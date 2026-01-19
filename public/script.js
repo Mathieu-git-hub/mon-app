@@ -1,5 +1,8 @@
 // script.js
 const app = document.getElementById("app");
+let currentUser = null;
+let dailyStore = {}; // remplace l'ancien "const dailyStore = {};"
+
 
 /* =========================================================
    ✅ STYLE GLOBAL : griser tous les boutons non cliquables
@@ -38,7 +41,7 @@ const app = document.getElementById("app");
  * Stockage en mémoire (pour l’instant).
  * Plus tard : localStorage / serveur.
  */
-const dailyStore = {};
+
 
 // Etat du mois affiché par page (0 = mois actuel, -1 = mois précédent, etc.)
 const monthOffsetByPage = {
@@ -138,6 +141,47 @@ function toNumberLoose(value) {
   const n = parseFloat(cleaned);
   return Number.isFinite(n) ? n : null;
 }
+
+async function apiGetMe() {
+  const r = await fetch("/api/auth/me");
+  if (!r.ok) return null;
+  const j = await r.json();
+  return j.user || null;
+}
+
+async function apiLogin(username, password) {
+  const r = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Login failed");
+  return j.user;
+}
+
+async function apiLogout() {
+  await fetch("/api/auth/logout", { method: "POST" });
+}
+
+async function apiLoadData() {
+  const r = await fetch("/api/data");
+  if (!r.ok) return {};
+  const j = await r.json();
+  return j.dailyStore || {};
+}
+
+async function apiSaveData(store) {
+  const r = await fetch("/api/data", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dailyStore: store }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Save failed");
+  return true;
+}
+
 
 // ✅ Grille: cases vides avant le 1er / après le dernier
 function buildCalendarCells(monthDate) {
@@ -2077,19 +2121,34 @@ function renderDailyDayPage(isoDate) {
   // -------------------------
   // ✅ ENREGISTRER
   // -------------------------
-  const saveBtn = document.getElementById("saveDay");
-  if (saveBtn) {
-    saveBtn.addEventListener("click", () => {
-      const ok = computeSaveEligible();
-      if (!ok) {
-        shake(saveBtn);
-        return;
-      }
+  // ✅ ENREGISTRER
+const saveBtn = document.getElementById("saveDay");
+if (saveBtn) {
+  saveBtn.addEventListener("click", async () => {
+    const ok = computeSaveEligible();
+    if (!ok) {
+      shake(saveBtn);
+      return;
+    }
+
+    try {
+      saveBtn.disabled = true;
+
+      // ✅ Sauvegarde TOUT le dailyStore en base
+      await apiSaveData(dailyStore);
+
       data.daySaved = true;
       renderDailyDayPage(isoDate);
       alert("Enregistré !");
-    });
-  }
+    } catch (e) {
+      alert("Erreur sauvegarde : " + (e.message || "inconnue"));
+      shake(saveBtn);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+}
+
   const editDayBtn = document.getElementById("editDay");
   if (editDayBtn) {
     editDayBtn.addEventListener("click", () => {
@@ -2167,6 +2226,51 @@ function navigateTo(hash) {
   render();
 }
 
+function renderLogin() {
+  app.innerHTML = `
+    <div class="page">
+      <div class="home-wrap">
+        <div style="width:min(92vw, 520px); display:flex; flex-direction:column; gap:12px;">
+          <div style="text-align:center; font-size:22px; font-weight:800;">Connexion</div>
+
+          <input id="loginUser" class="input" placeholder="Identifiant" autocomplete="username" />
+          <input id="loginPass" class="input" placeholder="Mot de passe" type="password" autocomplete="current-password" />
+
+          <button id="loginBtn" class="btn btn-blue lift">Se connecter</button>
+          <div id="loginErr" style="color:#ff8080; font-weight:700; text-align:center; display:none;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const u = document.getElementById("loginUser");
+  const p = document.getElementById("loginPass");
+  const b = document.getElementById("loginBtn");
+  const e = document.getElementById("loginErr");
+
+  async function doLogin() {
+    e.style.display = "none";
+    b.disabled = true;
+    try {
+      const user = await apiLogin(u.value.trim(), p.value);
+      currentUser = user;
+      dailyStore = await apiLoadData(); // ✅ charge DB
+      navigateTo("#daily"); // ou "#", comme tu veux
+    } catch (err) {
+      e.textContent = err.message || "Erreur";
+      e.style.display = "";
+    } finally {
+      b.disabled = false;
+    }
+  }
+
+  b.addEventListener("click", doLogin);
+  p.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") doLogin();
+  });
+}
+
+
 function render() {
   const route = parseRoute();
 
@@ -2180,4 +2284,14 @@ function render() {
 window.addEventListener("popstate", render);
 
 // --------- DÉMARRAGE ---------
-render();
+// --------- DÉMARRAGE ---------
+(async function startApp() {
+  currentUser = await apiGetMe();
+  if (!currentUser) {
+    renderLogin();
+    return;
+  }
+  dailyStore = await apiLoadData(); // ✅ charge DB si déjà connecté
+  render();
+})();
+
