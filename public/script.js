@@ -209,10 +209,18 @@ async function apiSaveData(store) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dailyStore: store }),
   });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || "Save failed");
+
+  const txt = await r.text();
+  let j = {};
+  try { j = txt ? JSON.parse(txt) : {}; } catch {}
+
+  if (!r.ok) {
+    throw new Error((j && j.error) ? j.error : `Save failed (HTTP ${r.status})`);
+  }
+
   return true;
 }
+
 
 async function persistNow() {
   if (!currentUser) throw new Error("No currentUser");
@@ -751,10 +759,16 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
     syncButtonsFromDraft();
   }
 
-  if (validateBtn) validateBtn.addEventListener("click", () => doPrelevValidate(p, prefix, isoDate, onDirty));
+  if (validateBtn) {
+  validateBtn.addEventListener("click", async () => {
+    doPrelevValidate(p, prefix, isoDate, onDirty);
+    try { await persistNow(); } catch (e) { console.error(e); }
+  });
+}
+
 
   if (finishBtn) {
-    finishBtn.addEventListener("click", (e) => {
+    finishBtn.addEventListener("click", async (e) => {
       const draftHasText = (p.draft || "").trim().length > 0;
 
       if (draftHasText) {
@@ -769,6 +783,7 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
       p.editing = false;
       p.draft = "";
       if (typeof onDirty === "function") onDirty();
+      try { await persistNow(); } catch (e) { console.error(e); }
       renderDailyDayPage(isoDate);
     });
   }
@@ -973,8 +988,9 @@ function renderDailyDayPage(isoDate) {
 
 
     : `
-      <div class="row">
+      <div class="${rowClass}">
         <div class="label">Nouveau capital :</div>
+
 
         ${ncItemsHTML_editing}
 
@@ -1094,8 +1110,9 @@ function renderDailyDayPage(isoDate) {
 `
 
     : `
-      <div class="row">
+      <div class="${rowClass}">
         <div class="label">Nouvelle caisse réelle :</div>
+
 
         ${ncrItemsHTML_editing}
 
@@ -1307,10 +1324,7 @@ function renderDailyDayPage(isoDate) {
                     <button id="benefModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
 
-                  <div class="${rowClass}">
-  <div class="label">Bénéfice réel total :</div>
-  <div class="card card-white lift">Total : ${formatTotal(monthTotal)}</div>
-</div>
+                  
 
                 `
                 : `
@@ -1326,6 +1340,16 @@ function renderDailyDayPage(isoDate) {
                 `
             }
           </div>
+          ${
+  data.beneficeReelFinalized
+    ? `
+      <div class="${rowClass}">
+        <div class="label">Bénéfice réel total :</div>
+        <div class="card card-white lift">Total : ${formatTotal(monthTotal)}</div>
+      </div>
+    `
+    : ``
+}
 
           <!-- ✅ NOUVELLE CAISSE RÉELLE (pile) -->
           ${ncrSectionHTML}
@@ -1590,22 +1614,36 @@ renderDailyDayPage(isoDate);
   }
 
   // Recette
-  if (!data.recetteFinalized) {
-    bindOpInput("recette", "recette", "recetteValidate", () => {
-      data.recetteFinalized = true;
-      markDirty();
-      renderDailyDayPage(isoDate);
-    });
-  }
+if (!data.recetteFinalized) {
+  bindOpInput("recette", "recette", "recetteValidate", async () => {
+    data.recetteFinalized = true;
+    markDirty();
+    try {
+      await persistNow();
+    } catch (e) {
+      alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
+      console.error(e);
+    }
+    renderDailyDayPage(isoDate);
+  });
+}
+
 
   // NL
-  if (!data.nouvelleLiquiditeFinalized) {
-    bindOpInput("nouvelleLiquidite", "nouvelleLiquidite", "nlValidate", () => {
-      data.nouvelleLiquiditeFinalized = true;
-      markDirty();
-      renderDailyDayPage(isoDate);
-    });
-  }
+if (!data.nouvelleLiquiditeFinalized) {
+  bindOpInput("nouvelleLiquidite", "nouvelleLiquidite", "nlValidate", async () => {
+    data.nouvelleLiquiditeFinalized = true;
+    markDirty();
+    try {
+      await persistNow();
+    } catch (e) {
+      alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
+      console.error(e);
+    }
+    renderDailyDayPage(isoDate);
+  });
+}
+
 
   const recetteModify = document.getElementById("recetteModify");
   if (recetteModify)
@@ -1640,7 +1678,8 @@ renderDailyDayPage(isoDate);
     }
 
     if (benefValidateBtn) {
-      benefValidateBtn.addEventListener("click", () => {
+      benefValidateBtn.addEventListener("click", async () => {
+
         const raw = (data.beneficeReel || "").trim();
 
         if (!raw || !isOperationPosed(raw)) {
@@ -1665,9 +1704,16 @@ renderDailyDayPage(isoDate);
         }
 
         data.beneficeReelFinalized = true;
-        data.beneficeReelError = false;
-        markDirty();
-        renderDailyDayPage(isoDate);
+data.beneficeReelError = false;
+markDirty();
+try {
+  await persistNow();
+} catch (e) {
+  alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
+  console.error(e);
+}
+renderDailyDayPage(isoDate);
+
       });
     }
   }

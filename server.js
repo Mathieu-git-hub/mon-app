@@ -81,7 +81,18 @@ app.use(
 /** ---------------------------
  *  5) Static files
  * -------------------------- */
-app.use(express.static(path.join(__dirname, "public")));
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    setHeaders(res, filePath) {
+      if (filePath.endsWith("script.js") || filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+    },
+  })
+);
+
 
 /** ---------------------------
  *  6) Helpers auth
