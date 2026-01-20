@@ -115,7 +115,7 @@ async function initDb() {
     );
   `);
 
-  // admin auto
+    // admin auto (créé OU remis à jour)
   const adminUser = process.env.ADMIN_USER;
   const adminPass = process.env.ADMIN_PASS;
 
@@ -124,18 +124,21 @@ async function initDb() {
     return;
   }
 
-  const existing = await pool.query("SELECT id FROM users WHERE username=$1", [adminUser]);
-  if (existing.rowCount > 0) {
-    console.log(`✅ Admin déjà présent : ${adminUser}`);
-    return;
-  }
-
   const hash = await bcrypt.hash(adminPass, 12);
+
+  // ✅ IMPORTANT : si l’admin existe déjà, on remet son mot de passe à ADMIN_PASS
   await pool.query(
-    "INSERT INTO users (username, pass_hash, is_admin) VALUES ($1,$2,TRUE)",
+    `
+    INSERT INTO users (username, pass_hash, is_admin)
+    VALUES ($1, $2, TRUE)
+    ON CONFLICT (username)
+    DO UPDATE SET pass_hash = EXCLUDED.pass_hash, is_admin = TRUE
+    `,
     [adminUser, hash]
   );
-  console.log(`✅ Admin créé : ${adminUser}`);
+
+  console.log(`✅ Admin synchronisé : ${adminUser}`);
+
 }
 
 initDb().catch((e) => {
