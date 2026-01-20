@@ -214,6 +214,15 @@ async function apiSaveData(store) {
   return true;
 }
 
+async function persistNow() {
+  try {
+    if (!currentUser) return;
+    await apiSaveData(dailyStore);
+  } catch (e) {
+    console.warn("Persist failed:", e?.message || e);
+  }
+}
+
 
 
 // ✅ Grille: cases vides avant le 1er / après le dernier
@@ -934,26 +943,37 @@ function renderDailyDayPage(isoDate) {
 
   const ncSectionHTML = nc.finalized
     ? `
-      <div class="${rowClass}">
-        <div class="label">Nouveau capital :</div>
+  <div class="${rowClass}">
+    <div class="label">Nouvelle caisse réelle :</div>
 
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          ${nc.items
-            .map(
-              (it) => `
-                <div class="card card-white lift" style="width:100%;">
-                  ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
-                </div>
-              `
-            )
-            .join("")}
-        </div>
+    <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+      ${
+        (ncr.items[0])
+          ? `
+            <div class="card card-white lift" style="width:100%;">
+              ${escapeHtml(ncr.items[0].raw)} = ${formatTotal(ncr.items[0].result ?? 0)}
+            </div>
+          `
+          : ``
+      }
 
-        <div style="display:flex; justify-content:center; margin-top:12px;">
-          <button id="ncModifyAll" class="btn btn-blue lift">Modifier</button>
-        </div>
+      ${
+        ncr.items.slice(1).map(
+          (it) => `
+            <div class="card card-white lift" style="width:100%;">
+              ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
+            </div>
+          `
+        ).join("")
+      }
+
+      <div style="display:flex; justify-content:center; margin-top:2px;">
+        <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
       </div>
-    `
+    </div>
+  </div>
+`
+
     : `
       <div class="row">
         <div class="label">Nouveau capital :</div>
@@ -1044,26 +1064,37 @@ function renderDailyDayPage(isoDate) {
 
   const ncrSectionHTML = ncr.finalized
     ? `
-      <div class="row">
-        <div class="label">Nouvelle caisse réelle :</div>
+  <div class="${rowClass}">
+    <div class="label">Nouvelle caisse réelle :</div>
 
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          ${ncr.items
-            .map(
-              (it) => `
-                <div class="card card-white lift" style="width:100%;">
-                  ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
-                </div>
-              `
-            )
-            .join("")}
-        </div>
+    <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+      ${
+        (ncr.items[0])
+          ? `
+            <div class="card card-white lift" style="width:100%;">
+              ${escapeHtml(ncr.items[0].raw)} = ${formatTotal(ncr.items[0].result ?? 0)}
+            </div>
+          `
+          : ``
+      }
 
-        <div style="display:flex; justify-content:center; margin-top:12px;">
-          <button id="ncrModifyAll" class="btn btn-blue lift">Modifier</button>
-        </div>
+      ${
+        ncr.items.slice(1).map(
+          (it) => `
+            <div class="card card-white lift" style="width:100%;">
+              ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
+            </div>
+          `
+        ).join("")
+      }
+
+      <div style="display:flex; justify-content:center; margin-top:2px;">
+        <button id="ncrModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
       </div>
-    `
+    </div>
+  </div>
+`
+
     : `
       <div class="row">
         <div class="label">Nouvelle caisse réelle :</div>
@@ -1278,10 +1309,11 @@ function renderDailyDayPage(isoDate) {
                     <button id="benefModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
 
-                  <div class="row" style="margin-top: 8px;">
-                    <div class="label">Bénéfice réel total :</div>
-                    <div class="card card-white lift">Total : ${formatTotal(monthTotal)}</div>
-                  </div>
+                  <div class="${rowClass}">
+  <div class="label">Bénéfice réel total :</div>
+  <div class="card card-white lift">Total : ${formatTotal(monthTotal)}</div>
+</div>
+
                 `
                 : `
                   <div class="inline-actions">
@@ -1406,17 +1438,19 @@ function renderDailyDayPage(isoDate) {
       });
 
       if (validateBtn) {
-        validateBtn.addEventListener("click", () => {
-          const v = (data[key] || "").trim();
-          if (!v) {
-            validateBtn.style.display = "none";
-            return;
-          }
-          data[finalizedKey] = true;
-          markDirty();
-          renderDailyDayPage(isoDate);
-        });
-      }
+  validateBtn.addEventListener("click", async () => {
+    const v = (data[key] || "").trim();
+    if (!v) {
+      validateBtn.style.display = "none";
+      return;
+    }
+    data[finalizedKey] = true;
+    markDirty();
+    await persistNow(); // ✅ SAUVEGARDE IMMÉDIATE
+    renderDailyDayPage(isoDate);
+  });
+}
+
     }
 
     if (modifyBtn) {

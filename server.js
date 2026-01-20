@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 /** ---------------------------
  *  2) Sécurité & parsing
  * -------------------------- */
+
 app.use(helmet());
 app.use(express.json({ limit: "1mb" }));
 
@@ -37,12 +38,15 @@ if (!process.env.DATABASE_URL) {
   console.error("❌ DATABASE_URL manquant dans les variables d'environnement Render.");
 }
 
+const DATABASE_URL = process.env.DATABASE_URL;
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL.includes("render.com")
+  connectionString: DATABASE_URL,
+  ssl: (DATABASE_URL && DATABASE_URL.includes("render.com"))
     ? { rejectUnauthorized: false }
     : undefined,
 });
+
 
 /** ---------------------------
  *  4) Sessions (stockées en DB)
@@ -64,11 +68,12 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      httpOnly: true,
-      secure: true, // Render = HTTPS
-      sameSite: "lax",
-      maxAge: 1000 * 60 * 60 * 24 * 30, // 30 jours
-    },
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production", // ✅ true sur Render, false en local
+  sameSite: "lax",
+  maxAge: 1000 * 60 * 60 * 24 * 30,
+},
+
   })
 );
 
@@ -243,6 +248,13 @@ app.post("/api/data", requireAuth, async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+// ✅ Fallback : renvoie toujours index.html pour les routes non-API
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api/")) return res.status(404).end();
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 
 /** ---------------------------
  *  10) Start server
