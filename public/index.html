@@ -66,10 +66,12 @@
         transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
       }
       .day-box.today { background: #e60000; color: #fff; }
+      .day-box.saved { background: #19a34a; color: #fff; }
       .day-empty { border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: transparent; }
 
       .day-box:hover { transform: scale(1.06); box-shadow: 0 0 0 2px rgba(30, 94, 255, 0.6); cursor: pointer; }
       .day-box.today:hover { transform: scale(1.04); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+      .day-box.saved:hover { transform: scale(1.04); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 
       .day-box.disabled, .day-box.disabled:hover {
         opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none;
@@ -88,18 +90,16 @@
         align-items: center;
         gap: 12px;
       }
-      
-      .row-saved .label {
-  width: 240px;
-  flex: 0 0 240px;
-}
 
-      
+      .row-saved .label {
+        width: 240px;
+        flex: 0 0 240px;
+      }
+
       .row-saved .total-row {
         margin: 0;
-      }  
+      }
 
-      /* Intitulés en gras + taille légèrement augmentée */
       .label {
         font-size: 17px;
         font-weight: 800;

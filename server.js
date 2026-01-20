@@ -18,14 +18,13 @@ const PORT = process.env.PORT || 3000;
 /** ---------------------------
  *  2) Sécurité & parsing
  * -------------------------- */
-
 app.use(helmet());
 app.use(express.json({ limit: "1mb" }));
 
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 300, // large pour débuter
+    max: 300,
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -42,11 +41,8 @@ const DATABASE_URL = process.env.DATABASE_URL;
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: (DATABASE_URL && DATABASE_URL.includes("render.com"))
-    ? { rejectUnauthorized: false }
-    : undefined,
+  ssl: DATABASE_URL && DATABASE_URL.includes("render.com") ? { rejectUnauthorized: false } : undefined,
 });
-
 
 /** ---------------------------
  *  4) Sessions (stockées en DB)
@@ -55,7 +51,7 @@ if (!process.env.SESSION_SECRET) {
   console.error("❌ SESSION_SECRET manquant dans les variables d'environnement Render.");
 }
 
-app.set("trust proxy", 1); // important sur Render (proxy)
+app.set("trust proxy", 1);
 
 app.use(
   session({
@@ -77,9 +73,8 @@ app.use(
   })
 );
 
-
 /** ---------------------------
- *  5) Static files
+ *  5) Static files (no-cache script/index)
  * -------------------------- */
 app.use(
   express.static(path.join(__dirname, "public"), {
@@ -92,7 +87,6 @@ app.use(
     },
   })
 );
-
 
 /** ---------------------------
  *  6) Helpers auth
@@ -112,7 +106,6 @@ function requireAdmin(req, res, next) {
  *  7) DB init : tables + admin
  * -------------------------- */
 async function initDb() {
-  // users
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -123,7 +116,6 @@ async function initDb() {
     );
   `);
 
-  // data par utilisateur (on stocke ton dailyStore en JSON)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS user_data (
       user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -132,7 +124,6 @@ async function initDb() {
     );
   `);
 
-    // admin auto (créé OU remis à jour)
   const adminUser = process.env.ADMIN_USER;
   const adminPass = process.env.ADMIN_PASS;
 
@@ -143,7 +134,6 @@ async function initDb() {
 
   const hash = await bcrypt.hash(adminPass, 12);
 
-  // ✅ IMPORTANT : si l’admin existe déjà, on remet son mot de passe à ADMIN_PASS
   await pool.query(
     `
     INSERT INTO users (username, pass_hash, is_admin)
@@ -155,7 +145,6 @@ async function initDb() {
   );
 
   console.log(`✅ Admin synchronisé : ${adminUser}`);
-
 }
 
 initDb().catch((e) => {
@@ -165,8 +154,6 @@ initDb().catch((e) => {
 /** ---------------------------
  *  8) API Auth
  * -------------------------- */
-
-// login
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { username, password } = req.body || {};
@@ -189,17 +176,14 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// logout
 app.post("/api/auth/logout", requireAuth, (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
 
-// whoami
 app.get("/api/auth/me", (req, res) => {
   res.json({ user: req.session.user || null });
 });
 
-// admin: create user
 app.post("/api/admin/create-user", requireAdmin, async (req, res) => {
   try {
     const { username, password } = req.body || {};
@@ -218,17 +202,14 @@ app.post("/api/admin/create-user", requireAdmin, async (req, res) => {
   }
 });
 
-// admin: list users
 app.get("/api/admin/users", requireAdmin, async (req, res) => {
   const r = await pool.query("SELECT id, username, is_admin, created_at FROM users ORDER BY id ASC");
   res.json({ users: r.rows });
 });
 
 /** ---------------------------
- *  9) API Data (persistance)
+ *  9) API Data
  * -------------------------- */
-
-// charger les données de l'utilisateur connecté
 app.get("/api/data", requireAuth, async (req, res) => {
   const userId = req.session.user.id;
 
@@ -238,7 +219,6 @@ app.get("/api/data", requireAuth, async (req, res) => {
   res.json({ dailyStore: r.rows[0].daily_store || {} });
 });
 
-// sauvegarder les données (dailyStore complet)
 app.post("/api/data", requireAuth, async (req, res) => {
   try {
     const userId = req.session.user.id;
@@ -261,12 +241,10 @@ app.post("/api/data", requireAuth, async (req, res) => {
   }
 });
 
-// ✅ Fallback : renvoie toujours index.html pour les routes non-API
 app.get("*", (req, res) => {
   if (req.path.startsWith("/api/")) return res.status(404).end();
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
-
 
 /** ---------------------------
  *  10) Start server

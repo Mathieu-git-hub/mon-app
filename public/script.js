@@ -1,15 +1,10 @@
 // script.js
 const app = document.getElementById("app");
 let currentUser = null;
-let dailyStore = {}; // remplace l'ancien "const dailyStore = {};"
-
+let dailyStore = {}; // store chargé depuis la DB
 
 /* =========================================================
    ✅ STYLE GLOBAL : griser tous les boutons non cliquables
-   - Tous les <button disabled> seront automatiquement gris
-   - Pour les cas "non appuyable mais doit rester cliquable"
-     (ex: Terminer Nouveau capital => shake), on utilise
-     la classe .pseudo-disabled
 ========================================================= */
 (function ensureDisabledButtonStyles() {
   if (document.getElementById("disabledButtonsStyle")) return;
@@ -37,12 +32,6 @@ let dailyStore = {}; // remplace l'ancien "const dailyStore = {};"
   document.head.appendChild(style);
 })();
 
-/**
- * Stockage en mémoire (pour l’instant).
- * Plus tard : localStorage / serveur.
- */
-
-
 // Etat du mois affiché par page (0 = mois actuel, -1 = mois précédent, etc.)
 const monthOffsetByPage = {
   daily: 0,
@@ -51,7 +40,6 @@ const monthOffsetByPage = {
 };
 
 // --------- ACCUEIL ---------
-
 function renderHome() {
   app.innerHTML = `
     <div class="page">
@@ -80,21 +68,16 @@ function renderHome() {
     lo.addEventListener("click", async () => {
       lo.disabled = true;
       try {
-        await apiLogout();            // serveur : détruit la session
-      } catch (e) {
-        // même si ça échoue, on nettoie côté client
-      }
-      currentUser = null;             // client : plus connecté
-      dailyStore = {};                // optionnel : vider en mémoire
-      history.pushState({}, "", "#"); // revenir à l'accueil (hash vide)
-      renderLogin();                  // écran connexion
+        await apiLogout();
+      } catch (e) {}
+      currentUser = null;
+      dailyStore = {};
+      history.pushState({}, "", "#");
+      renderLogin();
     });
   }
 }
-
-
 // --------- OUTILS DATE ---------
-
 function addMonths(date, n) {
   const d = new Date(date);
   d.setDate(1);
@@ -149,26 +132,22 @@ function fromISODate(s) {
 /**
  * ✅ Conversion robuste : accepte
  * - "100"
- * - "50"
- * - "12,5"
- * - "12.5"
+ * - "12,5" / "12.5"
  * - "1 000,50"
  */
 function toNumberLoose(value) {
   if (typeof value !== "string") return null;
 
   const cleaned = value.trim().replace(/\s+/g, "").replace(",", ".");
-
   if (cleaned === "" || cleaned === "." || cleaned === "-") return null;
 
   const n = parseFloat(cleaned);
   return Number.isFinite(n) ? n : null;
 }
 
+// --------- API ---------
 async function apiGetMe() {
-  const r = await fetch("/api/auth/me", {
-    credentials: "include",
-  });
+  const r = await fetch("/api/auth/me", { credentials: "include" });
   if (!r.ok) return null;
   const j = await r.json();
   return j.user || null;
@@ -187,16 +166,11 @@ async function apiLogin(username, password) {
 }
 
 async function apiLogout() {
-  await fetch("/api/auth/logout", {
-    method: "POST",
-    credentials: "include",
-  });
+  await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
 }
 
 async function apiLoadData() {
-  const r = await fetch("/api/data", {
-    credentials: "include",
-  });
+  const r = await fetch("/api/data", { credentials: "include" });
   if (!r.ok) throw new Error("Not authenticated");
   const j = await r.json();
   return j.dailyStore || {};
@@ -217,19 +191,19 @@ async function apiSaveData(store) {
   if (!r.ok) {
     throw new Error((j && j.error) ? j.error : `Save failed (HTTP ${r.status})`);
   }
-
   return true;
 }
 
-
+// ✅ Persistance immédiate (Valider/Terminer/Modifier)
 async function persistNow() {
   if (!currentUser) throw new Error("No currentUser");
-  await apiSaveData(dailyStore); // si ça échoue, on veut le voir
+  await apiSaveData(dailyStore);
 }
 
-
-
-
+// ✅ version "silencieuse" (pas de spam d'alert)
+async function safePersistNow() {
+  try { await persistNow(); } catch (e) { console.error(e); }
+}
 // ✅ Grille: cases vides avant le 1er / après le dernier
 function buildCalendarCells(monthDate) {
   const year = monthDate.getFullYear();
@@ -249,7 +223,6 @@ function buildCalendarCells(monthDate) {
 }
 
 // --------- CALENDRIER ---------
-
 function renderCalendarPage(pageName) {
   const offset = monthOffsetByPage[pageName] ?? 0;
 
@@ -289,9 +262,12 @@ function renderCalendarPage(pageName) {
             const iso = toISODate(c.date);
             const n = c.date.getDate();
 
+            // ✅ Jour "enregistré" => vert (daySaved=true)
+            const saved = !!(dailyStore?.[iso]?.daySaved);
+
             return `
               <button
-                class="day-box ${isToday ? "today" : ""} ${isFutureDay ? "disabled" : ""}"
+                class="day-box ${isToday ? "today" : ""} ${saved ? "saved" : ""} ${isFutureDay ? "disabled" : ""}"
                 data-date="${iso}"
                 ${isFutureDay ? "disabled" : ""}
               >${n}</button>
@@ -323,9 +299,7 @@ function renderCalendarPage(pageName) {
     });
   });
 }
-
 // --------- PAGE "COMPTE QUOTIDIEN" ---------
-
 function getDailyData(isoDate) {
   if (!dailyStore[isoDate]) {
     dailyStore[isoDate] = {
@@ -335,12 +309,11 @@ function getDailyData(isoDate) {
       capital: "",
       capitalFinalized: false,
 
-      // ✅ caisse départ
       caisseDepart: "",
       caisseDepartFinalized: false,
 
-      depense: "",
-      depenseFinalized: false,
+      // ✅ Dépenses (comme prélèvements)
+      depenses: { items: [], editing: false, finalized: false, draft: "" },
 
       recette: "",
       recetteFinalized: false,
@@ -348,18 +321,18 @@ function getDailyData(isoDate) {
       prt: "",
       prtFinalized: false,
 
-      // ✅ bénéfice réel : valeur + état (ANCIEN CONSERVÉ)
+      // ✅ bénéfice réel (ancien conservé)
       beneficeReel: "",
       beneficeReelFinalized: false,
       beneficeReelError: false,
 
-      // ⚠️ ancien compat (on garde les champs mais on ne les utilise plus en rendu)
+      // compat ancien
       nouvelleCaisseReelle: "",
       nouvelleCaisseReelleFinalized: false,
 
-      // ✅ NOUVELLE STRUCTURE : Nouvelle caisse réelle (mêmes règles que Nouveau capital)
+      // ✅ Nouvelle caisse réelle (pile)
       nouvelleCaisseReelleStack: {
-        items: [], // { raw, result }
+        items: [],
         draft: "",
         finalized: false,
         editIndex: null,
@@ -368,13 +341,13 @@ function getDailyData(isoDate) {
         draftError: false,
       },
 
-      // ⚠️ ancien (compat)
+      // compat ancien
       nouveauCapital: "",
       nouveauCapitalFinalized: false,
 
-      // ✅ NOUVELLE STRUCTURE pour "Nouveau capital"
+      // ✅ Nouveau capital (pile)
       nouveauCapitalStack: {
-        items: [], // { raw, result }
+        items: [],
         draft: "",
         finalized: false,
         editIndex: null,
@@ -387,34 +360,23 @@ function getDailyData(isoDate) {
       nouvelleLiquiditeFinalized: false,
 
       // ✅ Prélèvement sur capital
-      prelevement: {
-        items: [],
-        editing: false,
-        finalized: false,
-        draft: "",
-      },
+      prelevement: { items: [], editing: false, finalized: false, draft: "" },
 
-      // ✅ prélèvement sur caisse
-      prelevementCaisse: {
-        items: [],
-        editing: false,
-        finalized: false,
-        draft: "",
-      },
+      // ✅ Prélèvement sur caisse
+      prelevementCaisse: { items: [], editing: false, finalized: false, draft: "" },
 
-      // ✅ état "enregistrer" de la page
+      // ✅ état "enregistrer"
       daySaved: false,
     };
   }
 
   const d = dailyStore[isoDate];
 
-  // migrations (valeurs par défaut si manquantes)
+  // migrations
   if (d.beneficeReelFinalized == null) d.beneficeReelFinalized = false;
   if (d.beneficeReelError == null) d.beneficeReelError = false;
 
   if (d.recetteFinalized == null) d.recetteFinalized = false;
-  if (d.nouveauCapitalFinalized == null) d.nouveauCapitalFinalized = false;
   if (d.nouvelleLiquiditeFinalized == null) d.nouvelleLiquiditeFinalized = false;
 
   if (d.liquiditeFinalized == null) d.liquiditeFinalized = false;
@@ -423,12 +385,11 @@ function getDailyData(isoDate) {
   if (d.caisseDepartFinalized == null) d.caisseDepartFinalized = false;
   if (d.caisseDepart == null) d.caisseDepart = "";
 
-  if (d.depenseFinalized == null) d.depenseFinalized = false;
   if (d.prtFinalized == null) d.prtFinalized = false;
 
   if (d.daySaved == null) d.daySaved = false;
 
-  // migration nouveauCapitalStack
+  // migration piles
   if (!d.nouveauCapitalStack) {
     d.nouveauCapitalStack = {
       items: [],
@@ -450,12 +411,18 @@ function getDailyData(isoDate) {
     }
   }
 
-  // migration prélèvement sur caisse
   if (!d.prelevementCaisse) {
     d.prelevementCaisse = { items: [], editing: false, finalized: false, draft: "" };
   }
+  if (!d.prelevement) {
+    d.prelevement = { items: [], editing: false, finalized: false, draft: "" };
+  }
 
-  // migration nouvelleCaisseReelleStack
+  // ✅ migration dépenses
+  if (!d.depenses) {
+    d.depenses = { items: [], editing: false, finalized: false, draft: "" };
+  }
+
   if (!d.nouvelleCaisseReelleStack) {
     d.nouvelleCaisseReelleStack = {
       items: [],
@@ -516,7 +483,6 @@ function shake(el) {
 /* -------------------------
    ✅ RÈGLES "OPÉRATIONS"
 ------------------------- */
-
 function normalizeOp(s) {
   return String(s || "").replace(/\s+/g, "").replace(",", ".");
 }
@@ -553,13 +519,8 @@ function evalOperation(raw) {
   }
 
   let sign = +1;
-  if (s[i] === "+") {
-    sign = +1;
-    i++;
-  } else if (s[i] === "-") {
-    sign = -1;
-    i++;
-  }
+  if (s[i] === "+") { sign = +1; i++; }
+  else if (s[i] === "-") { sign = -1; i++; }
 
   const first = readNumber();
   if (first === null) return null;
@@ -579,17 +540,16 @@ function evalOperation(raw) {
   return total;
 }
 
+// ✅ Bénéfice réel total (mensuel jusqu’au jour)
 function computeMonthlyBeneficeTotal(cutoffIsoDate) {
   const cutoff = fromISODate(cutoffIsoDate);
   const y = cutoff.getFullYear();
   const m = cutoff.getMonth();
-
   const cutoffTime = new Date(y, m, cutoff.getDate()).getTime();
 
   let sum = 0;
   for (const iso of Object.keys(dailyStore)) {
     const d = fromISODate(iso);
-
     if (d.getFullYear() !== y || d.getMonth() !== m) continue;
 
     const t = new Date(y, m, d.getDate()).getTime();
@@ -605,11 +565,94 @@ function computeMonthlyBeneficeTotal(cutoffIsoDate) {
 }
 
 /* -------------------------
+   ✅ Totaux (hebdo / annuel)
+------------------------- */
+function startOfWeekMonday(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const idx = mondayIndex(d.getDay());
+  d.setDate(d.getDate() - idx);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfWeekSunday(date) {
+  const s = startOfWeekMonday(date);
+  const e = new Date(s);
+  e.setDate(e.getDate() + 6);
+  e.setHours(23, 59, 59, 999);
+  return e;
+}
+
+// Dépenses totales (hebdo)
+function computeWeeklyDepensesTotal(cutoffIsoDate) {
+  const cutoff = fromISODate(cutoffIsoDate);
+  const start = startOfWeekMonday(cutoff);
+  const end = endOfWeekSunday(cutoff);
+
+  let sum = 0;
+  for (const iso of Object.keys(dailyStore)) {
+    const d = fromISODate(iso);
+    const t = d.getTime();
+    if (t < start.getTime() || t > end.getTime()) continue;
+    if (t > cutoff.getTime()) continue;
+
+    const dayData = dailyStore[iso];
+    const dep = dayData?.depenses;
+    if (!dep || !dep.finalized) continue;
+
+    sum += computePrelevementTotal(dep.items || []);
+  }
+  return sum;
+}
+
+// Recette hebdo
+function computeWeeklyRecetteTotal(cutoffIsoDate) {
+  const cutoff = fromISODate(cutoffIsoDate);
+  const start = startOfWeekMonday(cutoff);
+  const end = endOfWeekSunday(cutoff);
+
+  let sum = 0;
+  for (const iso of Object.keys(dailyStore)) {
+    const d = fromISODate(iso);
+    const t = d.getTime();
+    if (t < start.getTime() || t > end.getTime()) continue;
+    if (t > cutoff.getTime()) continue;
+
+    const dayData = dailyStore[iso];
+    if (!dayData?.recetteFinalized) continue;
+
+    const val = evalOperation(dayData.recette);
+    if (val !== null) sum += val;
+  }
+  return sum;
+}
+
+// Recette totale (annuelle)
+function computeYearlyRecetteTotal(cutoffIsoDate) {
+  const cutoff = fromISODate(cutoffIsoDate);
+  const y = cutoff.getFullYear();
+
+  const start = new Date(y, 0, 1);
+  start.setHours(0, 0, 0, 0);
+
+  let sum = 0;
+  for (const iso of Object.keys(dailyStore)) {
+    const d = fromISODate(iso);
+    if (d.getFullYear() !== y) continue;
+
+    const t = d.getTime();
+    if (t < start.getTime() || t > cutoff.getTime()) continue;
+
+    const dayData = dailyStore[iso];
+    if (!dayData?.recetteFinalized) continue;
+
+    const val = evalOperation(dayData.recette);
+    if (val !== null) sum += val;
+  }
+  return sum;
+}
+/* -------------------------
    ✅ PRÉLÈVEMENT (générique)
-   - Valider grisé tant que draft vide / invalide
-   - Quand draft a du texte => Valider actif, Terminer grisé (non appuyable)
-   - Terminer valide seulement si draft vide (donc après Valider OU effacement)
-   - Entrée = Valider
 ------------------------- */
 
 function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
@@ -687,25 +730,26 @@ function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
   `;
 }
 
-
 function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
   const addBtn = document.getElementById(`${prefix}Add`);
   if (addBtn) {
-    addBtn.addEventListener("click", () => {
+    addBtn.addEventListener("click", async () => {
       p.editing = true;
       p.finalized = false;
       if (typeof onDirty === "function") onDirty();
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
   }
 
   const finishDirectBtn = document.getElementById(`${prefix}FinishDirect`);
   if (finishDirectBtn) {
-    finishDirectBtn.addEventListener("click", () => {
+    finishDirectBtn.addEventListener("click", async () => {
       p.finalized = true;
       p.editing = false;
       p.draft = "";
       if (typeof onDirty === "function") onDirty();
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
   }
@@ -752,7 +796,7 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        if (validateBtn && !validateBtn.disabled) validateBtn.click(); // Entrée = Valider
+        if (validateBtn && !validateBtn.disabled) validateBtn.click();
       }
     });
 
@@ -760,19 +804,17 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
   }
 
   if (validateBtn) {
-  validateBtn.addEventListener("click", async () => {
-    doPrelevValidate(p, prefix, isoDate, onDirty);
-    try { await persistNow(); } catch (e) { console.error(e); }
-  });
-}
-
+    validateBtn.addEventListener("click", async () => {
+      doPrelevValidate(p, prefix, isoDate, onDirty);
+      await safePersistNow();
+    });
+  }
 
   if (finishBtn) {
     finishBtn.addEventListener("click", async (e) => {
       const draftHasText = (p.draft || "").trim().length > 0;
 
       if (draftHasText) {
-        // grisé/non valide => shake input + bouton
         if (input) shake(input);
         shake(finishBtn);
         e.preventDefault();
@@ -783,17 +825,18 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
       p.editing = false;
       p.draft = "";
       if (typeof onDirty === "function") onDirty();
-      try { await persistNow(); } catch (e) { console.error(e); }
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
   }
 
   const modifyBtn = document.getElementById(`${prefix}Modify`);
   if (modifyBtn) {
-    modifyBtn.addEventListener("click", () => {
+    modifyBtn.addEventListener("click", async () => {
       p.finalized = false;
       p.editing = true;
       if (typeof onDirty === "function") onDirty();
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
   }
@@ -803,7 +846,7 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
     const [pfx, idxStr] = payload.split(":");
     if (pfx !== prefix) return;
 
-    xbtn.addEventListener("click", (e) => {
+    xbtn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -817,11 +860,11 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
       if (p.items.length === 0) p.draft = "";
 
       if (typeof onDirty === "function") onDirty();
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
   });
 }
-
 /* -------------------------
    ✅ PAGE JOUR (DAILY)
 ------------------------- */
@@ -830,33 +873,34 @@ function renderDailyDayPage(isoDate) {
   const date = fromISODate(isoDate);
   const data = getDailyData(isoDate);
 
-  const pCap = data.prelevement; // prélèvement sur capital
-  const pCaisse = data.prelevementCaisse; // prélèvement sur caisse
+  const pCap = data.prelevement;
+  const pCaisse = data.prelevementCaisse;
+  const pDep = data.depenses; // ✅ Dépenses = pile comme prélèvements
+
+  const depensesWeekTotal = computeWeeklyDepensesTotal(isoDate);
+  const recetteWeekTotal = computeWeeklyRecetteTotal(isoDate);
+  const recetteYearTotal = computeYearlyRecetteTotal(isoDate);
 
   const placeholders = {
     liquidite: "(...)",
     capital: "(...)",
     caisseDepart: "(...)",
-    depense: "(...)",
     recette: "(ex: 10+2-1,5)",
     beneficeReel: "(ex: 50-12,5)",
     nouvelleLiquidite: "(ex: 80+5)",
     prt: "(...)",
   };
 
-  // état "dirty"
   function markDirty() {
     data.daySaved = false;
   }
 
-  // ✅ AJOUT ICI
   const rowClass = `row ${data.daySaved ? "row-saved" : ""}`;
   const hideModifyStyle = data.daySaved ? 'style="display:none;"' : "";
 
   function opValidateButtonHTML(btnId, value, extraClass = "") {
     const hasText = (value || "").trim().length > 0;
     const ok = isOperationPosed(value);
-
     return `
       <button
         id="${btnId}"
@@ -879,7 +923,7 @@ function renderDailyDayPage(isoDate) {
   const benefOk = isOperationPosed(data.beneficeReel);
 
   // -------------------------
-  // ✅ NOUVEAU CAPITAL (pile)
+  // ✅ NOUVEAU CAPITAL (pile) — alignement corrigé
   // -------------------------
   const nc = data.nouveauCapitalStack;
   const showNcFinish = nc.items.length > 0;
@@ -953,47 +997,57 @@ function renderDailyDayPage(isoDate) {
     }
   `;
 
-  const ncSectionHTML = nc.finalized
-    ? `
-  <div class="${rowClass}">
-    <div class="label">Nouveau capital :</div>
-
+  const ncFinalList = `
     <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-      ${
-        (nc.items[0])
-          ? `
-            <div class="card card-white lift" style="width:100%;">
-              ${escapeHtml(nc.items[0].raw)} = ${formatTotal(nc.items[0].result ?? 0)}
-            </div>
-          `
-          : ``
-      }
-
-      ${
-        nc.items.slice(1).map(
+      ${nc.items
+        .map(
           (it) => `
             <div class="card card-white lift" style="width:100%;">
               ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
             </div>
           `
-        ).join("")
-      }
+        )
+        .join("")}
 
       <div style="display:flex; justify-content:center; margin-top:2px;">
         <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
       </div>
     </div>
-  </div>
-`
+  `;
 
-
-    : `
+  const ncSectionHTML = nc.finalized
+    ? `
       <div class="${rowClass}">
         <div class="label">Nouveau capital :</div>
 
-
+        ${
+          data.daySaved
+            ? `
+              <div class="total-row" style="width:100%;">
+                <div class="card card-white lift" style="flex:1; min-width:220px;">
+                  ${
+                    nc.items[0]
+                      ? `${escapeHtml(nc.items[0].raw)} = ${formatTotal(nc.items[0].result ?? 0)}`
+                      : `0`
+                  }
+                </div>
+              </div>
+              ${
+                nc.items.length > 1
+                  ? `<div style="margin-top:10px;">${ncFinalList}</div>`
+                  : `<div style="display:flex; justify-content:center; margin-top:2px;">
+                       <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+                     </div>`
+              }
+            `
+            : ncFinalList
+        }
+      </div>
+    `
+    : `
+      <div class="${rowClass}">
+        <div class="label">Nouveau capital :</div>
         ${ncItemsHTML_editing}
-
         <div style="margin-top:10px;">
           ${ncInputHTML}
         </div>
@@ -1001,7 +1055,7 @@ function renderDailyDayPage(isoDate) {
     `;
 
   // -------------------------
-  // ✅ NOUVELLE CAISSE RÉELLE (pile) — mêmes règles que Nouveau capital
+  // ✅ NOUVELLE CAISSE RÉELLE (pile) — alignement corrigé
   // -------------------------
   const ncr = data.nouvelleCaisseReelleStack;
 
@@ -1076,46 +1130,57 @@ function renderDailyDayPage(isoDate) {
     }
   `;
 
-  const ncrSectionHTML = ncr.finalized
-    ? `
-  <div class="${rowClass}">
-    <div class="label">Nouvelle caisse réelle :</div>
-
+  const ncrFinalList = `
     <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-      ${
-        (ncr.items[0])
-          ? `
-            <div class="card card-white lift" style="width:100%;">
-              ${escapeHtml(ncr.items[0].raw)} = ${formatTotal(ncr.items[0].result ?? 0)}
-            </div>
-          `
-          : ``
-      }
-
-      ${
-        ncr.items.slice(1).map(
+      ${ncr.items
+        .map(
           (it) => `
             <div class="card card-white lift" style="width:100%;">
               ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
             </div>
           `
-        ).join("")
-      }
+        )
+        .join("")}
 
       <div style="display:flex; justify-content:center; margin-top:2px;">
         <button id="ncrModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
       </div>
     </div>
-  </div>
-`
+  `;
 
-    : `
+  const ncrSectionHTML = ncr.finalized
+    ? `
       <div class="${rowClass}">
         <div class="label">Nouvelle caisse réelle :</div>
 
-
+        ${
+          data.daySaved
+            ? `
+              <div class="total-row" style="width:100%;">
+                <div class="card card-white lift" style="flex:1; min-width:220px;">
+                  ${
+                    ncr.items[0]
+                      ? `${escapeHtml(ncr.items[0].raw)} = ${formatTotal(ncr.items[0].result ?? 0)}`
+                      : `0`
+                  }
+                </div>
+              </div>
+              ${
+                ncr.items.length > 1
+                  ? `<div style="margin-top:10px;">${ncrFinalList}</div>`
+                  : `<div style="display:flex; justify-content:center; margin-top:2px;">
+                       <button id="ncrModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+                     </div>`
+              }
+            `
+            : ncrFinalList
+        }
+      </div>
+    `
+    : `
+      <div class="${rowClass}">
+        <div class="label">Nouvelle caisse réelle :</div>
         ${ncrItemsHTML_editing}
-
         <div style="margin-top:10px;">
           ${ncrInputHTML}
         </div>
@@ -1130,7 +1195,6 @@ function renderDailyDayPage(isoDate) {
       data.liquiditeFinalized &&
       data.capitalFinalized &&
       data.caisseDepartFinalized &&
-      data.depenseFinalized &&
       data.recetteFinalized &&
       data.prtFinalized &&
       data.beneficeReelFinalized &&
@@ -1139,6 +1203,7 @@ function renderDailyDayPage(isoDate) {
     const requiredRecorded =
       pCap.finalized &&
       pCaisse.finalized &&
+      pDep.finalized &&
       ncr.finalized &&
       nc.finalized;
 
@@ -1174,12 +1239,10 @@ function renderDailyDayPage(isoDate) {
                 `
                 : `
                   <div class="inline-actions">
-                    <input class="input" id="liquidite" placeholder="${placeholders.liquidite}" value="${escapeAttr(
-                      data.liquidite
-                    )}" style="flex:1; min-width: 220px;" />
-                    <button id="liquiditeValidate" class="btn btn-green lift" style="${
-                      (data.liquidite || "").trim() ? "" : "display:none;"
-                    }">Valider</button>
+                    <input class="input" id="liquidite" placeholder="${placeholders.liquidite}"
+                      value="${escapeAttr(data.liquidite)}" style="flex:1; min-width: 220px;" />
+                    <button id="liquiditeValidate" class="btn btn-green lift"
+                      style="${(data.liquidite || "").trim() ? "" : "display:none;"}">Valider</button>
                   </div>
                 `
             }
@@ -1198,12 +1261,10 @@ function renderDailyDayPage(isoDate) {
                 `
                 : `
                   <div class="inline-actions">
-                    <input class="input" id="capital" placeholder="${placeholders.capital}" value="${escapeAttr(
-                      data.capital
-                    )}" style="flex:1; min-width: 220px;" />
-                    <button id="capitalValidate" class="btn btn-green lift" style="${
-                      (data.capital || "").trim() ? "" : "display:none;"
-                    }">Valider</button>
+                    <input class="input" id="capital" placeholder="${placeholders.capital}"
+                      value="${escapeAttr(data.capital)}" style="flex:1; min-width: 220px;" />
+                    <button id="capitalValidate" class="btn btn-green lift"
+                      style="${(data.capital || "").trim() ? "" : "display:none;"}">Valider</button>
                   </div>
                 `
             }
@@ -1222,40 +1283,29 @@ function renderDailyDayPage(isoDate) {
                 `
                 : `
                   <div class="inline-actions">
-                    <input class="input" id="caisseDepart" placeholder="${placeholders.caisseDepart}" value="${escapeAttr(
-                      data.caisseDepart
-                    )}" style="flex:1; min-width: 220px;" />
-                    <button id="caisseDepartValidate" class="btn btn-green lift" style="${
-                      (data.caisseDepart || "").trim() ? "" : "display:none;"
-                    }">Valider</button>
+                    <input class="input" id="caisseDepart" placeholder="${placeholders.caisseDepart}"
+                      value="${escapeAttr(data.caisseDepart)}" style="flex:1; min-width: 220px;" />
+                    <button id="caisseDepartValidate" class="btn btn-green lift"
+                      style="${(data.caisseDepart || "").trim() ? "" : "display:none;"}">Valider</button>
                   </div>
                 `
             }
           </div>
 
-          <!-- DÉPENSES -->
-          <div class="${rowClass}">
-            <div class="label">Dépenses :</div>
-            ${
-              data.depenseFinalized
-                ? `
+          <!-- ✅ DÉPENSES (pile) -->
+          ${renderPrelevementSectionHTML(pDep, "depenses", "Dépenses", rowClass, data.daySaved)}
+          ${
+            pDep.finalized
+              ? `
+                <div class="${rowClass}">
+                  <div class="label">Dépenses totales :</div>
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(data.depense || "0")}</div>
-                    <button id="depenseModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+                    <div class="card card-white lift">Total : ${formatTotal(depensesWeekTotal)}</div>
                   </div>
-                `
-                : `
-                  <div class="inline-actions">
-                    <input class="input" id="depense" placeholder="${placeholders.depense}" value="${escapeAttr(
-                      data.depense
-                    )}" style="flex:1; min-width: 220px;" />
-                    <button id="depenseValidate" class="btn btn-green lift" style="${
-                      (data.depense || "").trim() ? "" : "display:none;"
-                    }">Valider</button>
-                  </div>
-                `
-            }
-          </div>
+                </div>
+              `
+              : ``
+          }
 
           <!-- PRÉLÈVEMENT SUR CAPITAL -->
           ${renderPrelevementSectionHTML(pCap, "prelevCap", "Prélèvement sur capital", rowClass, data.daySaved)}
@@ -1288,6 +1338,26 @@ function renderDailyDayPage(isoDate) {
             }
           </div>
 
+          ${
+            data.recetteFinalized
+              ? `
+                <div class="${rowClass}">
+                  <div class="label">Recette hebdomadaire :</div>
+                  <div class="total-row">
+                    <div class="card card-white lift">Total : ${formatTotal(recetteWeekTotal)}</div>
+                  </div>
+                </div>
+
+                <div class="${rowClass}">
+                  <div class="label">Recette totale :</div>
+                  <div class="total-row">
+                    <div class="card card-white lift">Total : ${formatTotal(recetteYearTotal)}</div>
+                  </div>
+                </div>
+              `
+              : ``
+          }
+
           <!-- PRT -->
           <div class="${rowClass}">
             <div class="label">Prix de revient total :</div>
@@ -1301,21 +1371,18 @@ function renderDailyDayPage(isoDate) {
                 `
                 : `
                   <div class="inline-actions">
-                    <input class="input" id="prt" placeholder="${placeholders.prt}" value="${escapeAttr(
-                      data.prt
-                    )}" style="flex:1; min-width: 220px;" />
-                    <button id="prtValidate" class="btn btn-green lift" style="${
-                      (data.prt || "").trim() ? "" : "display:none;"
-                    }">Valider</button>
+                    <input class="input" id="prt" placeholder="${placeholders.prt}"
+                      value="${escapeAttr(data.prt)}" style="flex:1; min-width: 220px;" />
+                    <button id="prtValidate" class="btn btn-green lift"
+                      style="${(data.prt || "").trim() ? "" : "display:none;"}">Valider</button>
                   </div>
                 `
             }
           </div>
 
-          <!-- BÉNÉFICE RÉEL (inchangé) -->
+          <!-- BÉNÉFICE RÉEL -->
           <div class="${rowClass}">
             <div class="label">Bénéfice réel :</div>
-
             ${
               data.beneficeReelFinalized
                 ? `
@@ -1323,9 +1390,6 @@ function renderDailyDayPage(isoDate) {
                     <div class="card card-white lift">${escapeHtml(data.beneficeReel || "0")}</div>
                     <button id="benefModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
-
-                  
-
                 `
                 : `
                   <div class="inline-actions">
@@ -1340,21 +1404,21 @@ function renderDailyDayPage(isoDate) {
                 `
             }
           </div>
+
           ${
-  data.beneficeReelFinalized
-    ? `
-      <div class="${rowClass}">
-        <div class="label">Bénéfice réel total :</div>
-        <div class="card card-white lift">Total : ${formatTotal(monthTotal)}</div>
-      </div>
-    `
-    : ``
-}
+            data.beneficeReelFinalized
+              ? `
+                <div class="${rowClass}">
+                  <div class="label">Bénéfice réel total :</div>
+                  <div class="total-row">
+                    <div class="card card-white lift">Total : ${formatTotal(monthTotal)}</div>
+                  </div>
+                </div>
+              `
+              : ``
+          }
 
-          <!-- ✅ NOUVELLE CAISSE RÉELLE (pile) -->
           ${ncrSectionHTML}
-
-          <!-- NOUVEAU CAPITAL (pile) -->
           ${ncSectionHTML}
 
           <!-- NOUVELLE LIQUIDITÉ -->
@@ -1382,25 +1446,26 @@ function renderDailyDayPage(isoDate) {
             }
           </div>
 
-          <!-- ✅ ENREGISTRER / MODIFIER (global) -->
-<div style="display:flex; justify-content:center; margin-top: 16px;">
-  ${
-    !data.daySaved
-      ? `
-        <button id="saveDay" class="btn btn-green lift"
-          ${saveEligible ? "" : "disabled"}
-          style="min-width: 220px;">
-          Enregistrer
-        </button>
-      `
-      : `
-        <button id="editDay" class="btn btn-blue lift"
-          style="min-width: 220px;">
-          Modifier
-        </button>
-      `
-  }
-</div>
+          <!-- ✅ ENREGISTRER / MODIFIER -->
+          <div style="display:flex; justify-content:center; margin-top: 16px;">
+            ${
+              !data.daySaved
+                ? `
+                  <button id="saveDay" class="btn btn-green lift"
+                    ${saveEligible ? "" : "disabled"}
+                    style="min-width: 220px;">
+                    Enregistrer
+                  </button>
+                `
+                : `
+                  <button id="editDay" class="btn btn-blue lift"
+                    style="min-width: 220px;">
+                    Modifier
+                  </button>
+                `
+            }
+          </div>
+
         </div>
       </div>
     </div>
@@ -1410,14 +1475,12 @@ function renderDailyDayPage(isoDate) {
 
   // -------------------------
   // ✅ Champs numériques simples : chiffres + virgule uniquement
-  // liquidite / capital / caisseDepart / depense / prt
-  // Entrée = Valider
+  // liquidite / capital / caisseDepart / prt
   // -------------------------
   function filterDigitsComma(raw) {
     let s = String(raw || "");
     s = s.replace(/\./g, ",");
     let cleaned = s.replace(/[^0-9,]/g, "");
-
     const firstComma = cleaned.indexOf(",");
     if (firstComma !== -1) {
       cleaned = cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, "");
@@ -1430,22 +1493,20 @@ function renderDailyDayPage(isoDate) {
     const validateBtn = document.getElementById(validateId);
     const modifyBtn = document.getElementById(modifyId);
 
-    if (input) {
-      function sync() {
-        const hasText = (data[key] || "").trim().length > 0;
-        if (validateBtn) validateBtn.style.display = hasText ? "" : "none";
-      }
+    function sync() {
+      const hasText = (data[key] || "").trim().length > 0;
+      if (validateBtn) validateBtn.style.display = hasText ? "" : "none";
+    }
 
+    if (input) {
       sync();
 
       input.addEventListener("input", () => {
         const filtered = filterDigitsComma(input.value);
-
         if (filtered !== input.value) {
           input.value = filtered;
           shake(input);
         }
-
         data[key] = filtered;
         markDirty();
         sync();
@@ -1458,44 +1519,30 @@ function renderDailyDayPage(isoDate) {
           if (validateBtn && hasText) validateBtn.click();
         }
       });
-
-      if (validateBtn) {
-  validateBtn.addEventListener("click", async () => {
-    const v = (data[key] || "").trim();
-    if (!v) {
-      validateBtn.style.display = "none";
-      return;
     }
-    data[finalizedKey] = true;
-    markDirty();
-    try {
-  await persistNow();
-} catch (e) {
-  alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
-  console.error(e);
-}
-renderDailyDayPage(isoDate);
 
-  });
-}
-
+    if (validateBtn) {
+      validateBtn.addEventListener("click", async () => {
+        const v = (data[key] || "").trim();
+        if (!v) {
+          validateBtn.style.display = "none";
+          return;
+        }
+        data[finalizedKey] = true;
+        markDirty();
+        await safePersistNow();
+        renderDailyDayPage(isoDate);
+      });
     }
 
     if (modifyBtn) {
-  modifyBtn.addEventListener("click", async () => {
-    data[finalizedKey] = false;
-    markDirty();
-    try {
-  await persistNow();
-} catch (e) {
-  alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
-  console.error(e);
-}
-renderDailyDayPage(isoDate);
-
-  });
-}
-
+      modifyBtn.addEventListener("click", async () => {
+        data[finalizedKey] = false;
+        markDirty();
+        await safePersistNow();
+        renderDailyDayPage(isoDate);
+      });
+    }
   }
 
   if (!data.liquiditeFinalized)
@@ -1507,43 +1554,26 @@ renderDailyDayPage(isoDate);
   else bindNumericFinalize(null, "capital", "capitalFinalized", "capitalValidate", "capitalModify");
 
   if (!data.caisseDepartFinalized)
-    bindNumericFinalize(
-      "caisseDepart",
-      "caisseDepart",
-      "caisseDepartFinalized",
-      "caisseDepartValidate",
-      "caisseDepartModify"
-    );
+    bindNumericFinalize("caisseDepart", "caisseDepart", "caisseDepartFinalized", "caisseDepartValidate", "caisseDepartModify");
   else
-    bindNumericFinalize(
-      null,
-      "caisseDepart",
-      "caisseDepartFinalized",
-      "caisseDepartValidate",
-      "caisseDepartModify"
-    );
-
-  if (!data.depenseFinalized)
-    bindNumericFinalize("depense", "depense", "depenseFinalized", "depenseValidate", "depenseModify");
-  else bindNumericFinalize(null, "depense", "depenseFinalized", "depenseValidate", "depenseModify");
+    bindNumericFinalize(null, "caisseDepart", "caisseDepart", "caisseDepartFinalized", "caisseDepartValidate", "caisseDepartModify");
 
   if (!data.prtFinalized) bindNumericFinalize("prt", "prt", "prtFinalized", "prtValidate", "prtModify");
   else bindNumericFinalize(null, "prt", "prtFinalized", "prtValidate", "prtModify");
 
   // -------------------------
-  // ✅ Prélèvements (nouvelles règles boutons)
+  // ✅ Prélèvements + Dépenses
   // -------------------------
+  bindPrelevementHandlers(pDep, "depenses", isoDate, markDirty);
   bindPrelevementHandlers(pCap, "prelevCap", isoDate, markDirty);
   bindPrelevementHandlers(pCaisse, "prelevCaisse", isoDate, markDirty);
 
   // -------------------------
-  // ✅ Handlers champs opérations (Recette / NL / Bénéfice réel)
-  // Entrée = Valider
+  // ✅ Opérations (Recette / NL / Bénéfice réel)
   // -------------------------
   function bindOpInput(inputId, dataKey, buttonId, onValid) {
     const input = document.getElementById(inputId);
     const btn = buttonId ? document.getElementById(buttonId) : null;
-
     if (!input) return;
 
     let lastValid = data[dataKey] || "";
@@ -1587,7 +1617,7 @@ renderDailyDayPage(isoDate);
     });
 
     if (btn) {
-      btn.addEventListener("click", (e) => {
+      btn.addEventListener("click", async (e) => {
         const v = (data[dataKey] || "").trim();
         if (!v || !isOperationPosed(v)) {
           input.classList.add("error");
@@ -1607,133 +1637,101 @@ renderDailyDayPage(isoDate);
         }
 
         input.classList.remove("error");
-
-        if (typeof onValid === "function") onValid(v, result);
+        if (typeof onValid === "function") await onValid(v, result);
       });
     }
   }
 
-  // Recette
-if (!data.recetteFinalized) {
-  bindOpInput("recette", "recette", "recetteValidate", async () => {
-    data.recetteFinalized = true;
-    markDirty();
-    try {
-      await persistNow();
-    } catch (e) {
-      alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
-      console.error(e);
-    }
-    renderDailyDayPage(isoDate);
-  });
-}
+  if (!data.recetteFinalized) {
+    bindOpInput("recette", "recette", "recetteValidate", async () => {
+      data.recetteFinalized = true;
+      markDirty();
+      await safePersistNow();
+      renderDailyDayPage(isoDate);
+    });
+  }
 
-
-  // NL
-if (!data.nouvelleLiquiditeFinalized) {
-  bindOpInput("nouvelleLiquidite", "nouvelleLiquidite", "nlValidate", async () => {
-    data.nouvelleLiquiditeFinalized = true;
-    markDirty();
-    try {
-      await persistNow();
-    } catch (e) {
-      alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
-      console.error(e);
-    }
-    renderDailyDayPage(isoDate);
-  });
-}
-
+  if (!data.nouvelleLiquiditeFinalized) {
+    bindOpInput("nouvelleLiquidite", "nouvelleLiquidite", "nlValidate", async () => {
+      data.nouvelleLiquiditeFinalized = true;
+      markDirty();
+      await safePersistNow();
+      renderDailyDayPage(isoDate);
+    });
+  }
 
   const recetteModify = document.getElementById("recetteModify");
-  if (recetteModify)
-    recetteModify.addEventListener("click", () => {
+  if (recetteModify) {
+    recetteModify.addEventListener("click", async () => {
       data.recetteFinalized = false;
       markDirty();
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
+  }
 
   const nlModify = document.getElementById("nlModify");
-  if (nlModify)
-    nlModify.addEventListener("click", () => {
+  if (nlModify) {
+    nlModify.addEventListener("click", async () => {
       data.nouvelleLiquiditeFinalized = false;
       markDirty();
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
+  }
 
-  // Bénéfice réel (inchangé + Entrée=Valider via bindOpInput)
   if (!data.beneficeReelFinalized) {
     bindOpInput("beneficeReel", "beneficeReel", "benefValidate");
 
     const benefValidateBtn = document.getElementById("benefValidate");
     const benefInput = document.getElementById("beneficeReel");
 
-    if (benefInput && benefValidateBtn) {
-      benefInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          if (benefValidateBtn.style.display !== "none" && !benefValidateBtn.disabled) benefValidateBtn.click();
-        }
-      });
-    }
-
     if (benefValidateBtn) {
       benefValidateBtn.addEventListener("click", async () => {
-
         const raw = (data.beneficeReel || "").trim();
 
         if (!raw || !isOperationPosed(raw)) {
           data.beneficeReelError = true;
-          const i = document.getElementById("beneficeReel");
-          const b = document.getElementById("benefValidate");
-          if (i) i.classList.add("error");
-          if (i) shake(i);
-          if (b) shake(b);
+          if (benefInput) benefInput.classList.add("error");
+          if (benefInput) shake(benefInput);
+          shake(benefValidateBtn);
           return;
         }
 
         const result = evalOperation(raw);
         if (result === null) {
           data.beneficeReelError = true;
-          const i = document.getElementById("beneficeReel");
-          const b = document.getElementById("benefValidate");
-          if (i) i.classList.add("error");
-          if (i) shake(i);
-          if (b) shake(b);
+          if (benefInput) benefInput.classList.add("error");
+          if (benefInput) shake(benefInput);
+          shake(benefValidateBtn);
           return;
         }
 
         data.beneficeReelFinalized = true;
-data.beneficeReelError = false;
-markDirty();
-try {
-  await persistNow();
-} catch (e) {
-  alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
-  console.error(e);
-}
-renderDailyDayPage(isoDate);
-
+        data.beneficeReelError = false;
+        markDirty();
+        await safePersistNow();
+        renderDailyDayPage(isoDate);
       });
     }
   }
 
   const benefModifyBtn = document.getElementById("benefModify");
   if (benefModifyBtn) {
-    benefModifyBtn.addEventListener("click", () => {
+    benefModifyBtn.addEventListener("click", async () => {
       data.beneficeReelFinalized = false;
       data.beneficeReelError = false;
       markDirty();
+      await safePersistNow();
       renderDailyDayPage(isoDate);
     });
   }
 
   // -------------------------
-  // ✅ Helpers pile (Nouveau capital / Nouvelle caisse réelle)
+  // ✅ Helpers pile NC/NCR + handlers (persist)
   // -------------------------
   function bindNcTextFilter(inputEl, getVal, setVal, clearErrorFlag) {
     if (!inputEl) return;
-
     let lastValid = getVal() || "";
 
     inputEl.addEventListener("input", () => {
@@ -1762,7 +1760,6 @@ renderDailyDayPage(isoDate);
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        // le click est géré par les validate buttons (on clique si possible)
         const id = inputEl.id;
         const validateId =
           id === "ncDraft"
@@ -1781,9 +1778,11 @@ renderDailyDayPage(isoDate);
     });
   }
 
-  // -------------------------
-  // ✅ NOUVEAU CAPITAL handlers (pile)
-  // -------------------------
+  async function persistAndRerender() {
+    await safePersistNow();
+    renderDailyDayPage(isoDate);
+  }
+
   function resetNouveauCapitalToZero() {
     nc.items = [];
     nc.draft = "";
@@ -1794,29 +1793,21 @@ renderDailyDayPage(isoDate);
     nc.draftError = false;
   }
 
-  // Draft
   const ncDraftInput = document.getElementById("ncDraft");
   const ncValidate = document.getElementById("ncValidate");
-  const ncFinish = document.getElementById("ncFinish"); // peut être null
+  const ncFinish = document.getElementById("ncFinish");
 
   if (ncDraftInput) {
-    bindNcTextFilter(
-      ncDraftInput,
-      () => nc.draft,
-      (v) => (nc.draft = v),
-      (flag) => (nc.draftError = flag)
-    );
+    bindNcTextFilter(ncDraftInput, () => nc.draft, (v) => (nc.draft = v), (flag) => (nc.draftError = flag));
 
     function syncNcValidateBtn() {
       const v = nc.draft || "";
       const hasText = v.trim().length > 0;
       const ok = isOperationPosed(v);
-
       if (ncValidate) {
         ncValidate.style.display = hasText ? "" : "none";
         ncValidate.disabled = hasText ? !ok : true;
       }
-
       if (hasText && !ok) ncDraftInput.classList.add("error");
       else ncDraftInput.classList.remove("error");
     }
@@ -1825,7 +1816,7 @@ renderDailyDayPage(isoDate);
     ncDraftInput.addEventListener("input", syncNcValidateBtn);
 
     if (ncValidate) {
-      ncValidate.addEventListener("click", (e) => {
+      ncValidate.addEventListener("click", async (e) => {
         const raw = (nc.draft || "").trim();
         if (!raw || !isOperationPosed(raw)) {
           nc.draftError = true;
@@ -1835,7 +1826,6 @@ renderDailyDayPage(isoDate);
           e.preventDefault();
           return;
         }
-
         const res = evalOperation(raw);
         if (res === null) {
           nc.draftError = true;
@@ -1851,14 +1841,13 @@ renderDailyDayPage(isoDate);
         nc.draftError = false;
 
         markDirty();
-        renderDailyDayPage(isoDate);
+        await persistAndRerender();
       });
     }
   }
 
-  // Terminer
   if (ncFinish) {
-    ncFinish.addEventListener("click", (e) => {
+    ncFinish.addEventListener("click", async (e) => {
       const draftHasTextNow = (nc.draft || "").trim().length > 0;
       const editHasTextNow = nc.editIndex !== null && (nc.editDraft || "").trim().length > 0;
       const canFinishNow = nc.items.length > 0 && !draftHasTextNow && !editHasTextNow;
@@ -1887,25 +1876,23 @@ renderDailyDayPage(isoDate);
       nc.draftError = false;
 
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   }
 
-  // Modifier (bleu)
   const ncModifyAll = document.getElementById("ncModifyAll");
   if (ncModifyAll) {
-    ncModifyAll.addEventListener("click", () => {
+    ncModifyAll.addEventListener("click", async () => {
       nc.finalized = false;
       nc.draftError = false;
       nc.editError = false;
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   }
 
-  // Supprimer
   app.querySelectorAll("[data-nc-del]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -1927,13 +1914,12 @@ renderDailyDayPage(isoDate);
       }
 
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   });
 
-  // Modifier une case
   app.querySelectorAll("[data-nc-mod]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -1945,32 +1931,24 @@ renderDailyDayPage(isoDate);
       nc.editError = false;
 
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   });
 
-  // Edition
   const ncEditInput = document.getElementById("ncEditInput");
   const ncEditValidate = document.getElementById("ncEditValidate");
 
   if (ncEditInput) {
-    bindNcTextFilter(
-      ncEditInput,
-      () => nc.editDraft,
-      (v) => (nc.editDraft = v),
-      (flag) => (nc.editError = flag)
-    );
+    bindNcTextFilter(ncEditInput, () => nc.editDraft, (v) => (nc.editDraft = v), (flag) => (nc.editError = flag));
 
     function syncNcEditValidateBtn() {
       const v = nc.editDraft || "";
       const hasText = v.trim().length > 0;
       const ok = isOperationPosed(v);
-
       if (ncEditValidate) {
         ncEditValidate.style.display = hasText ? "" : "none";
         ncEditValidate.disabled = hasText ? !ok : true;
       }
-
       if (hasText && !ok) ncEditInput.classList.add("error");
       else ncEditInput.classList.remove("error");
     }
@@ -1979,7 +1957,7 @@ renderDailyDayPage(isoDate);
     ncEditInput.addEventListener("input", syncNcEditValidateBtn);
 
     if (ncEditValidate) {
-      ncEditValidate.addEventListener("click", (e) => {
+      ncEditValidate.addEventListener("click", async (e) => {
         const raw = (nc.editDraft || "").trim();
         if (!raw || !isOperationPosed(raw)) {
           nc.editError = true;
@@ -1989,7 +1967,6 @@ renderDailyDayPage(isoDate);
           e.preventDefault();
           return;
         }
-
         const res = evalOperation(raw);
         if (res === null) {
           nc.editError = true;
@@ -2004,20 +1981,16 @@ renderDailyDayPage(isoDate);
         if (idx === null || idx < 0 || idx >= nc.items.length) return;
 
         nc.items[idx] = { raw, result: res };
-
         nc.editIndex = null;
         nc.editDraft = "";
         nc.editError = false;
 
         markDirty();
-        renderDailyDayPage(isoDate);
+        await persistAndRerender();
       });
     }
   }
 
-  // -------------------------
-  // ✅ NOUVELLE CAISSE RÉELLE handlers (pile)
-  // -------------------------
   function resetNcrToZero() {
     ncr.items = [];
     ncr.draft = "";
@@ -2033,23 +2006,16 @@ renderDailyDayPage(isoDate);
   const ncrFinish = document.getElementById("ncrFinish");
 
   if (ncrDraftInput) {
-    bindNcTextFilter(
-      ncrDraftInput,
-      () => ncr.draft,
-      (v) => (ncr.draft = v),
-      (flag) => (ncr.draftError = flag)
-    );
+    bindNcTextFilter(ncrDraftInput, () => ncr.draft, (v) => (ncr.draft = v), (flag) => (ncr.draftError = flag));
 
     function syncNcrValidateBtn() {
       const v = ncr.draft || "";
       const hasText = v.trim().length > 0;
       const ok = isOperationPosed(v);
-
       if (ncrValidate) {
         ncrValidate.style.display = hasText ? "" : "none";
         ncrValidate.disabled = hasText ? !ok : true;
       }
-
       if (hasText && !ok) ncrDraftInput.classList.add("error");
       else ncrDraftInput.classList.remove("error");
     }
@@ -2058,7 +2024,7 @@ renderDailyDayPage(isoDate);
     ncrDraftInput.addEventListener("input", syncNcrValidateBtn);
 
     if (ncrValidate) {
-      ncrValidate.addEventListener("click", (e) => {
+      ncrValidate.addEventListener("click", async (e) => {
         const raw = (ncr.draft || "").trim();
         if (!raw || !isOperationPosed(raw)) {
           ncr.draftError = true;
@@ -2068,7 +2034,6 @@ renderDailyDayPage(isoDate);
           e.preventDefault();
           return;
         }
-
         const res = evalOperation(raw);
         if (res === null) {
           ncr.draftError = true;
@@ -2084,13 +2049,13 @@ renderDailyDayPage(isoDate);
         ncr.draftError = false;
 
         markDirty();
-        renderDailyDayPage(isoDate);
+        await persistAndRerender();
       });
     }
   }
 
   if (ncrFinish) {
-    ncrFinish.addEventListener("click", (e) => {
+    ncrFinish.addEventListener("click", async (e) => {
       const draftHasTextNow = (ncr.draft || "").trim().length > 0;
       const editHasTextNow = ncr.editIndex !== null && (ncr.editDraft || "").trim().length > 0;
       const canFinishNow = ncr.items.length > 0 && !draftHasTextNow && !editHasTextNow;
@@ -2119,23 +2084,23 @@ renderDailyDayPage(isoDate);
       ncr.draftError = false;
 
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   }
 
   const ncrModifyAll = document.getElementById("ncrModifyAll");
   if (ncrModifyAll) {
-    ncrModifyAll.addEventListener("click", () => {
+    ncrModifyAll.addEventListener("click", async () => {
       ncr.finalized = false;
       ncr.draftError = false;
       ncr.editError = false;
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   }
 
   app.querySelectorAll("[data-ncr-del]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -2157,12 +2122,12 @@ renderDailyDayPage(isoDate);
       }
 
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   });
 
   app.querySelectorAll("[data-ncr-mod]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+    btn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
 
@@ -2174,7 +2139,7 @@ renderDailyDayPage(isoDate);
       ncr.editError = false;
 
       markDirty();
-      renderDailyDayPage(isoDate);
+      await persistAndRerender();
     });
   });
 
@@ -2182,23 +2147,16 @@ renderDailyDayPage(isoDate);
   const ncrEditValidate = document.getElementById("ncrEditValidate");
 
   if (ncrEditInput) {
-    bindNcTextFilter(
-      ncrEditInput,
-      () => ncr.editDraft,
-      (v) => (ncr.editDraft = v),
-      (flag) => (ncr.editError = flag)
-    );
+    bindNcTextFilter(ncrEditInput, () => ncr.editDraft, (v) => (ncr.editDraft = v), (flag) => (ncr.editError = flag));
 
     function syncNcrEditValidateBtn() {
       const v = ncr.editDraft || "";
       const hasText = v.trim().length > 0;
       const ok = isOperationPosed(v);
-
       if (ncrEditValidate) {
         ncrEditValidate.style.display = hasText ? "" : "none";
         ncrEditValidate.disabled = hasText ? !ok : true;
       }
-
       if (hasText && !ok) ncrEditInput.classList.add("error");
       else ncrEditInput.classList.remove("error");
     }
@@ -2207,7 +2165,7 @@ renderDailyDayPage(isoDate);
     ncrEditInput.addEventListener("input", syncNcrEditValidateBtn);
 
     if (ncrEditValidate) {
-      ncrEditValidate.addEventListener("click", (e) => {
+      ncrEditValidate.addEventListener("click", async (e) => {
         const raw = (ncr.editDraft || "").trim();
         if (!raw || !isOperationPosed(raw)) {
           ncr.editError = true;
@@ -2217,7 +2175,6 @@ renderDailyDayPage(isoDate);
           e.preventDefault();
           return;
         }
-
         const res = evalOperation(raw);
         if (res === null) {
           ncr.editError = true;
@@ -2232,80 +2189,56 @@ renderDailyDayPage(isoDate);
         if (idx === null || idx < 0 || idx >= ncr.items.length) return;
 
         ncr.items[idx] = { raw, result: res };
-
         ncr.editIndex = null;
         ncr.editDraft = "";
         ncr.editError = false;
 
         markDirty();
-        renderDailyDayPage(isoDate);
+        await persistAndRerender();
       });
     }
   }
 
   // -------------------------
-  // ✅ ENREGISTRER
+  // ✅ ENREGISTRER / MODIFIER (persisté en DB)
   // -------------------------
-  // ✅ ENREGISTRER
-// -------------------------
-// ✅ ENREGISTRER (persisté en DB)
-// -------------------------
-const saveBtn = document.getElementById("saveDay");
-if (saveBtn) {
-  saveBtn.addEventListener("click", async () => {
-    const ok = computeSaveEligible();
-    if (!ok) {
-      shake(saveBtn);
-      return;
-    }
+  const saveBtn = document.getElementById("saveDay");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      const ok = computeSaveEligible();
+      if (!ok) {
+        shake(saveBtn);
+        return;
+      }
 
-    saveBtn.disabled = true;
+      saveBtn.disabled = true;
 
-    try {
-      // ✅ on marque enregistré AVANT de sauver
-      data.daySaved = true;
+      try {
+        data.daySaved = true;
+        await apiSaveData(dailyStore);
+        renderDailyDayPage(isoDate);
+        alert("Enregistré !");
+      } catch (e) {
+        data.daySaved = false;
+        renderDailyDayPage(isoDate);
+        alert("Erreur sauvegarde : " + (e?.message || "inconnue"));
+        shake(saveBtn);
+      } finally {
+        const b = document.getElementById("saveDay");
+        if (b) b.disabled = false;
+      }
+    });
+  }
 
-      // ✅ on persiste tout le store (incluant daySaved)
-      await apiSaveData(dailyStore);
-
-      renderDailyDayPage(isoDate);
-      alert("Enregistré !");
-    } catch (e) {
-      // rollback
+  const editDayBtn = document.getElementById("editDay");
+  if (editDayBtn) {
+    editDayBtn.addEventListener("click", async () => {
       data.daySaved = false;
+      await safePersistNow();
       renderDailyDayPage(isoDate);
-
-      alert("Erreur sauvegarde : " + (e?.message || "inconnue"));
-      shake(saveBtn);
-    } finally {
-      const b = document.getElementById("saveDay");
-      if (b) b.disabled = false;
-    }
-  });
+    });
+  }
 }
-
-// -------------------------
-// ✅ MODIFIER (et persister en DB)
-// -------------------------
-const editDayBtn = document.getElementById("editDay");
-if (editDayBtn) {
-  editDayBtn.addEventListener("click", async () => {
-    data.daySaved = false;
-
-    try {
-      // ✅ on persiste le fait qu'on repasse en mode édition
-      await apiSaveData(dailyStore);
-    } catch (e) {
-      // pas bloquant
-    }
-
-    renderDailyDayPage(isoDate);
-  });
-}
-
-} // ✅ FIN de renderDailyDayPage
-
-
 function doPrelevValidate(p, prefix, isoDate, onDirty) {
   const raw = (p.draft || "").trim();
 
@@ -2313,7 +2246,6 @@ function doPrelevValidate(p, prefix, isoDate, onDirty) {
   const validateBtn = document.getElementById(`${prefix}Validate`);
 
   if (!raw) {
-    // draft vide => Valider grisé
     if (validateBtn) shake(validateBtn);
     if (inputEl) shake(inputEl);
     return;
@@ -2340,7 +2272,6 @@ function doPrelevValidate(p, prefix, isoDate, onDirty) {
 }
 
 // --------- PAGES "HEBDO/ACHAT" (provisoire) ---------
-
 function renderGenericDayPage(pageName, isoDate) {
   const date = fromISODate(isoDate);
   app.innerHTML = `
@@ -2355,7 +2286,6 @@ function renderGenericDayPage(pageName, isoDate) {
 }
 
 // --------- ROUTING / HISTORIQUE ---------
-
 function parseRoute() {
   const hash = (location.hash || "").replace("#", "");
   if (!hash) return { kind: "home" };
@@ -2373,7 +2303,6 @@ function navigateTo(hash) {
   history.pushState({}, "", hash);
   render();
 }
-
 function renderLogin() {
   app.innerHTML = `
     <div class="page">
@@ -2383,10 +2312,10 @@ function renderLogin() {
 
           <input id="loginUser" class="input" placeholder="Identifiant" autocomplete="username" />
           <div style="display:flex; gap:10px; align-items:center;">
-  <input id="loginPass" class="input" placeholder="Mot de passe" type="password" autocomplete="current-password" style="flex:1;" />
-  <button id="togglePass" class="btn btn-blue lift" type="button" style="min-width:140px;">👁 Afficher</button>
-</div>
-
+            <input id="loginPass" class="input" placeholder="Mot de passe" type="password"
+              autocomplete="current-password" style="flex:1;" />
+            <button id="togglePass" class="btn btn-blue lift" type="button" style="min-width:140px;">👁 Afficher</button>
+          </div>
 
           <button id="loginBtn" class="btn btn-blue lift">Se connecter</button>
           <div id="loginErr" style="color:#ff8080; font-weight:700; text-align:center; display:none;"></div>
@@ -2401,15 +2330,14 @@ function renderLogin() {
   const e = document.getElementById("loginErr");
 
   const t = document.getElementById("togglePass");
-if (t && p) {
-  t.addEventListener("click", () => {
-    const showing = p.type === "text";
-    p.type = showing ? "password" : "text";
-    t.textContent = showing ? "👁 Afficher" : "🙈 Masquer";
-    p.focus();
-  });
-}
-
+  if (t && p) {
+    t.addEventListener("click", () => {
+      const showing = p.type === "text";
+      p.type = showing ? "password" : "text";
+      t.textContent = showing ? "👁 Afficher" : "🙈 Masquer";
+      p.focus();
+    });
+  }
 
   async function doLogin() {
     e.style.display = "none";
@@ -2417,8 +2345,8 @@ if (t && p) {
     try {
       const user = await apiLogin(u.value.trim(), p.value);
       currentUser = user;
-      dailyStore = await apiLoadData(); // ✅ charge DB
-      navigateTo("#daily"); // ou "#", comme tu veux
+      dailyStore = await apiLoadData();
+      navigateTo("#daily");
     } catch (err) {
       e.textContent = err.message || "Erreur";
       e.style.display = "";
@@ -2433,7 +2361,6 @@ if (t && p) {
   });
 }
 
-
 function render() {
   const route = parseRoute();
 
@@ -2447,14 +2374,12 @@ function render() {
 window.addEventListener("popstate", render);
 
 // --------- DÉMARRAGE ---------
-// --------- DÉMARRAGE ---------
 (async function startApp() {
   currentUser = await apiGetMe();
   if (!currentUser) {
     renderLogin();
     return;
   }
-  dailyStore = await apiLoadData(); // ✅ charge DB si déjà connecté
+  dailyStore = await apiLoadData();
   render();
 })();
-
