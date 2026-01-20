@@ -143,7 +143,9 @@ function toNumberLoose(value) {
 }
 
 async function apiGetMe() {
-  const r = await fetch("/api/auth/me");
+  const r = await fetch("/api/auth/me", {
+    credentials: "include",
+  });
   if (!r.ok) return null;
   const j = await r.json();
   return j.user || null;
@@ -152,6 +154,7 @@ async function apiGetMe() {
 async function apiLogin(username, password) {
   const r = await fetch("/api/auth/login", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
@@ -161,12 +164,17 @@ async function apiLogin(username, password) {
 }
 
 async function apiLogout() {
-  await fetch("/api/auth/logout", { method: "POST" });
+  await fetch("/api/auth/logout", {
+    method: "POST",
+    credentials: "include",
+  });
 }
 
 async function apiLoadData() {
-  const r = await fetch("/api/data");
-  if (!r.ok) return {};
+  const r = await fetch("/api/data", {
+    credentials: "include",
+  });
+  if (!r.ok) throw new Error("Not authenticated");
   const j = await r.json();
   return j.dailyStore || {};
 }
@@ -174,6 +182,7 @@ async function apiLoadData() {
 async function apiSaveData(store) {
   const r = await fetch("/api/data", {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dailyStore: store }),
   });
@@ -181,6 +190,7 @@ async function apiSaveData(store) {
   if (!r.ok) throw new Error(j.error || "Save failed");
   return true;
 }
+
 
 
 // ✅ Grille: cases vides avant le 1er / après le dernier
@@ -2122,6 +2132,9 @@ function renderDailyDayPage(isoDate) {
   // ✅ ENREGISTRER
   // -------------------------
   // ✅ ENREGISTRER
+// -------------------------
+// ✅ ENREGISTRER (persisté en DB)
+// -------------------------
 const saveBtn = document.getElementById("saveDay");
 if (saveBtn) {
   saveBtn.addEventListener("click", async () => {
@@ -2131,32 +2144,52 @@ if (saveBtn) {
       return;
     }
 
-    try {
-      saveBtn.disabled = true;
+    saveBtn.disabled = true;
 
-      // ✅ Sauvegarde TOUT le dailyStore en base
+    try {
+      // ✅ on marque enregistré AVANT de sauver
+      data.daySaved = true;
+
+      // ✅ on persiste tout le store (incluant daySaved)
       await apiSaveData(dailyStore);
 
-      data.daySaved = true;
       renderDailyDayPage(isoDate);
       alert("Enregistré !");
     } catch (e) {
-      alert("Erreur sauvegarde : " + (e.message || "inconnue"));
+      // rollback
+      data.daySaved = false;
+      renderDailyDayPage(isoDate);
+
+      alert("Erreur sauvegarde : " + (e?.message || "inconnue"));
       shake(saveBtn);
     } finally {
-      saveBtn.disabled = false;
+      const b = document.getElementById("saveDay");
+      if (b) b.disabled = false;
     }
   });
 }
 
-  const editDayBtn = document.getElementById("editDay");
-  if (editDayBtn) {
-    editDayBtn.addEventListener("click", () => {
-      data.daySaved = false;
-      renderDailyDayPage(isoDate);
-    });
-  }
+// -------------------------
+// ✅ MODIFIER (et persister en DB)
+// -------------------------
+const editDayBtn = document.getElementById("editDay");
+if (editDayBtn) {
+  editDayBtn.addEventListener("click", async () => {
+    data.daySaved = false;
+
+    try {
+      // ✅ on persiste le fait qu'on repasse en mode édition
+      await apiSaveData(dailyStore);
+    } catch (e) {
+      // pas bloquant
+    }
+
+    renderDailyDayPage(isoDate);
+  });
 }
+
+} // ✅ FIN de renderDailyDayPage
+
 
 function doPrelevValidate(p, prefix, isoDate, onDirty) {
   const raw = (p.draft || "").trim();
