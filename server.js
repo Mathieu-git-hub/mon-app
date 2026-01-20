@@ -241,8 +241,7 @@ app.post("/api/data", requireAuth, async (req, res) => {
   }
 });
 
-app.get("*", (req, res) => {
-  if (req.path.startsWith("/api/")) return res.status(404).end();
+app.get(/^(?!\/api\/).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
