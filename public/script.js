@@ -1454,12 +1454,14 @@ function renderDailyDayPage(isoDate) {
     }
 
     if (modifyBtn) {
-      modifyBtn.addEventListener("click", () => {
-        data[finalizedKey] = false;
-        markDirty();
-        renderDailyDayPage(isoDate);
-      });
-    }
+  modifyBtn.addEventListener("click", async () => {
+    data[finalizedKey] = false;
+    markDirty();
+    await persistNow(); // ✅ persiste aussi le retour en édition
+    renderDailyDayPage(isoDate);
+  });
+}
+
   }
 
   if (!data.liquiditeFinalized)
