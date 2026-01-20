@@ -215,13 +215,10 @@ async function apiSaveData(store) {
 }
 
 async function persistNow() {
-  try {
-    if (!currentUser) return;
-    await apiSaveData(dailyStore);
-  } catch (e) {
-    console.warn("Persist failed:", e?.message || e);
-  }
+  if (!currentUser) throw new Error("No currentUser");
+  await apiSaveData(dailyStore); // si ça échoue, on veut le voir
 }
+
 
 
 
@@ -944,21 +941,21 @@ function renderDailyDayPage(isoDate) {
   const ncSectionHTML = nc.finalized
     ? `
   <div class="${rowClass}">
-    <div class="label">Nouvelle caisse réelle :</div>
+    <div class="label">Nouveau capital :</div>
 
     <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
       ${
-        (ncr.items[0])
+        (nc.items[0])
           ? `
             <div class="card card-white lift" style="width:100%;">
-              ${escapeHtml(ncr.items[0].raw)} = ${formatTotal(ncr.items[0].result ?? 0)}
+              ${escapeHtml(nc.items[0].raw)} = ${formatTotal(nc.items[0].result ?? 0)}
             </div>
           `
           : ``
       }
 
       ${
-        ncr.items.slice(1).map(
+        nc.items.slice(1).map(
           (it) => `
             <div class="card card-white lift" style="width:100%;">
               ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
@@ -973,6 +970,7 @@ function renderDailyDayPage(isoDate) {
     </div>
   </div>
 `
+
 
     : `
       <div class="row">
@@ -1446,8 +1444,14 @@ function renderDailyDayPage(isoDate) {
     }
     data[finalizedKey] = true;
     markDirty();
-    await persistNow(); // ✅ SAUVEGARDE IMMÉDIATE
-    renderDailyDayPage(isoDate);
+    try {
+  await persistNow();
+} catch (e) {
+  alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
+  console.error(e);
+}
+renderDailyDayPage(isoDate);
+
   });
 }
 
@@ -1457,8 +1461,14 @@ function renderDailyDayPage(isoDate) {
   modifyBtn.addEventListener("click", async () => {
     data[finalizedKey] = false;
     markDirty();
-    await persistNow(); // ✅ persiste aussi le retour en édition
-    renderDailyDayPage(isoDate);
+    try {
+  await persistNow();
+} catch (e) {
+  alert("Sauvegarde impossible : " + (e?.message || "inconnue"));
+  console.error(e);
+}
+renderDailyDayPage(isoDate);
+
   });
 }
 

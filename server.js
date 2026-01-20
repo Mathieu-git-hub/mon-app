@@ -65,17 +65,18 @@ app.use(
       createTableIfMissing: true,
     }),
     secret: process.env.SESSION_SECRET || "dev-secret",
+    proxy: true,
     resave: false,
     saveUninitialized: false,
     cookie: {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production", // ✅ true sur Render, false en local
-  sameSite: "lax",
-  maxAge: 1000 * 60 * 60 * 24 * 30,
-},
-
+      httpOnly: true,
+      secure: "auto",
+      sameSite: "lax",
+      maxAge: 1000 * 60 * 60 * 24 * 30,
+    },
   })
 );
+
 
 /** ---------------------------
  *  5) Static files
