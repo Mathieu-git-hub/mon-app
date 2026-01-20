@@ -55,12 +55,18 @@ const monthOffsetByPage = {
 function renderHome() {
   app.innerHTML = `
     <div class="page">
-      <div class="home-wrap">
+      <div class="home-wrap" style="flex-direction:column; gap:18px;">
         <div class="home-row">
           <button id="daily" class="big-btn">Compte quotidien</button>
           <button id="weekly" class="big-btn">Compte hebdomadaire</button>
           <button id="buy" class="big-btn">Compte d’achat</button>
         </div>
+
+        ${
+          currentUser
+            ? `<button id="logoutBtn" class="btn btn-blue lift" style="min-width:240px;">Déconnexion</button>`
+            : ``
+        }
       </div>
     </div>
   `;
@@ -68,7 +74,24 @@ function renderHome() {
   document.getElementById("daily").addEventListener("click", () => navigateTo("#daily"));
   document.getElementById("weekly").addEventListener("click", () => navigateTo("#weekly"));
   document.getElementById("buy").addEventListener("click", () => navigateTo("#buy"));
+
+  const lo = document.getElementById("logoutBtn");
+  if (lo) {
+    lo.addEventListener("click", async () => {
+      lo.disabled = true;
+      try {
+        await apiLogout();            // serveur : détruit la session
+      } catch (e) {
+        // même si ça échoue, on nettoie côté client
+      }
+      currentUser = null;             // client : plus connecté
+      dailyStore = {};                // optionnel : vider en mémoire
+      history.pushState({}, "", "#"); // revenir à l'accueil (hash vide)
+      renderLogin();                  // écran connexion
+    });
+  }
 }
+
 
 // --------- OUTILS DATE ---------
 
@@ -2267,7 +2290,11 @@ function renderLogin() {
           <div style="text-align:center; font-size:22px; font-weight:800;">Connexion</div>
 
           <input id="loginUser" class="input" placeholder="Identifiant" autocomplete="username" />
-          <input id="loginPass" class="input" placeholder="Mot de passe" type="password" autocomplete="current-password" />
+          <div style="display:flex; gap:10px; align-items:center;">
+  <input id="loginPass" class="input" placeholder="Mot de passe" type="password" autocomplete="current-password" style="flex:1;" />
+  <button id="togglePass" class="btn btn-blue lift" type="button" style="min-width:140px;">👁 Afficher</button>
+</div>
+
 
           <button id="loginBtn" class="btn btn-blue lift">Se connecter</button>
           <div id="loginErr" style="color:#ff8080; font-weight:700; text-align:center; display:none;"></div>
@@ -2280,6 +2307,17 @@ function renderLogin() {
   const p = document.getElementById("loginPass");
   const b = document.getElementById("loginBtn");
   const e = document.getElementById("loginErr");
+
+  const t = document.getElementById("togglePass");
+if (t && p) {
+  t.addEventListener("click", () => {
+    const showing = p.type === "text";
+    p.type = showing ? "password" : "text";
+    t.textContent = showing ? "👁 Afficher" : "🙈 Masquer";
+    p.focus();
+  });
+}
+
 
   async function doLogin() {
     e.style.display = "none";
