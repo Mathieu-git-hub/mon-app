@@ -535,65 +535,355 @@ function shake(el) {
   el.classList.add("shake");
 }
 
+/* =========================================================
+   ✅ CLAVIER CALCULATRICE (mobile) pour inputs opérations
+   - portrait: essentiels (0-9, +, -, ×, ÷, ., , , backspace, cancel, OK)
+   - paysage: ajoute ( ), ^, π, x²
+========================================================= */
+function isMobileNarrow() {
+  return window.matchMedia("(max-width: 520px)").matches;
+}
+function isLandscape() {
+  return window.matchMedia("(orientation: landscape)").matches;
+}
+
+function ensureCalcPadStyles() {
+  if (document.getElementById("calcPadStyle")) return;
+  const st = document.createElement("style");
+  st.id = "calcPadStyle";
+  st.textContent = `
+    .calcpad {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: rgba(10,10,10,0.98);
+      border-top: 1px solid rgba(255,255,255,0.12);
+      padding: 10px;
+      z-index: 9999;
+    }
+    .calcpad .row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .calcpad button {
+      border: none;
+      border-radius: 12px;
+      padding: 14px 10px;
+      font-weight: 900;
+      font-size: 16px;
+      color: #fff;
+      background: rgba(255,255,255,0.10);
+    }
+    .calcpad button:active { transform: scale(0.98); }
+    .calcpad .op { background: rgba(30,94,255,0.45); }
+    .calcpad .danger { background: rgba(230,0,0,0.55); }
+    .calcpad .ok { background: rgba(25,163,74,0.55); }
+    .calcpad .wide { grid-column: span 2; }
+    @media (max-width: 520px){
+      .calcpad button{ padding: 12px 8px; font-size: 15px; border-radius: 10px; }
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+function attachCalcKeyboard(inputEl, { onEnter } = {}) {
+  if (!inputEl) return;
+  if (!isMobileNarrow()) return;
+
+  ensureCalcPadStyles();
+
+  function insertAtCursor(text) {
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const end = inputEl.selectionEnd ?? inputEl.value.length;
+    const v = inputEl.value;
+    inputEl.value = v.slice(0, start) + text + v.slice(end);
+    const pos = start + text.length;
+    inputEl.setSelectionRange(pos, pos);
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function backspace() {
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const end = inputEl.selectionEnd ?? inputEl.value.length;
+    if (start !== end) {
+      insertAtCursor("");
+      return;
+    }
+    if (start <= 0) return;
+    const v = inputEl.value;
+    inputEl.value = v.slice(0, start - 1) + v.slice(end);
+    const pos = start - 1;
+    inputEl.setSelectionRange(pos, pos);
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function closePad() {
+    const pad = document.getElementById("calcpad");
+    if (pad) pad.remove();
+  }
+
+  function buildPad() {
+    closePad();
+
+    const pad = document.createElement("div");
+    pad.className = "calcpad";
+    pad.id = "calcpad";
+
+    const portrait = !isLandscape();
+
+    const rowsPortrait = [
+      ["7","8","9","+","-"],
+      ["4","5","6","×","÷"],
+      ["1","2","3",".",","],
+      ["0","(",")","⌫","CANCEL"],
+      ["OK"]
+    ];
+
+    const rowsLandscape = [
+      ["7","8","9","+","-"],
+      ["4","5","6","×","÷"],
+      ["1","2","3",".",","],
+      ["0","(",")","^","x²"],
+      ["π","⌫","CANCEL","OK"]
+    ];
+
+    const rows = portrait ? rowsPortrait : rowsLandscape;
+
+    rows.forEach((arr) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      if (arr.length === 1) row.style.gridTemplateColumns = "repeat(1, 1fr)";
+      pad.appendChild(row);
+
+      arr.forEach((key) => {
+        const b = document.createElement("button");
+
+        if (["+","-","×","÷","^","(",")","x²","π"].includes(key)) b.classList.add("op");
+        if (key === "CANCEL") b.classList.add("danger");
+        if (key === "OK") b.classList.add("ok");
+        if (key === "OK" && arr.length === 1) b.classList.add("wide");
+
+        b.textContent = key;
+        b.type = "button";
+
+        b.addEventListener("click", () => {
+          if (key === "⌫") return backspace();
+          if (key === "CANCEL") {
+            inputEl.value = "";
+            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+            return;
+          }
+          if (key === "OK") {
+            closePad();
+            if (typeof onEnter === "function") onEnter();
+            return;
+          }
+          if (key === "×") return insertAtCursor("*");
+          if (key === "÷") return insertAtCursor("/");
+          if (key === "π") return insertAtCursor("3.1415926535");
+          if (key === "x²") return insertAtCursor("^2");
+
+          insertAtCursor(key);
+        });
+
+        row.appendChild(b);
+      });
+    });
+
+    document.body.appendChild(pad);
+  }
+
+  inputEl.setAttribute("inputmode", "none");
+
+  inputEl.addEventListener("focus", buildPad);
+  inputEl.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (document.activeElement !== inputEl) closePad();
+    }, 120);
+  });
+
+  window.addEventListener("orientationchange", () => {
+    if (document.activeElement === inputEl) buildPad();
+  });
+}
+
+
 /* -------------------------
    ✅ RÈGLES "OPÉRATIONS"
+   - Support: + - * / (x, ×, ÷), parenthèses, virgule, puissances ^
+   - Évaluation sans eval()
 ------------------------- */
 function normalizeOp(s) {
-  return String(s || "").replace(/\s+/g, "").replace(",", ".");
+  return String(s || "")
+    .replace(/\s+/g, "")
+    .replace(/,/g, ".")
+    .replace(/[x×]/g, "*")
+    .replace(/[÷]/g, "/");
 }
 
 function charsAllowedForOpInput(value) {
-  return /^[0-9\s.,+\-]*$/.test(value);
+  // autorise chiffres, espaces, , . + - * / x × ÷ ( ) ^
+  return /^[0-9\s.,+\-*/x×÷()^]*$/.test(value);
 }
 
 function isOperationPosed(raw) {
   const s = normalizeOp(raw);
-  if (s === "") return false;
-  if (!/^[0-9+\-\.]*$/.test(s)) return false;
+  if (!s) return false;
 
-  const withoutLeadingSign = s.replace(/^[+\-]/, "");
-  if (!/[+\-]/.test(withoutLeadingSign)) return false;
+  // doit contenir au moins un opérateur binaire ou une puissance
+  if (!/[+\-*/^]/.test(s.replace(/^[+\-]/, ""))) return false;
 
-  const re = /^[+\-]?\d+(?:\.\d+)?(?:[+\-]\d+(?:\.\d+)?)+$/;
-  return re.test(s);
+  // caractères stricts
+  if (!/^[0-9+\-*/.^()]*$/.test(s)) return false;
+
+  // essai d'évaluation "safe"
+  return evalOperation(raw) !== null;
 }
 
 function evalOperation(raw) {
   const s = normalizeOp(raw);
-  if (!isOperationPosed(raw)) return null;
+  if (!s) return null;
 
+  // Tokenizer : nombres / opérateurs / parenthèses
+  const tokens = [];
   let i = 0;
-  let total = 0;
 
-  function readNumber() {
-    let start = i;
-    while (i < s.length && /[0-9.]/.test(s[i])) i++;
-    const part = s.slice(start, i);
-    const n = parseFloat(part);
-    return Number.isFinite(n) ? n : null;
-  }
-
-  let sign = +1;
-  if (s[i] === "+") { sign = +1; i++; }
-  else if (s[i] === "-") { sign = -1; i++; }
-
-  const first = readNumber();
-  if (first === null) return null;
-  total = sign * first;
+  function isDigit(ch) { return /[0-9]/.test(ch); }
 
   while (i < s.length) {
-    const op = s[i];
-    if (op !== "+" && op !== "-") return null;
-    i++;
+    const ch = s[i];
 
-    const n = readNumber();
-    if (n === null) return null;
+    // nombres
+    if (isDigit(ch) || ch === ".") {
+      let start = i;
+      i++;
+      while (i < s.length && (isDigit(s[i]) || s[i] === ".")) i++;
+      const part = s.slice(start, i);
+      const n = parseFloat(part);
+      if (!Number.isFinite(n)) return null;
+      tokens.push({ type: "num", value: n });
+      continue;
+    }
 
-    total = op === "+" ? total + n : total - n;
+    // pi (option : "pi" via bouton -> on injecte le nombre direct, donc pas besoin)
+    // opérateurs / parenthèses
+    if ("+-*/^()".includes(ch)) {
+      tokens.push({ type: "op", value: ch });
+      i++;
+      continue;
+    }
+
+    return null; // caractère invalide
   }
 
-  return total;
+  // Shunting-yard -> RPN
+  const output = [];
+  const stack = [];
+
+  function prec(op) {
+    if (op === "^") return 4;
+    if (op === "*" || op === "/") return 3;
+    if (op === "+" || op === "-") return 2;
+    return 0;
+  }
+  function rightAssoc(op) {
+    return op === "^";
+  }
+
+  // gérer unary +/- : on transforme "-3" en "0 - 3" quand nécessaire
+  const normalized = [];
+  for (let k = 0; k < tokens.length; k++) {
+    const t = tokens[k];
+    if (t.type === "op" && (t.value === "+" || t.value === "-")) {
+      const prev = normalized[normalized.length - 1];
+      const isUnary = !prev || (prev.type === "op" && prev.value !== ")") || (prev.type === "op" && prev.value === "(");
+      if (isUnary) {
+        // injecte 0 puis opérateur
+        normalized.push({ type: "num", value: 0 });
+        normalized.push(t);
+        continue;
+      }
+    }
+    normalized.push(t);
+  }
+
+  for (const t of normalized) {
+    if (t.type === "num") {
+      output.push(t);
+      continue;
+    }
+
+    const op = t.value;
+
+    if (op === "(") {
+      stack.push(op);
+      continue;
+    }
+    if (op === ")") {
+      while (stack.length && stack[stack.length - 1] !== "(") {
+        output.push({ type: "op", value: stack.pop() });
+      }
+      if (!stack.length || stack[stack.length - 1] !== "(") return null;
+      stack.pop(); // remove "("
+      continue;
+    }
+
+    // opérateur binaire
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (top === "(") break;
+
+      const pTop = prec(top);
+      const pCur = prec(op);
+
+      if (pTop > pCur || (pTop === pCur && !rightAssoc(op))) {
+        output.push({ type: "op", value: stack.pop() });
+        continue;
+      }
+      break;
+    }
+    stack.push(op);
+  }
+
+  while (stack.length) {
+    const top = stack.pop();
+    if (top === "(" || top === ")") return null;
+    output.push({ type: "op", value: top });
+  }
+
+  // Évaluation RPN
+  const st = [];
+  for (const t of output) {
+    if (t.type === "num") {
+      st.push(t.value);
+      continue;
+    }
+    const op = t.value;
+    if (st.length < 2) return null;
+    const b = st.pop();
+    const a = st.pop();
+
+    let r;
+    if (op === "+") r = a + b;
+    else if (op === "-") r = a - b;
+    else if (op === "*") r = a * b;
+    else if (op === "/") {
+      if (b === 0) return null;
+      r = a / b;
+    }
+    else if (op === "^") r = Math.pow(a, b);
+    else return null;
+
+    if (!Number.isFinite(r)) return null;
+    st.push(r);
+  }
+
+  if (st.length !== 1) return null;
+  return st[0];
 }
+
+
 
 // ✅ Bénéfice réel total (mensuel jusqu’au jour)
 function computeMonthlyBeneficeTotal(cutoffIsoDate) {
@@ -1082,43 +1372,37 @@ function renderDailyDayPage(isoDate) {
   `;
 
   const ncSectionHTML = nc.finalized
-    ? `
-      <div class="${rowClass}">
-        <div class="label">Nouveau capital :</div>
+  ? `
+    <div class="${rowClass}">
+      <div class="label">Nouveau capital :</div>
 
-        ${
-          data.daySaved
-            ? `
-              <div class="total-row" style="width:100%;">
-                <div class="card card-white lift" style="flex:1; min-width:220px;">
-                  ${
-                    nc.items[0]
-                      ? `${escapeHtml(nc.items[0].raw)} = ${formatTotal(nc.items[0].result ?? 0)}`
-                      : `0`
-                  }
-                </div>
+      <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+        ${nc.items
+          .map(
+            (it) => `
+              <div class="card card-white lift" style="width:100%;">
+                ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
               </div>
-              ${
-                nc.items.length > 1
-                  ? `<div style="margin-top:10px;">${ncFinalList}</div>`
-                  : `<div style="display:flex; justify-content:center; margin-top:2px;">
-                       <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
-                     </div>`
-              }
             `
-            : ncFinalList
-        }
-      </div>
-    `
-    : `
-      <div class="${rowClass}">
-        <div class="label">Nouveau capital :</div>
-        ${ncItemsHTML_editing}
-        <div style="margin-top:10px;">
-          ${ncInputHTML}
+          )
+          .join("")}
+
+        <div style="display:flex; justify-content:center; margin-top:2px;">
+          <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
         </div>
       </div>
-    `;
+    </div>
+  `
+  : `
+    <div class="${rowClass}">
+      <div class="label">Nouveau capital :</div>
+      ${ncItemsHTML_editing}
+      <div style="margin-top:10px;">
+        ${ncInputHTML}
+      </div>
+    </div>
+  `;
+
 
   // -------------------------
   // ✅ NOUVELLE CAISSE RÉELLE (pile) — (inchangé chez toi)
@@ -1267,11 +1551,12 @@ function renderDailyDayPage(isoDate) {
       data.nouvelleLiquiditeFinalized;
 
     const requiredRecorded =
-      pCap.finalized &&
-      pCaisse.finalized &&
-      pDep.finalized &&
-      ncr.finalized &&
-      nc.finalized;
+     pCap.finalized &&
+     pCaisse.finalized &&
+     pDep.finalized &&
+     nc.finalized &&
+     data.nouvelleCaisseReelleFinalized; // ✅ champ simple
+
 
     return !!(requiredFinalized && requiredRecorded);
   }
@@ -1293,7 +1578,7 @@ function renderDailyDayPage(isoDate) {
       (pDep && pDep.finalized) ||
       (pCap && pCap.finalized) ||
       (pCaisse && pCaisse.finalized) ||
-      (ncr && ncr.finalized) ||
+      data.nouvelleCaisseReelleFinalized ||
       (nc && nc.finalized)
     );
   }
@@ -1302,10 +1587,11 @@ function renderDailyDayPage(isoDate) {
   // ✅ caisse départ après prélèvement (affiché seulement après Enregistrer, si total ≠ 0)
   const caisseDepartNum = toNumberLoose(data.caisseDepart || "0") ?? 0;
   const prelevCaisseTotal = computePrelevementTotal((pCaisse && pCaisse.items) ? pCaisse.items : []);
+  
   const showCaisseDepartAfterPrelev =
-    data.daySaved &&
-    !!pCaisse?.finalized &&
-    Math.abs(prelevCaisseTotal) > 0.0000001;
+  !!pCaisse?.finalized &&
+  Math.abs(prelevCaisseTotal) > 0.0000001;
+
 
   const caisseDepartAfter = caisseDepartNum - prelevCaisseTotal;
 
@@ -1528,7 +1814,28 @@ function renderDailyDayPage(isoDate) {
               : ``
           }
 
-          ${ncrSectionHTML}
+          <!-- NOUVELLE CAISSE RÉELLE (comme liquidités/capital) -->
+          <div class="${rowClass}">
+            <div class="label">Nouvelle caisse réelle :</div>
+            ${
+              data.nouvelleCaisseReelleFinalized
+                ? `
+                  <div class="total-row">
+                    <div class="card card-white lift">${escapeHtml(data.nouvelleCaisseReelle || "0")}</div>
+                    <button id="ncrSimpleModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+                  </div>
+                `
+                : `
+                  <div class="inline-actions">
+                    <input class="input" id="ncrSimple" placeholder="(...)"
+                      value="${escapeAttr(data.nouvelleCaisseReelle || "")}" style="flex:1; min-width: 220px;" />
+                    <button id="ncrSimpleValidate" class="btn btn-green lift"
+                      style="${(data.nouvelleCaisseReelle || "").trim() ? "" : "display:none;"}">Valider</button>
+                  </div>
+                `
+            }
+          </div>
+
           ${ncSectionHTML}
 
           <!-- NOUVELLE LIQUIDITÉ -->
@@ -1686,6 +1993,25 @@ function renderDailyDayPage(isoDate) {
     bindNumericFinalize(null, "prt", "prtFinalized", "prtValidate", "prtModify");
 
 
+  // ✅ NOUVELLE CAISSE RÉELLE (simple numérique)
+  if (!data.nouvelleCaisseReelleFinalized)
+    bindNumericFinalize(
+      "ncrSimple",
+      "nouvelleCaisseReelle",
+      "nouvelleCaisseReelleFinalized",
+      "ncrSimpleValidate",
+      "ncrSimpleModify"
+    );
+  else
+    bindNumericFinalize(
+      null,
+      "nouvelleCaisseReelle",
+      "nouvelleCaisseReelleFinalized",
+      "ncrSimpleValidate",
+      "ncrSimpleModify"
+    );
+
+
   // -------------------------
   // ✅ Prélèvements + Dépenses
   // -------------------------
@@ -1700,6 +2026,11 @@ function renderDailyDayPage(isoDate) {
     const input = document.getElementById(inputId);
     const btn = buttonId ? document.getElementById(buttonId) : null;
     if (!input) return;
+
+    attachCalcKeyboard(input, { onEnter: () => {
+      if (btn && btn.style.display !== "none" && !btn.disabled) btn.click();
+    }});
+
 
     let lastValid = data[dataKey] || "";
 
@@ -1857,6 +2188,12 @@ function renderDailyDayPage(isoDate) {
   // -------------------------
     function bindNcTextFilter(inputEl, getVal, setVal, clearErrorFlag) {
     if (!inputEl) return;
+    attachCalcKeyboard(inputEl, { onEnter: () => {
+      const btnId = resolveValidateBtnId(inputEl.id);
+      const vb = btnId ? document.getElementById(btnId) : null;
+      if (vb && vb.style.display !== "none" && !vb.disabled) vb.click();
+    }});
+
 
     let lastValid = getVal() || "";
 
@@ -1988,7 +2325,7 @@ function renderDailyDayPage(isoDate) {
         return;
       }
 
-      nc.items.unshift({ raw, result: res });
+      nc.items.push({ raw, result: res }); // ✅ le plus récent se retrouve en dessous
       nc.draft = "";
       nc.draftError = false;
       nc.editIndex = null;
@@ -2401,6 +2738,12 @@ function renderDailyDayPage(isoDate) {
         if (data.caisseDepartFinalized) { dst.caisseDepart = data.caisseDepart; dst.caisseDepartFinalized = true; }
         if (data.prtFinalized) { dst.prt = data.prt; dst.prtFinalized = true; }
 
+        if (data.nouvelleCaisseReelleFinalized) {
+          dst.nouvelleCaisseReelle = data.nouvelleCaisseReelle;
+          dst.nouvelleCaisseReelleFinalized = true;
+        }
+
+
         if (data.recetteFinalized) { dst.recette = data.recette; dst.recetteFinalized = true; }
         if (data.beneficeReelFinalized) { dst.beneficeReel = data.beneficeReel; dst.beneficeReelFinalized = true; dst.beneficeReelError = false; }
         if (data.nouvelleLiquiditeFinalized) { dst.nouvelleLiquidite = data.nouvelleLiquidite; dst.nouvelleLiquiditeFinalized = true; }
@@ -2415,15 +2758,6 @@ function renderDailyDayPage(isoDate) {
           dst.prelevementCaisse = { items: deepClone(pCaisse.items || []), editing: false, finalized: true, draft: "" };
         }
 
-        if (ncr?.finalized) {
-          dst.nouvelleCaisseReelleStack = deepClone(ncr);
-          dst.nouvelleCaisseReelleStack.editIndex = null;
-          dst.nouvelleCaisseReelleStack.editDraft = "";
-          dst.nouvelleCaisseReelleStack.editError = false;
-          dst.nouvelleCaisseReelleStack.draftError = false;
-          dst.nouvelleCaisseReelleStack.draft = "";
-          dst.nouvelleCaisseReelleStack.finalized = true;
-        }
 
         if (nc?.finalized) {
           dst.nouveauCapitalStack = deepClone(nc);
@@ -2486,7 +2820,7 @@ function doPrelevValidate(p, prefix, isoDate, onDirty) {
   }
 
   const normalized = raw.replace(/\s+/g, "").replace(",", ".");
-  p.items.unshift(normalized);
+  p.items.push(normalized); // ✅ le plus récent est vers la droite (affichage en flex-row)
   p.draft = "";
   p.editing = true;
   p.finalized = false;

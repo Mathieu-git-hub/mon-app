@@ -158,6 +158,110 @@
 
       .input.error { border-color: rgba(230, 0, 0, 0.95); box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.25); }
       .btn.shake { animation: shake 180ms ease-in-out; }
+
+      /* =========================================================
+   ✅ MOBILE / RESPONSIVE (calendrier + pages jour)
+   - évite chevauchement bouton retour / titre
+   - adapte tailles boutons / inputs / cards sans casser desktop
+========================================================= */
+
+@media (max-width: 520px) {
+  .back-btn{
+    top: 12px; left: 12px;
+    padding: 10px 12px;
+    font-size: 16px;
+    border-radius: 10px;
+  }
+
+  /* Calendrier : laisse de l’air pour le bouton retour */
+  .calendar-header{
+    height: 92px;
+    padding-top: 18px;
+    box-sizing: border-box;
+  }
+  .month-title{ font-size: 18px; }
+
+  /* Page jour : évite tout chevauchement avec le bouton retour */
+  .day-page{ padding: 104px 14px 18px; }
+  .date-title{ font-size: 18px; margin-bottom: 18px; }
+
+  .form-col{ gap: 12px; }
+  .label{ font-size: 15px; }
+
+  .input{
+    padding: 12px 12px;
+    font-size: 15px;
+  }
+
+  .btn{
+    padding: 11px 14px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+
+  .calendar-grid{
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .day-box, .day-empty{ border-radius: 10px; }
+}
+
+/* =========================================================
+   ✅ IMPORTANT : après "Enregistrer", les cases blanches doivent
+   être juste après "Intitulé :"
+   (actuellement elles passent parfois en colonne verticale)
+========================================================= */
+
+.row-saved{
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+/* largeur intitulé desktop */
+.row-saved .label{
+  width: 240px;
+  flex: 0 0 240px;
+}
+
+/* contenu à droite : ne force pas le passage à la ligne */
+.row-saved .total-row{
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+/* cartes : autoriser à se “shrink” sans tout casser */
+.row-saved .card-white{
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ajustement mobile : réduire la largeur fixe du label pour que
+   la case blanche reste à côté (juste après :) */
+@media (max-width: 520px){
+  .row-saved .label{
+    width: 170px;
+    flex: 0 0 170px;
+  }
+  .row-saved .total-row{
+    flex-wrap: wrap;       /* si vraiment trop étroit, ça wrap mais reste à droite du label */
+    row-gap: 8px;
+  }
+  .row-saved .card-white{
+    white-space: normal;   /* sur mobile, autoriser 2 lignes si besoin */
+  }
+}
+
+
+
     </style>
   </head>
 
