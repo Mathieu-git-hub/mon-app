@@ -1855,17 +1855,46 @@ function renderDailyDayPage(isoDate) {
   // -------------------------
   // ✅ Helpers pile NC/NCR + handlers (persist) — (inchangé chez toi)
   // -------------------------
-  function bindNcTextFilter(inputEl, getVal, setVal, clearErrorFlag) {
+    function bindNcTextFilter(inputEl, getVal, setVal, clearErrorFlag) {
     if (!inputEl) return;
+
     let lastValid = getVal() || "";
+
+    function resolveValidateBtnId(id) {
+      if (id === "ncDraft") return "ncValidate";
+      if (id === "ncEditInput") return "ncEditValidate";
+      if (id === "ncrDraft") return "ncrValidate";
+      if (id === "ncrEditInput") return "ncrEditValidate";
+      return null;
+    }
+
+    function syncValidateButton(value) {
+      const btnId = resolveValidateBtnId(inputEl.id);
+      if (!btnId) return;
+
+      const vb = document.getElementById(btnId);
+      if (!vb) return;
+
+      const hasText = value.trim().length > 0;
+      const ok = isOperationPosed(value);
+
+      // ✅ comme recette : apparait dès qu’on écrit, et grisé si invalide
+      vb.style.display = hasText ? "" : "none";
+      vb.disabled = hasText ? !ok : true;
+    }
+
+    // ✅ synchro au chargement
+    syncValidateButton(lastValid);
 
     inputEl.addEventListener("input", () => {
       const value = inputEl.value;
 
+      // caractères autorisés seulement
       if (!charsAllowedForOpInput(value)) {
         inputEl.value = lastValid;
         inputEl.classList.add("error");
         shake(inputEl);
+        syncValidateButton(inputEl.value);
         return;
       }
 
@@ -1880,24 +1909,17 @@ function renderDailyDayPage(isoDate) {
       else inputEl.classList.remove("error");
 
       if (typeof clearErrorFlag === "function") clearErrorFlag(false);
+
+      // ✅ IMPORTANT : afficher/masquer + activer/désactiver le bouton Valider
+      syncValidateButton(value);
     });
 
     inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        const id = inputEl.id;
-        const validateId =
-          id === "ncDraft"
-            ? "ncValidate"
-            : id === "ncEditInput"
-              ? "ncEditValidate"
-              : id === "ncrDraft"
-                ? "ncrValidate"
-                : id === "ncrEditInput"
-                  ? "ncrEditValidate"
-                  : null;
-        if (!validateId) return;
-        const vb = document.getElementById(validateId);
+        const btnId = resolveValidateBtnId(inputEl.id);
+        if (!btnId) return;
+        const vb = document.getElementById(btnId);
         if (vb && vb.style.display !== "none" && !vb.disabled) vb.click();
       }
     });
