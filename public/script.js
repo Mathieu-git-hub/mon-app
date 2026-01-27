@@ -1589,7 +1589,7 @@ function renderDailyDayPage(isoDate) {
 
   document.getElementById("back").addEventListener("click", () => history.back());
 
-  // -------------------------
+    // -------------------------
   // ✅ Champs numériques simples : chiffres + virgule uniquement
   // liquidite / capital / caisseDepart / prt
   // -------------------------
@@ -1661,21 +1661,30 @@ function renderDailyDayPage(isoDate) {
     }
   }
 
+  // LIQUIDITÉS
   if (!data.liquiditeFinalized)
     bindNumericFinalize("liquidite", "liquidite", "liquiditeFinalized", "liquiditeValidate", "liquiditeModify");
-  else bindNumericFinalize(null, "liquidite", "liquiditeFinalized", "liquiditeValidate", "liquiditeModify");
+  else
+    bindNumericFinalize(null, "liquidite", "liquiditeFinalized", "liquiditeValidate", "liquiditeModify");
 
+  // CAPITAL
   if (!data.capitalFinalized)
     bindNumericFinalize("capital", "capital", "capitalFinalized", "capitalValidate", "capitalModify");
-  else bindNumericFinalize(null, "capital", "capitalFinalized", "capitalValidate", "capitalModify");
+  else
+    bindNumericFinalize(null, "capital", "capitalFinalized", "capitalValidate", "capitalModify");
 
+  // ✅ CAISSE DÉPART (corrigé)
   if (!data.caisseDepartFinalized)
     bindNumericFinalize("caisseDepart", "caisseDepart", "caisseDepartFinalized", "caisseDepartValidate", "caisseDepartModify");
   else
-    bindNumericFinalize(null, "caisseDepart", "caisseDepart", "caisseDepartValidate", "caisseDepartModify"); // (sans effet, mais gardé)
+    bindNumericFinalize(null, "caisseDepart", "caisseDepartFinalized", "caisseDepartValidate", "caisseDepartModify");
 
-  if (!data.prtFinalized) bindNumericFinalize("prt", "prt", "prtFinalized", "prtValidate", "prtModify");
-  else bindNumericFinalize(null, "prt", "prtFinalized", "prtValidate", "prtModify");
+  // PRT
+  if (!data.prtFinalized)
+    bindNumericFinalize("prt", "prt", "prtFinalized", "prtValidate", "prtModify");
+  else
+    bindNumericFinalize(null, "prt", "prtFinalized", "prtValidate", "prtModify");
+
 
   // -------------------------
   // ✅ Prélèvements + Dépenses
@@ -1911,6 +1920,389 @@ function renderDailyDayPage(isoDate) {
 
   // ... (tes handlers NC / NCR identiques à ton code actuel)
   // ⚠️ Je laisse exactement ton code ci-dessous inchangé dans ton fichier.
+
+    // ===============================
+  // ✅ HANDLERS — NOUVEAU CAPITAL (NC)
+  // ===============================
+
+  // Filtre / synchro pour les inputs NC
+  bindNcTextFilter(
+    document.getElementById("ncDraft"),
+    () => nc.draft,
+    (v) => (nc.draft = v),
+    (flag) => (nc.draftError = flag)
+  );
+
+  bindNcTextFilter(
+    document.getElementById("ncEditInput"),
+    () => nc.editDraft,
+    (v) => (nc.editDraft = v),
+    (flag) => (nc.editError = flag)
+  );
+
+  // Valider draft NC
+  const ncValidateBtn = document.getElementById("ncValidate");
+  if (ncValidateBtn) {
+    ncValidateBtn.addEventListener("click", async () => {
+      const raw = (nc.draft || "").trim();
+      if (!raw || !isOperationPosed(raw)) {
+        nc.draftError = true;
+        const el = document.getElementById("ncDraft");
+        if (el) el.classList.add("error");
+        if (el) shake(el);
+        shake(ncValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      const res = evalOperation(raw);
+      if (res === null) {
+        nc.draftError = true;
+        const el = document.getElementById("ncDraft");
+        if (el) el.classList.add("error");
+        if (el) shake(el);
+        shake(ncValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      nc.items.unshift({ raw, result: res });
+      nc.draft = "";
+      nc.draftError = false;
+      nc.editIndex = null;
+      nc.editDraft = "";
+      nc.editError = false;
+
+      // tant que pas "Terminer", ce n'est pas finalized
+      nc.finalized = false;
+
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
+  // Modifier une ligne NC (ouvrir edit)
+  app.querySelectorAll("[data-nc-mod]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx = Number(btn.getAttribute("data-nc-mod"));
+      if (!Number.isFinite(idx)) return;
+
+      nc.editIndex = idx;
+      nc.editDraft = nc.items[idx]?.raw ?? "";
+      nc.editError = false;
+
+      nc.finalized = false;
+      markDirty();
+      await persistAndRerender();
+    });
+  });
+
+  // Supprimer une ligne NC
+  app.querySelectorAll("[data-nc-del]").forEach((xbtn) => {
+    xbtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const idx = Number(xbtn.getAttribute("data-nc-del"));
+      if (!Number.isFinite(idx)) return;
+
+      nc.items.splice(idx, 1);
+
+      // si on supprimait celle en cours d'édition
+      if (nc.editIndex === idx) {
+        nc.editIndex = null;
+        nc.editDraft = "";
+        nc.editError = false;
+      } else if (nc.editIndex !== null && idx < nc.editIndex) {
+        nc.editIndex -= 1;
+      }
+
+      // si plus rien, reset complet
+      if (nc.items.length === 0) {
+        resetNouveauCapitalToZero();
+      } else {
+        nc.finalized = false;
+      }
+
+      markDirty();
+      await persistAndRerender();
+    });
+  });
+
+  // Valider edit NC
+  const ncEditValidateBtn = document.getElementById("ncEditValidate");
+  if (ncEditValidateBtn) {
+    ncEditValidateBtn.addEventListener("click", async () => {
+      if (nc.editIndex === null) return;
+
+      const raw = (nc.editDraft || "").trim();
+      const input = document.getElementById("ncEditInput");
+
+      if (!raw || !isOperationPosed(raw)) {
+        nc.editError = true;
+        if (input) input.classList.add("error");
+        if (input) shake(input);
+        shake(ncEditValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      const res = evalOperation(raw);
+      if (res === null) {
+        nc.editError = true;
+        if (input) input.classList.add("error");
+        if (input) shake(input);
+        shake(ncEditValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      nc.items[nc.editIndex] = { raw, result: res };
+
+      nc.editIndex = null;
+      nc.editDraft = "";
+      nc.editError = false;
+
+      nc.finalized = false;
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
+  // Terminer NC
+  const ncFinishBtn = document.getElementById("ncFinish");
+  if (ncFinishBtn) {
+    ncFinishBtn.addEventListener("click", async (e) => {
+      const draftHasText = (nc.draft || "").trim().length > 0;
+      const editHasText = nc.editIndex !== null && (nc.editDraft || "").trim().length > 0;
+
+      if (nc.items.length === 0 || draftHasText || editHasText) {
+        const el = document.getElementById(draftHasText ? "ncDraft" : "ncEditInput");
+        if (el) shake(el);
+        shake(ncFinishBtn);
+        e.preventDefault();
+        return;
+      }
+
+      nc.finalized = true;
+      nc.editIndex = null;
+      nc.editDraft = "";
+      nc.editError = false;
+      nc.draft = "";
+      nc.draftError = false;
+
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
+  // Modifier (tout) NC après finalisation
+  const ncModifyAllBtn = document.getElementById("ncModifyAll");
+  if (ncModifyAllBtn) {
+    ncModifyAllBtn.addEventListener("click", async () => {
+      nc.finalized = false;
+      nc.editIndex = null;
+      nc.editDraft = "";
+      nc.editError = false;
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
+  // ===============================
+  // ✅ HANDLERS — NOUVELLE CAISSE RÉELLE (NCR)
+  // ===============================
+
+  function resetNouvelleCaisseReelleToZero() {
+    ncr.items = [];
+    ncr.draft = "";
+    ncr.finalized = false;
+    ncr.editIndex = null;
+    ncr.editDraft = "";
+    ncr.editError = false;
+    ncr.draftError = false;
+  }
+
+  bindNcTextFilter(
+    document.getElementById("ncrDraft"),
+    () => ncr.draft,
+    (v) => (ncr.draft = v),
+    (flag) => (ncr.draftError = flag)
+  );
+
+  bindNcTextFilter(
+    document.getElementById("ncrEditInput"),
+    () => ncr.editDraft,
+    (v) => (ncr.editDraft = v),
+    (flag) => (ncr.editError = flag)
+  );
+
+  // Valider draft NCR
+  const ncrValidateBtn = document.getElementById("ncrValidate");
+  if (ncrValidateBtn) {
+    ncrValidateBtn.addEventListener("click", async () => {
+      const raw = (ncr.draft || "").trim();
+      const input = document.getElementById("ncrDraft");
+
+      if (!raw || !isOperationPosed(raw)) {
+        ncr.draftError = true;
+        if (input) input.classList.add("error");
+        if (input) shake(input);
+        shake(ncrValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      const res = evalOperation(raw);
+      if (res === null) {
+        ncr.draftError = true;
+        if (input) input.classList.add("error");
+        if (input) shake(input);
+        shake(ncrValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      ncr.items.unshift({ raw, result: res });
+      ncr.draft = "";
+      ncr.draftError = false;
+      ncr.editIndex = null;
+      ncr.editDraft = "";
+      ncr.editError = false;
+
+      ncr.finalized = false;
+
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
+  // Modifier une ligne NCR
+  app.querySelectorAll("[data-ncr-mod]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx = Number(btn.getAttribute("data-ncr-mod"));
+      if (!Number.isFinite(idx)) return;
+
+      ncr.editIndex = idx;
+      ncr.editDraft = ncr.items[idx]?.raw ?? "";
+      ncr.editError = false;
+
+      ncr.finalized = false;
+      markDirty();
+      await persistAndRerender();
+    });
+  });
+
+  // Supprimer une ligne NCR
+  app.querySelectorAll("[data-ncr-del]").forEach((xbtn) => {
+    xbtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const idx = Number(xbtn.getAttribute("data-ncr-del"));
+      if (!Number.isFinite(idx)) return;
+
+      ncr.items.splice(idx, 1);
+
+      if (ncr.editIndex === idx) {
+        ncr.editIndex = null;
+        ncr.editDraft = "";
+        ncr.editError = false;
+      } else if (ncr.editIndex !== null && idx < ncr.editIndex) {
+        ncr.editIndex -= 1;
+      }
+
+      if (ncr.items.length === 0) {
+        resetNouvelleCaisseReelleToZero();
+      } else {
+        ncr.finalized = false;
+      }
+
+      markDirty();
+      await persistAndRerender();
+    });
+  });
+
+  // Valider edit NCR
+  const ncrEditValidateBtn = document.getElementById("ncrEditValidate");
+  if (ncrEditValidateBtn) {
+    ncrEditValidateBtn.addEventListener("click", async () => {
+      if (ncr.editIndex === null) return;
+
+      const raw = (ncr.editDraft || "").trim();
+      const input = document.getElementById("ncrEditInput");
+
+      if (!raw || !isOperationPosed(raw)) {
+        ncr.editError = true;
+        if (input) input.classList.add("error");
+        if (input) shake(input);
+        shake(ncrEditValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      const res = evalOperation(raw);
+      if (res === null) {
+        ncr.editError = true;
+        if (input) input.classList.add("error");
+        if (input) shake(input);
+        shake(ncrEditValidateBtn);
+        await persistAndRerender();
+        return;
+      }
+
+      ncr.items[ncr.editIndex] = { raw, result: res };
+
+      ncr.editIndex = null;
+      ncr.editDraft = "";
+      ncr.editError = false;
+
+      ncr.finalized = false;
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
+  // Terminer NCR
+  const ncrFinishBtn = document.getElementById("ncrFinish");
+  if (ncrFinishBtn) {
+    ncrFinishBtn.addEventListener("click", async (e) => {
+      const draftHasText = (ncr.draft || "").trim().length > 0;
+      const editHasText = ncr.editIndex !== null && (ncr.editDraft || "").trim().length > 0;
+
+      if (ncr.items.length === 0 || draftHasText || editHasText) {
+        const el = document.getElementById(draftHasText ? "ncrDraft" : "ncrEditInput");
+        if (el) shake(el);
+        shake(ncrFinishBtn);
+        e.preventDefault();
+        return;
+      }
+
+      ncr.finalized = true;
+      ncr.editIndex = null;
+      ncr.editDraft = "";
+      ncr.editError = false;
+      ncr.draft = "";
+      ncr.draftError = false;
+
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
+  // Modifier (tout) NCR après finalisation
+  const ncrModifyAllBtn = document.getElementById("ncrModifyAll");
+  if (ncrModifyAllBtn) {
+    ncrModifyAllBtn.addEventListener("click", async () => {
+      ncr.finalized = false;
+      ncr.editIndex = null;
+      ncr.editDraft = "";
+      ncr.editError = false;
+      markDirty();
+      await persistAndRerender();
+    });
+  }
+
   // -------------------------
   // ✅ ENREGISTRER / MODIFIER / MIGRER (persisté en DB)
   // -------------------------
