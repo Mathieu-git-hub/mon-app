@@ -159,6 +159,27 @@
       .input.error { border-color: rgba(230, 0, 0, 0.95); box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.25); }
       .btn.shake { animation: shake 180ms ease-in-out; }
 
+      /* ✅ FIX : après Enregistrer, la case blanche doit être juste après ":" */
+     .row.row-saved {
+      align-items: center;
+      gap: 10px;
+     }
+
+     .row.row-saved .label {
+      width: auto !important;
+      flex: 0 0 auto !important;
+      white-space: nowrap;
+     }
+
+     .row.row-saved .total-row {
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;     /* si écran trop étroit, ça wrap mais reste à droite du label */
+      gap: 10px;
+     }
+
+
       /* =========================================================
    ✅ MOBILE / RESPONSIVE (calendrier + pages jour)
    - évite chevauchement bouton retour / titre
