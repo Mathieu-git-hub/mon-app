@@ -1928,7 +1928,10 @@ function renderDailyDayPage(isoDate) {
             }
           </div>
 
-                    ${
+          <!-- PRÉLÈVEMENT SUR CAPITAL -->
+          ${renderPrelevementSectionHTML(pCap, "prelevCap", "Prélèvement sur capital", rowClass, data.daySaved)}
+
+          ${
             showCapitalAfterPrelev
               ? `
                 <div class="${rowClass}">
@@ -1944,6 +1947,10 @@ function renderDailyDayPage(isoDate) {
               `
               : ``
           }
+
+
+
+                    
 
 
           <!-- CAISSE DÉPART -->
@@ -1968,6 +1975,9 @@ function renderDailyDayPage(isoDate) {
             }
           </div>
 
+                    <!-- PRÉLÈVEMENT SUR CAISSE -->
+          ${renderPrelevementSectionHTML(pCaisse, "prelevCaisse", "Prélèvement sur caisse", rowClass, data.daySaved)}
+
           ${
             showCaisseDepartAfterPrelev
              ? `
@@ -1984,6 +1994,9 @@ function renderDailyDayPage(isoDate) {
              `
             : ``
           }
+
+
+        
 
 
           <!-- ✅ DÉPENSES (pile) -->
@@ -2008,11 +2021,9 @@ function renderDailyDayPage(isoDate) {
           ${pDep.finalized ? nouvelleCaisseHTML : ``}
 
 
-          <!-- PRÉLÈVEMENT SUR CAPITAL -->
-          ${renderPrelevementSectionHTML(pCap, "prelevCap", "Prélèvement sur capital", rowClass, data.daySaved)}
+          
 
-          <!-- PRÉLÈVEMENT SUR CAISSE -->
-          ${renderPrelevementSectionHTML(pCaisse, "prelevCaisse", "Prélèvement sur caisse", rowClass, data.daySaved)}
+          
 
           <!-- RECETTE -->
           <div class="${rowClass}">
