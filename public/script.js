@@ -1893,18 +1893,21 @@ function renderDailyDayPage(isoDate) {
 
           ${
             showCaisseDepartAfterPrelev
-              ? `
-                <div class="${rowClass}">
-                  <div class="label">Caisse départ après prélèvement :</div>
-                  <div class="total-row">
-                    <div class="card card-white lift">
-                      ${escapeHtml(formatInputNumberDisplay(data.caisseDepart || "0"))} - ...
-                    </div>
-                  </div>
+             ? `
+               <div class="${rowClass}">
+                <div class="label">Caisse départ après prélèvement :</div>
+                <div class="total-row">
+                 <div class="card card-white lift">
+                  ${escapeHtml(formatInputNumberDisplay(data.caisseDepart || "0"))}
+                  - ${formatCommaNumber(prelevCaisseTotal)}
+                  = ${formatCommaNumber(caisseDepartAfter)}
+                 </div>
                 </div>
-              `
-              : ``
+               </div>
+             `
+            : ``
           }
+
 
           <!-- ✅ DÉPENSES (pile) -->
           ${renderPrelevementSectionHTML(pDep, "depenses", "Dépenses", rowClass, data.daySaved)}
