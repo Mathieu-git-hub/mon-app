@@ -423,7 +423,7 @@ function getDailyData(isoDate) {
       caisseDepartFinalized: false,
 
       // ✅ Dépenses (comme prélèvements)
-      depenses: { items: [], editing: false, finalized: false, draft: "" },
+      depenses: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "" },
 
       recette: "",
       recetteFinalized: false,
@@ -470,10 +470,10 @@ function getDailyData(isoDate) {
       nouvelleLiquiditeFinalized: false,
 
       // ✅ Prélèvement sur capital
-      prelevement: { items: [], editing: false, finalized: false, draft: "" },
+      prelevement: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "" },
 
       // ✅ Prélèvement sur caisse
-      prelevementCaisse: { items: [], editing: false, finalized: false, draft: "" },
+      prelevementCaisse: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "" },
 
       // ✅ état "enregistrer"
       daySaved: false,
@@ -1103,15 +1103,17 @@ function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
   const total = computePrelevementTotal(p.items);
   const showInitialButtons = !p.editing && !p.finalized && p.items.length === 0;
 
-  const draft = (p.draft || "").trim();
+  const draft = (p.editIndex === null ? (p.draft || "") : (p.editDraft || "")).trim();
   const draftHasText = draft.length > 0;
-  const draftIsValid = !draftHasText ? false : toNumberLoose(p.draft) !== null;
+  const activeRaw = (p.editIndex === null ? (p.draft || "") : (p.editDraft || ""));
+  const draftIsValid = !draftHasText ? false : toNumberLoose(activeRaw) !== null;
+
 
   const finishPseudoDisabled = draftHasText; // tant qu'il y a quelque chose, terminer est grisé
   const hideModifyStyle = daySaved ? 'style="display:none;"' : "";
 
   // ✅ Après Enregistrer : prélevement sur capital = colonne verticale
-  const forceColumn = daySaved && prefix === "prelevCap";
+  const forceColumn = false; // ✅ capital = même rendu que caisse
   const itemsContainerStyle = forceColumn
     ? `style="display:flex; flex-direction:column; gap:10px; align-items:stretch;"`
     : ``;
@@ -1131,26 +1133,31 @@ function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
             `
             : `
               <div class="prelev-items" id="${prefix}Items" ${itemsContainerStyle}>
-                ${p.items
-                  .map(
-                    (val, idx) => `
-                      <div class="card card-white lift" ${forceColumn ? `style="width:100%;"` : ``}>
-                        ${escapeHtml(formatNumberTextFR(val))}
-                        ${
-                          !p.finalized
-                            ? `<button class="close-x" data-prelev-del="${prefix}:${idx}" title="Supprimer">×</button>`
-                            : ``
-                        }
-                      </div>
-                    `
-                  )
-                  .join("")}
+               ${p.items
+                .map(
+                  (val, idx) => `
+                   <div
+                    class="card card-white lift"
+                    data-prelev-edit="${prefix}:${idx}"
+                    ${forceColumn ? `style="width:100%; cursor:${p.editIndex === null ? "pointer" : "default"};"` : `style="cursor:${p.editIndex === null ? "pointer" : "default"};"`}
+                  >
+                    ${escapeHtml(formatNumberTextFR(val))}
+                    ${
+                     (!p.finalized && (p.editIndex === null))
+                      ? `<button class="close-x" data-prelev-del="${prefix}:${idx}" title="Supprimer">×</button>`
+                      : ``
+                    }
+                  </div>
+                `
+              )
+              .join("")}
+
 
                 ${
                   p.finalized
                     ? `
                       <div class="total-row">
-                        <div class="card card-white lift">Total : ${formatTotal(total)}</div>
+                        <div class="card card-white lift">Total : ${formatCommaNumber(total)}</div>
                         <button id="${prefix}Modify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                       </div>
                     `
@@ -1163,7 +1170,7 @@ function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
                   ? `
                     <div class="inline-actions">
                       <input class="input" id="${prefix}Input" inputmode="decimal" placeholder="(entre une valeur)"
-                        value="${escapeAttr(p.draft)}" style="flex:1; min-width: 220px;" />
+                        value="${escapeAttr(p.editIndex === null ? p.draft : p.editDraft)}" style="flex:1; min-width: 220px;" />
                       <button id="${prefix}Validate" class="btn btn-blue lift"
                         ${draftIsValid ? "" : "disabled"}>Valider</button>
                       <button id="${prefix}Finish" class="btn btn-green lift ${
@@ -1212,21 +1219,35 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
   const validateBtn = document.getElementById(`${prefix}Validate`);
   const finishBtn = document.getElementById(`${prefix}Finish`);
 
-  function syncButtonsFromDraft() {
-    if (!validateBtn && !finishBtn) return;
-    const draft = (p.draft || "").trim();
-    const hasText = draft.length > 0;
-    const ok = hasText ? toNumberLoose(p.draft) !== null : false;
-
-    if (validateBtn) validateBtn.disabled = !ok;
-    if (finishBtn) {
-      if (hasText) finishBtn.classList.add("pseudo-disabled");
-      else finishBtn.classList.remove("pseudo-disabled");
-    }
+  function getActiveDraftRaw() {
+  return (p.editIndex === null) ? (p.draft || "") : (p.editDraft || "");
+  }
+  function setActiveDraftRaw(v) {
+  if (p.editIndex === null) p.draft = v;
+  else p.editDraft = v;
   }
 
+
+  function syncButtonsFromDraft() {
+   if (!validateBtn && !finishBtn) return;
+
+   const raw = getActiveDraftRaw();
+   const draft = raw.trim();
+   const hasText = draft.length > 0;
+   const ok = hasText ? toNumberLoose(raw) !== null : false;
+
+   if (validateBtn) validateBtn.disabled = !ok;
+
+   if (finishBtn) {
+    if (hasText) finishBtn.classList.add("pseudo-disabled");
+    else finishBtn.classList.remove("pseudo-disabled");
+   }
+  }
+
+
   if (input) {
-    let lastValid = p.draft || "";
+   let lastValid = getActiveDraftRaw();
+
 
     input.addEventListener("input", () => {
       const value = input.value;
@@ -1236,7 +1257,7 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
 
       if (charsOk && numericOk) {
         lastValid = value;
-        p.draft = value;
+        setActiveDraftRaw(value);
         if (typeof onDirty === "function") onDirty();
         syncButtonsFromDraft();
         return;
@@ -1266,7 +1287,7 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
 
   if (finishBtn) {
     finishBtn.addEventListener("click", async (e) => {
-      const draftHasText = (p.draft || "").trim().length > 0;
+      const draftHasText = getActiveDraftRaw().trim().length > 0;
 
       if (draftHasText) {
         if (input) shake(input);
@@ -1278,6 +1299,9 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
       p.finalized = true;
       p.editing = false;
       p.draft = "";
+      p.editIndex = null;
+      p.editDraft = "";
+
       if (typeof onDirty === "function") onDirty();
       await safePersistNow();
       renderDailyDayPage(isoDate);
@@ -1303,6 +1327,8 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
     xbtn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
+        if (p.editIndex !== null) return; // ✅ pas de suppression pendant édition
+
 
       const idx = Number(idxStr);
       if (!Number.isFinite(idx)) return;
@@ -1318,6 +1344,38 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
       renderDailyDayPage(isoDate);
     });
   });
+  
+  // ✅ Clic sur une case blanche -> édition de cette valeur (sans déplacer)
+  app.querySelectorAll("[data-prelev-edit]").forEach((card) => {
+   const payload = card.getAttribute("data-prelev-edit") || "";
+   const [pfx, idxStr] = payload.split(":");
+   if (pfx !== prefix) return;
+
+   card.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const idx = Number(idxStr);
+    if (!Number.isFinite(idx)) return;
+
+    // ✅ si déjà en édition : on bloque les autres
+    if (p.editIndex !== null) return;
+
+    p.editIndex = idx;
+    p.editDraft = String(p.items[idx] ?? "");
+    p.draft = ""; // on vide le draft normal
+
+    if (input) {
+      input.value = p.editDraft;
+      input.focus();
+    }
+
+    if (typeof onDirty === "function") onDirty();
+    await safePersistNow();
+    renderDailyDayPage(isoDate);
+  });
+});
+
 }
 
 // ===============================
@@ -2928,7 +2986,8 @@ function renderDailyDayPage(isoDate) {
 
 
 function doPrelevValidate(p, prefix, isoDate, onDirty) {
-  const raw = (p.draft || "").trim();
+  // ✅ draft actif : soit p.draft (ajout), soit p.editDraft (édition)
+  const raw = ((p.editIndex === null) ? (p.draft || "") : (p.editDraft || "")).trim();
 
   const inputEl = document.getElementById(`${prefix}Input`);
   const validateBtn = document.getElementById(`${prefix}Validate`);
@@ -2950,14 +3009,25 @@ function doPrelevValidate(p, prefix, isoDate, onDirty) {
   }
 
   const normalized = raw.replace(/\s+/g, "").replace(",", ".");
-  p.items.push(normalized); // ✅ le plus récent est vers la droite (affichage en flex-row)
-  p.draft = "";
+
+  if (p.editIndex !== null && Number.isFinite(p.editIndex)) {
+    // ✅ ÉDITION : remplace sans déplacer
+    p.items[p.editIndex] = normalized;
+    p.editIndex = null;
+    p.editDraft = "";
+  } else {
+    // ✅ AJOUT : le plus récent vers la droite
+    p.items.push(normalized);
+    p.draft = "";
+  }
+
   p.editing = true;
   p.finalized = false;
 
   if (typeof onDirty === "function") onDirty();
   renderDailyDayPage(isoDate);
 }
+
 
 // --------- PAGES "HEBDO/ACHAT" (provisoire) ---------
 function renderGenericDayPage(pageName, isoDate) {
