@@ -1566,21 +1566,63 @@ function renderDailyDayPage(isoDate) {
     <div class="${rowClass}">
       <div class="label">Nouveau capital :</div>
 
-      <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-        ${nc.items
-          .map(
-            (it) => `
-              <div class="card card-white lift" style="width:100%;">
-                ${escapeHtml(it.raw)} = ${formatTotal(it.result ?? 0)}
+      ${
+        data.daySaved
+          ? `
+            <!-- ✅ 1ère donnée alignée horizontalement avec l’intitulé -->
+            <div class="total-row" style="width:100%;">
+              <div class="card card-white lift" style="flex:1; min-width:220px;">
+                ${
+                  nc.items[0]
+                    ? `${escapeHtml(formatOperationDisplay(nc.items[0].raw || "0"))} = ${formatCommaNumber(nc.items[0].result ?? 0)}`
+                    : `0`
+                }
               </div>
-            `
-          )
-          .join("")}
+            </div>
 
-        <div style="display:flex; justify-content:center; margin-top:2px;">
-          <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
-        </div>
-      </div>
+            <!-- ✅ les autres données alignées verticalement sous la 1ère case -->
+            ${
+              nc.items.length > 1
+                ? `
+                  <div class="stack-after-first">
+                    ${nc.items
+                      .slice(1)
+                      .map(
+                        (it) => `
+                          <div class="card card-white lift" style="width:100%;">
+                            ${escapeHtml(formatOperationDisplay(it.raw || "0"))} = ${formatCommaNumber(it.result ?? 0)}
+                          </div>
+                        `
+                      )
+                      .join("")}
+                  </div>
+                `
+                : ``
+            }
+
+            <div style="display:flex; justify-content:center; margin-top:6px;">
+              <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+            </div>
+          `
+          : `
+            <!-- Hors mode Enregistrer : tu gardes ton rendu liste complet -->
+            <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+              ${nc.items
+                .map(
+                  (it) => `
+                    <div class="card card-white lift" style="width:100%;">
+                      ${escapeHtml(formatOperationDisplay(it.raw || "0"))} = ${formatCommaNumber(it.result ?? 0)}
+                    </div>
+                  `
+                )
+                .join("")}
+
+              <div style="display:flex; justify-content:center; margin-top:2px;">
+                <button id="ncModifyAll" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+              </div>
+            </div>
+          `
+      }
     </div>
   `
   : `
@@ -1592,6 +1634,7 @@ function renderDailyDayPage(isoDate) {
       </div>
     </div>
   `;
+
 
 
   // -------------------------

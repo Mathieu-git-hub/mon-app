@@ -105,6 +105,19 @@
         margin: 0;
       }
 
+      /* ✅ NC : après Enregistrer, aligner les items suivants sous la 1ère case blanche */
+      .stack-after-first{
+       margin-left: 252px; /* 240 label + 12 gap desktop */
+       display: flex;
+       flex-direction: column;
+       gap: 10px;
+      }
+      @media (max-width: 520px){
+       .stack-after-first{
+        margin-left: 180px; /* 170 label + 10 gap mobile */
+       }
+      }
+
       .label {
         font-size: 17px;
         font-weight: 800;
