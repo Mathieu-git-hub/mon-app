@@ -2122,27 +2122,32 @@ function renderDailyDayPage(isoDate) {
               : ``
           }
 
-          <!-- NOUVELLE CAISSE RÉELLE (comme liquidités/capital) -->
+          <!-- ✅ NOUVELLE CAISSE RÉELLE (OPÉRATION) -->
           <div class="${rowClass}">
             <div class="label">Nouvelle caisse réelle :</div>
             ${
               data.nouvelleCaisseReelleFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.nouvelleCaisseReelle || "0"))}</div>
-                    <button id="ncrSimpleModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+                    <div class="card card-white lift">
+                      ${escapeHtml(formatOperationDisplay(data.nouvelleCaisseReelle || "0"))}
+                      = ${formatCommaNumber(evalOperation(data.nouvelleCaisseReelle) ?? 0)}
+                    </div>
+                    <button id="ncrModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
                 : `
                   <div class="inline-actions">
-                    <input class="input" id="ncrSimple" placeholder="(...)"
-                      value="${escapeAttr(data.nouvelleCaisseReelle || "")}" style="flex:1; min-width: 220px;" />
-                    <button id="ncrSimpleValidate" class="btn btn-green lift"
-                      style="${(data.nouvelleCaisseReelle || "").trim() ? "" : "display:none;"}">Valider</button>
+                    <input class="input" id="nouvelleCaisseReelle" inputmode="decimal"
+                      placeholder="(ex: 100+20-5)"
+                      value="${escapeAttr(data.nouvelleCaisseReelle)}"
+                      style="flex:1; min-width: 220px;" />
+                    ${opValidateButtonHTML("ncrValidate", data.nouvelleCaisseReelle)}
                   </div>
                 `
             }
           </div>
+
 
           ${ncSectionHTML}
 
@@ -2320,25 +2325,6 @@ function renderDailyDayPage(isoDate) {
     bindNumericFinalize(null, "prt", "prtFinalized", "prtValidate", "prtModify");
 
 
-  // ✅ NOUVELLE CAISSE RÉELLE (simple numérique)
-  if (!data.nouvelleCaisseReelleFinalized)
-    bindNumericFinalize(
-      "ncrSimple",
-      "nouvelleCaisseReelle",
-      "nouvelleCaisseReelleFinalized",
-      "ncrSimpleValidate",
-      "ncrSimpleModify"
-    );
-  else
-    bindNumericFinalize(
-      null,
-      "nouvelleCaisseReelle",
-      "nouvelleCaisseReelleFinalized",
-      "ncrSimpleValidate",
-      "ncrSimpleModify"
-    );
-
-
   // -------------------------
   // ✅ Prélèvements + Dépenses
   // -------------------------
@@ -2442,6 +2428,27 @@ function renderDailyDayPage(isoDate) {
       renderDailyDayPage(isoDate);
     });
   }
+
+  // ✅ NOUVELLE CAISSE RÉELLE (OPÉRATION)
+  if (!data.nouvelleCaisseReelleFinalized) {
+    bindOpInput("nouvelleCaisseReelle", "nouvelleCaisseReelle", "ncrValidate", async () => {
+      data.nouvelleCaisseReelleFinalized = true;
+      markDirty();
+      await safePersistNow();
+      renderDailyDayPage(isoDate);
+    });
+  }
+
+  const ncrModify = document.getElementById("ncrModify");
+  if (ncrModify) {
+    ncrModify.addEventListener("click", async () => {
+      data.nouvelleCaisseReelleFinalized = false;
+      markDirty();
+      await safePersistNow();
+      renderDailyDayPage(isoDate);
+    });
+  }
+
 
   const recetteModify = document.getElementById("recetteModify");
   if (recetteModify) {
