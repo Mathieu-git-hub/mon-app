@@ -423,7 +423,7 @@ function getDailyData(isoDate) {
       caisseDepartFinalized: false,
 
       // ✅ Dépenses (comme prélèvements)
-      depenses: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "" },
+      depenses: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
 
       recette: "",
       recetteFinalized: false,
@@ -470,10 +470,10 @@ function getDailyData(isoDate) {
       nouvelleLiquiditeFinalized: false,
 
       // ✅ Prélèvement sur capital
-      prelevement: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "" },
+      prelevement: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
 
       // ✅ Prélèvement sur caisse
-      prelevementCaisse: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "" },
+      prelevementCaisse: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
 
       // ✅ état "enregistrer"
       daySaved: false,
@@ -1174,8 +1174,9 @@ function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
                       <button id="${prefix}Validate" class="btn btn-blue lift"
                         ${draftIsValid ? "" : "disabled"}>Valider</button>
                       <button id="${prefix}Finish" class="btn btn-green lift ${
-                        finishPseudoDisabled ? "pseudo-disabled" : ""
-                      }">Terminer</button>
+                       finishPseudoDisabled ? "pseudo-disabled" : ""
+                      }">${p.editIndex === null ? "Terminer" : "Annuler"}</button>
+
                     </div>
                   `
                   : ``
@@ -1286,27 +1287,50 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
   }
 
   if (finishBtn) {
-    finishBtn.addEventListener("click", async (e) => {
-      const draftHasText = getActiveDraftRaw().trim().length > 0;
+   finishBtn.addEventListener("click", async (e) => {
 
-      if (draftHasText) {
-        if (input) shake(input);
-        shake(finishBtn);
-        e.preventDefault();
-        return;
+    // ✅ MODE ÉDITION : Finish = "Annuler"
+    if (p.editIndex !== null) {
+      if (p.editBackup) {
+        p.items = (p.editBackup.items || []).slice();
+        p.draft = p.editBackup.draft || "";
+        p.editing = !!p.editBackup.editing;
+        p.finalized = !!p.editBackup.finalized;
       }
 
-      p.finalized = true;
-      p.editing = false;
-      p.draft = "";
       p.editIndex = null;
       p.editDraft = "";
+      p.editBackup = null;
 
       if (typeof onDirty === "function") onDirty();
       await safePersistNow();
       renderDailyDayPage(isoDate);
-    });
-  }
+      return;
+    }
+
+    // ✅ MODE NORMAL : Finish = "Terminer"
+    const draftHasText = getActiveDraftRaw().trim().length > 0;
+
+    if (draftHasText) {
+      if (input) shake(input);
+      shake(finishBtn);
+      e.preventDefault();
+      return;
+    }
+
+    p.finalized = true;
+    p.editing = false;
+    p.draft = "";
+    p.editIndex = null;
+    p.editDraft = "";
+    p.editBackup = null;
+
+    if (typeof onDirty === "function") onDirty();
+    await safePersistNow();
+    renderDailyDayPage(isoDate);
+  });
+}
+
 
   const modifyBtn = document.getElementById(`${prefix}Modify`);
   if (modifyBtn) {
@@ -1360,6 +1384,15 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
 
     // ✅ si déjà en édition : on bloque les autres
     if (p.editIndex !== null) return;
+
+    // ✅ snapshot pour Annuler
+    p.editBackup = {
+     items: (p.items || []).slice(),
+     draft: p.draft || "",
+     editing: !!p.editing,
+     finalized: !!p.finalized
+   };
+
 
     p.editIndex = idx;
     p.editDraft = String(p.items[idx] ?? "");
