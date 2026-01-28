@@ -2294,6 +2294,25 @@ function renderDailyDayPage(isoDate) {
   else
     bindNumericFinalize(null, "caisseDepart", "caisseDepartFinalized", "caisseDepartValidate", "caisseDepartModify");
 
+  // ✅ NOUVELLE CAISSE (simple numérique)
+  if (!data.nouvelleCaisseFinalized)
+   bindNumericFinalize(
+     "nouvelleCaisse",
+     "nouvelleCaisse",
+     "nouvelleCaisseFinalized",
+     "nouvelleCaisseValidate",
+     "nouvelleCaisseModify"
+    );
+  else
+   bindNumericFinalize(
+    null,
+    "nouvelleCaisse",
+    "nouvelleCaisseFinalized",
+    "nouvelleCaisseValidate",
+    "nouvelleCaisseModify"
+   );
+
+  
   // PRT
   if (!data.prtFinalized)
     bindNumericFinalize("prt", "prt", "prtFinalized", "prtValidate", "prtModify");
