@@ -422,6 +422,10 @@ function getDailyData(isoDate) {
       caisseDepart: "",
       caisseDepartFinalized: false,
 
+      nouvelleCaisse: "",
+      nouvelleCaisseFinalized: false,
+
+
       // ✅ Dépenses (comme prélèvements)
       depenses: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
 
@@ -497,6 +501,10 @@ function getDailyData(isoDate) {
 
   if (d.caisseDepartFinalized == null) d.caisseDepartFinalized = false;
   if (d.caisseDepart == null) d.caisseDepart = "";
+
+  if (d.nouvelleCaisseFinalized == null) d.nouvelleCaisseFinalized = false;
+  if (d.nouvelleCaisse == null) d.nouvelleCaisse = "";
+
 
   if (d.prtFinalized == null) d.prtFinalized = false;
 
@@ -1430,6 +1438,7 @@ function renderDailyDayPage(isoDate) {
     liquidite: "(...)",
     capital: "(...)",
     caisseDepart: "(...)",
+    nouvelleCaisse: "(...)",
     recette: "(ex: 10+2-1,5)",
     beneficeReel: "(ex: 50-12,5)",
     nouvelleLiquidite: "(ex: 80+5)",
@@ -1443,6 +1452,31 @@ function renderDailyDayPage(isoDate) {
 
   const rowClass = `row ${data.daySaved ? "row-saved" : ""}`;
   const hideModifyStyle = data.daySaved ? 'style="display:none;"' : "";
+
+  const nouvelleCaisseHTML = `
+    <!-- NOUVELLE CAISSE (numérique simple comme liquidités/capital) -->
+    <div class="${rowClass}">
+      <div class="label">Nouvelle caisse :</div>
+      ${
+        data.nouvelleCaisseFinalized
+          ? `
+            <div class="total-row">
+              <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.nouvelleCaisse || "0"))}</div>
+              <button id="nouvelleCaisseModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
+            </div>
+          `
+          : `
+            <div class="inline-actions">
+              <input class="input" id="nouvelleCaisse" placeholder="${placeholders.nouvelleCaisse}"
+                value="${escapeAttr(data.nouvelleCaisse)}" style="flex:1; min-width: 220px;" />
+              <button id="nouvelleCaisseValidate" class="btn btn-green lift"
+                style="${(data.nouvelleCaisse || "").trim() ? "" : "display:none;"}">Valider</button>
+            </div>
+          `
+      }
+    </div>
+  `;
+
 
   function opValidateButtonHTML(btnId, value, extraClass = "") {
     const hasText = (value || "").trim().length > 0;
@@ -1954,6 +1988,10 @@ function renderDailyDayPage(isoDate) {
 
           <!-- ✅ DÉPENSES (pile) -->
           ${renderPrelevementSectionHTML(pDep, "depenses", "Dépenses", rowClass, data.daySaved)}
+          
+          ${!pDep.finalized ? nouvelleCaisseHTML : ``}
+
+
           ${
             pDep.finalized
               ? `
@@ -1966,6 +2004,9 @@ function renderDailyDayPage(isoDate) {
               `
               : ``
           }
+
+          ${pDep.finalized ? nouvelleCaisseHTML : ``}
+
 
           <!-- PRÉLÈVEMENT SUR CAPITAL -->
           ${renderPrelevementSectionHTML(pCap, "prelevCap", "Prélèvement sur capital", rowClass, data.daySaved)}
