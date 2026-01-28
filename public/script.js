@@ -1883,7 +1883,7 @@ function renderDailyDayPage(isoDate) {
               data.nouvelleCaisseReelleFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.ncr || "0"))}</div>
+                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.nouvelleCaisseReelle || "0"))}</div>
                     <button id="ncrSimpleModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
