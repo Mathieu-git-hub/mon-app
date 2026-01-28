@@ -1135,7 +1135,7 @@ function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
                   .map(
                     (val, idx) => `
                       <div class="card card-white lift" ${forceColumn ? `style="width:100%;"` : ``}>
-                        ${escapeHtml(val)}
+                        ${escapeHtml(formatNumberTextFR(val))}
                         ${
                           !p.finalized
                             ? `<button class="close-x" data-prelev-del="${prefix}:${idx}" title="Supprimer">×</button>`
@@ -1844,7 +1844,7 @@ function renderDailyDayPage(isoDate) {
                 ? `
                   <div class="total-row">
                     <div class="card card-white lift">
-                      ${escapeHtml(data.recette || "0")} = ${formatTotal(recetteRes ?? 0)}
+                      ${escapeHtml(formatOperationDisplay(data.recette || "0"))} = ${formatCommaNumber(recetteRes ?? 0)}
                     </div>
                     <button id="recetteModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
@@ -1911,7 +1911,7 @@ function renderDailyDayPage(isoDate) {
                 ? `
                   <div class="total-row">
                     <div class="card card-white lift">
-                     ${escapeHtml(data.beneficeReel || "0")} = ${formatTotal(evalOperation(data.beneficeReel) ?? 0)}
+                     ${escapeHtml(formatOperationDisplay(data.beneficeReel || "0"))} = ${formatCommaNumber(evalOperation(data.beneficeReel) ?? 0)}
                     </div>
 
                     <button id="benefModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
@@ -1976,7 +1976,7 @@ function renderDailyDayPage(isoDate) {
                 ? `
                   <div class="total-row">
                     <div class="card card-white lift">
-                      ${escapeHtml(data.nouvelleLiquidite || "0")} = ${formatTotal(nlRes ?? 0)}
+                      ${escapeHtml(formatOperationDisplay(data.nouvelleLiquidite || "0"))} = ${formatCommaNumber(nlRes ?? 0)}
                     </div>
                     <button id="nlModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
