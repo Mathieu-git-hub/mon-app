@@ -145,6 +145,71 @@ function toNumberLoose(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+// ✅ Ajoute espaces milliers + virgule FR à partir d'une chaîne "numérique"
+function formatNumberTextFR(raw) {
+  const n = toNumberLoose(String(raw ?? ""));
+  if (n === null) return "0";
+  // formatTotal met déjà les espaces milliers (si tu as appliqué ma modif),
+  // puis on passe en virgule.
+  return formatCommaNumber(n);
+}
+
+// ✅ Affiche une opération avec espaces autour des signes + format milliers sur chaque nombre
+// Ex: "1000+20-3,5" -> "1 000 + 20 - 3,5"
+function formatOperationDisplay(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return "0";
+
+  // Normaliser : pas d'espaces, virgule->point
+  s = s.replace(/\s+/g, "").replace(",", ".");
+
+  // Tokenize: nombres / opérateurs
+  const tokens = [];
+  let i = 0;
+
+  while (i < s.length) {
+    const ch = s[i];
+
+    if (ch === "+" || ch === "-" || ch === "*" || ch === "/" || ch === "^" || ch === "(" || ch === ")") {
+      tokens.push(ch);
+      i++;
+      continue;
+    }
+
+    // nombre (avec décimales)
+    if (/[0-9.]/.test(ch)) {
+      let j = i;
+      while (j < s.length && /[0-9.]/.test(s[j])) j++;
+      tokens.push(s.slice(i, j));
+      i = j;
+      continue;
+    }
+
+    // caractère inattendu : on le garde brut
+    tokens.push(ch);
+    i++;
+  }
+
+  // Formatage : chaque "nombre" -> milliers + virgule
+  const out = tokens.map((t) => {
+    if (/^\d+(\.\d+)?$/.test(t)) return formatCommaNumber(parseFloat(t));
+    if (t === "*") return "×";
+    if (t === "/") return "÷";
+    return t;
+  });
+
+  // Espaces autour des opérateurs (et parenthèses propres)
+  // "1 000+20" -> "1 000 + 20"
+  return out
+    .join(" ")
+    .replace(/\s*\(\s*/g, "(")
+    .replace(/\s*\)\s*/g, ")")
+    .replace(/\s+([+\-×÷^])\s+/g, " $1 ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+
 // ✅ Affichage "fr" pour une saisie texte
 // ex: "1300000,5" -> "1 300 000,5"
 function formatInputNumberDisplay(raw) {
