@@ -1845,7 +1845,10 @@ function renderDailyDayPage(isoDate) {
               data.beneficeReelFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(data.beneficeReel || "0")}</div>
+                    <div class="card card-white lift">
+                     ${escapeHtml(data.beneficeReel || "0")} = ${formatTotal(evalOperation(data.beneficeReel) ?? 0)}
+                    </div>
+
                     <button id="benefModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
