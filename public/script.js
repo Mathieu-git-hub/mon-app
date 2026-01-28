@@ -145,6 +145,28 @@ function toNumberLoose(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+// ✅ Affichage "fr" pour une saisie texte
+// ex: "1300000,5" -> "1 300 000,5"
+function formatInputNumberDisplay(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "0";
+
+  // garde virgule, retire espaces existants
+  const cleaned = s.replace(/\s+/g, "").replace(/\./g, ",");
+
+  const neg = cleaned.startsWith("-") ? "-" : "";
+  const body = neg ? cleaned.slice(1) : cleaned;
+
+  const parts = body.split(",");
+  const intPart = parts[0] || "0";
+  const decPart = parts.length > 1 ? parts.slice(1).join("") : null;
+
+  const intSpaced = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+  return neg + (decPart != null && decPart !== "" ? `${intSpaced},${decPart}` : intSpaced);
+}
+
+
 // --------- API ---------
 async function apiGetMe() {
   const r = await fetch("/api/auth/me", { credentials: "include" });
@@ -489,8 +511,20 @@ function computePrelevementTotal(items) {
 
 function formatTotal(n) {
   if (!Number.isFinite(n)) return "0";
-  return n.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+
+  // 1) format de base (garde le "." ici)
+  let s = n.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+
+  // 2) ajoute espaces milliers sur la partie entière
+  const sign = s.startsWith("-") ? "-" : "";
+  if (sign) s = s.slice(1);
+
+  const [intPart, decPart] = s.split(".");
+  const intSpaced = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+  return sign + (decPart != null ? `${intSpaced}.${decPart}` : intSpaced);
 }
+
 
 // ===============================
 // ✅ DÉBUT — Helpers migration
@@ -1595,6 +1629,16 @@ function renderDailyDayPage(isoDate) {
 
   const caisseDepartAfter = caisseDepartNum - prelevCaisseTotal;
 
+    // ✅ capital après prélèvement (affiché si prélèvement sur capital terminé et total ≠ 0)
+  const capitalNum = toNumberLoose(data.capital || "0") ?? 0;
+  const prelevCapTotal = computePrelevementTotal((pCap && pCap.items) ? pCap.items : []);
+  const showCapitalAfterPrelev =
+    !!pCap?.finalized &&
+    Math.abs(prelevCapTotal) > 0.0000001;
+
+  const capitalAfter = capitalNum - prelevCapTotal;
+
+
   // -------------------------
   // ✅ RENDU
   // -------------------------
@@ -1614,7 +1658,7 @@ function renderDailyDayPage(isoDate) {
               data.liquiditeFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(data.liquidite || "0")}</div>
+                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.liquidite || "0"))}</div>
                     <button id="liquiditeModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
@@ -1636,7 +1680,7 @@ function renderDailyDayPage(isoDate) {
               data.capitalFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(data.capital || "0")}</div>
+                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.capital || "0"))}</div>
                     <button id="capitalModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
@@ -1651,6 +1695,24 @@ function renderDailyDayPage(isoDate) {
             }
           </div>
 
+                    ${
+            showCapitalAfterPrelev
+              ? `
+                <div class="${rowClass}">
+                  <div class="label">Capital après prélèvement :</div>
+                  <div class="total-row">
+                    <div class="card card-white lift">
+                      ${escapeHtml(formatInputNumberDisplay(data.capital || "0"))}
+                      - ${formatCommaNumber(prelevCapTotal)}
+                      = ${formatCommaNumber(capitalAfter)}
+                    </div>
+                  </div>
+                </div>
+              `
+              : ``
+          }
+
+
           <!-- CAISSE DÉPART -->
           <div class="${rowClass}">
             <div class="label">Caisse départ :</div>
@@ -1658,7 +1720,7 @@ function renderDailyDayPage(isoDate) {
               data.caisseDepartFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(data.caisseDepart || "0")}</div>
+                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.caisseDepart || "0"))}</div>
                     <button id="caisseDepartModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
@@ -1680,7 +1742,7 @@ function renderDailyDayPage(isoDate) {
                   <div class="label">Caisse départ après prélèvement :</div>
                   <div class="total-row">
                     <div class="card card-white lift">
-                      ${escapeHtml(data.caisseDepart || "0")} - ${formatCommaNumber(prelevCaisseTotal)} = ${formatCommaNumber(caisseDepartAfter)}
+                      ${escapeHtml(formatInputNumberDisplay(data.caisseDepart || "0"))} - ...
                     </div>
                   </div>
                 </div>
@@ -1761,7 +1823,7 @@ function renderDailyDayPage(isoDate) {
               data.prtFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(data.prt || "0")}</div>
+                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.prt || "0"))}</div>
                     <button id="prtModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
@@ -1821,7 +1883,7 @@ function renderDailyDayPage(isoDate) {
               data.nouvelleCaisseReelleFinalized
                 ? `
                   <div class="total-row">
-                    <div class="card card-white lift">${escapeHtml(data.nouvelleCaisseReelle || "0")}</div>
+                    <div class="card card-white lift">${escapeHtml(formatInputNumberDisplay(data.ncr || "0"))}</div>
                     <button id="ncrSimpleModify" class="btn btn-blue lift" ${hideModifyStyle}>Modifier</button>
                   </div>
                 `
