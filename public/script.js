@@ -2387,6 +2387,16 @@ function renderDailyDayPage(isoDate) {
         data[key] = filtered;
         markDirty();
         sync();
+        
+        // ✅ si l'utilisateur efface tout en mode modification : on persiste immédiatement
+        if (filtered.trim() === "") {
+          // on s'assure que c'est bien "non finalisé"
+          data[finalizedKey] = false;
+
+          // persist immédiat (silencieux)
+          safePersistNow();
+        }
+
       });
 
       input.addEventListener("keydown", (e) => {
@@ -3337,6 +3347,9 @@ function renderGenericDayPage(pageName, isoDate) {
       </div>
     </div>
   `;
+
+  bindPrevNextDayButtons(isoDate, { baseHashPrefix: `#${pageName}/` });
+
   document.getElementById("back").addEventListener("click", () => history.back());
 }
 
@@ -3381,13 +3394,22 @@ function renderDailySalePage(isoDate) {
       <button id="back" class="back-btn">← Retour</button>
 
       <div class="day-page">
-        <div class="date-title">${formatFullDate(date)}</div>
+        ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
         <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
           Vente du jour (à construire)
         </div>
       </div>
     </div>
   `;
+
+  bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#daily/" });
+
+  // ✅ on force la route /sale
+  const prev = document.getElementById("prevDay");
+  const next = document.getElementById("nextDay");
+  if (prev) prev.onclick = () => navigateTo(`#daily/${addDaysIso(isoDate,-1)}/sale`);
+  if (next && !next.disabled) next.onclick = () => navigateTo(`#daily/${addDaysIso(isoDate,+1)}/sale`);
+
 
   document.getElementById("back").addEventListener("click", () => history.back());
 }
