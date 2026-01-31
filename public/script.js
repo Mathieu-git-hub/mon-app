@@ -801,7 +801,8 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
       const viewportTop = vv?.offsetTop || 0;
 
       // 1) tentative centrée
-      try { inputEl.scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
+      try { inputEl.scrollIntoView({ block: "center", behavior: "auto" }); } catch {}
+
 
       // 2) correction fine : si le bas de l’input est sous la zone visible (au-dessus du pad)
       requestAnimationFrame(() => {
@@ -812,7 +813,8 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
 
         if (rect.bottom > safeBottom) {
           const delta = rect.bottom - safeBottom;
-          window.scrollBy({ top: delta, left: 0, behavior: "smooth" });
+          window.scrollBy({ top: delta, left: 0, behavior: "auto" });
+
         }
       });
     });
@@ -996,13 +998,14 @@ inputEl.addEventListener("focus", () => {
 
     // ✅ IMPORTANT : on NE bloque PAS le pointerdown, sinon impossible de placer le caret au doigt
   inputEl.addEventListener("pointerdown", () => {
-    // on laisse le système placer le caret où l’utilisateur touche
-    // puis on ouvre le pad juste après
-    setTimeout(() => {
-      buildPad();
-      inputEl.focus({ preventScroll: true });
-    }, 0);
-  });
+  setTimeout(() => {
+    buildPad();
+    inputEl.focus({ preventScroll: true });
+    const pad = document.getElementById("calcpad");
+    if (pad) ensureInputVisible(pad);
+  }, 0);
+});
+
 
 
 
