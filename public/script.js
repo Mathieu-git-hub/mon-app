@@ -2346,11 +2346,7 @@ function renderDailyDayPage(isoDate) {
   `;
 
       bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#daily/" });
-  // et on redirige vers /sale en interceptant :
-      const prev = document.getElementById("prevDay");
-      const next = document.getElementById("nextDay");
-      if (prev) prev.onclick = () => navigateTo(`#daily/${addDaysIso(isoDate,-1)}/sale`);
-      if (next && !next.disabled) next.onclick = () => navigateTo(`#daily/${addDaysIso(isoDate,+1)}/sale`);
+  
 
 
 
