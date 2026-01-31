@@ -2004,26 +2004,31 @@ function renderDailyDayPage(isoDate) {
   // -------------------------
   app.innerHTML = `
     <div class="page">
-      <div class="topbar-left">
-        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 10.5L12 3l9 7.5" />
-            <path d="M5 10v10h14V10" />
-          </svg>
-        </button>
+      <div class="topbar">
+        <div class="slot left">
+          <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 10.5L12 3l9 7.5" />
+              <path d="M5 10v10h14V10" />
+            </svg>
+          </button>
+        </div>
 
-        <button id="back" class="back-btn">← Retour</button>
+        <div class="slot center">
+          <button id="back" class="back-btn">← Retour</button>
+        </div>
+
+        <div class="slot right">
+          <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 3v3M17 3v3" />
+              <path d="M3.5 8h17" />
+              <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+            </svg>
+          </button>
+       </div>
       </div>
 
-      <div class="topbar-right">
-        <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M7 3v3M17 3v3" />
-            <path d="M3.5 8h17" />
-            <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
-          </svg>
-        </button>
-      </div>
 
 
 
@@ -2373,6 +2378,10 @@ function renderDailyDayPage(isoDate) {
 
       const cb = document.getElementById("calBtn");
       if (cb) cb.addEventListener("click", () => navigateTo("#daily"));
+
+      const backBtn = document.getElementById("back");
+      if (backBtn) backBtn.addEventListener("click", () => history.back());
+
 
 
   

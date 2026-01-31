@@ -36,31 +36,68 @@
 
       /* =========================================================
       ✅ TOP BAR (Home / Retour / Calendrier)
-      - Home à gauche du Retour sur toutes les pages "jour"
-      - Calendrier à droite du Retour sur Compte du jour + Vente du jour
-========================================================= */
-      .topbar-left{
+      - Home à gauche, Retour centré, Calendrier à droite
+      - mêmes hauteurs, Retour reste rectangle
+      ========================================================= */
+      .topbar{
         position:absolute;
-        top:20px; left:20px;
+        top:20px; left:20px; right:20px;
         display:flex;
-        gap:10px;
         align-items:center;
+        gap:10px;
         z-index: 20;
       }
 
-      .topbar-right{
-        position:absolute;
-        top:20px;
-        right:20px;
+      .topbar .slot{
         display:flex;
-        gap:10px;
         align-items:center;
-        z-index: 20;
+        gap:10px;
       }
 
+      .topbar .slot.center{
+        flex: 1;
+        justify-content: center; /* ✅ Retour au centre */
+      }
+
+      /* ✅ On neutralise le position:absolute du back-btn quand il est dans la topbar */
+      .topbar .back-btn{
+        position: static;
+        top:auto; left:auto;
+      }
+
+      /* ✅ Hauteurs identiques */
+      .icon-btn{
+        width:48px;
+        height:48px;
+      }
+
+      .topbar .back-btn{
+        height:48px;              /* ✅ même hauteur que icon-btn */
+        padding: 0 18px;          /* rectangle, pas carré */
+        display:flex;
+        align-items:center;
+        justify-content:center;
+      }
+
+      /* Mobile */
       @media (max-width:520px){
-        .topbar-right{ top:12px; right:12px; }
+        .topbar{ top:12px; left:12px; right:12px; gap:8px; }
+
+        .icon-btn{
+          width:40px;
+          height:40px;
+          border-radius:10px;
+        }
+
+        .topbar .back-btn{
+          height:40px;
+          padding: 0 12px;
+          font-size:16px;
+          border-radius:10px;
+        }
       }
+
+      
 
 
       .icon-btn{
