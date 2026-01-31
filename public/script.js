@@ -777,6 +777,19 @@ function ensureOpOverlayStyles() {
       border-top: 1px solid rgba(255,255,255,0.12);
       background: rgba(10,10,10,0.98);
     }
+          /* ✅ Réutilise le style .calcpad dans l'overlay, mais sans "fixed" */
+    .op-overlay .calcpad {
+      position: static;
+      left: auto; right: auto; bottom: auto;
+      border-top: 0;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    }
+
+    /* ✅ Optionnel : si tu veux un peu moins “massif” dans l’overlay */
+    .op-overlay .calcpad button {
+      font-size: 16px;
+    }
+
   `;
   document.head.appendChild(st);
 }
@@ -808,7 +821,7 @@ function openOpOverlay({
       <input id="opOverlayInput" class="input" inputmode="decimal"
         placeholder="${escapeAttr(placeholder)}" />
     </div>
-    <div class="pad-wrap" id="opOverlayPad"></div>
+    <div class="pad-wrap calcpad" id="opOverlayPad"></div>
   `;
 
   document.body.appendChild(overlay);
