@@ -781,9 +781,18 @@ function ensureOpOverlayStyles() {
   document.head.appendChild(st);
 }
 
-function openOpOverlay(inputEl, { onEnter } = {}) {
+function openOpOverlay({
+  inputEl,          // input original (celui de ta page)
+  title = "",       // optionnel, si tu veux l’afficher (sinon laisse vide)
+  initialValue = "",
+  placeholder = "",
+  onCancel = () => {},
+  onOk = () => {},  // appelé quand on appuie OK (touche calculette)
+} = {}) {
+  if (!inputEl) return;
+
   ensureOpOverlayStyles();
-  ensureCalcPadStyles(); // on réutilise les styles du pad si tu veux garder tes classes
+  ensureCalcPadStyles();
 
   // évite double overlay
   const old = document.getElementById("opOverlay");
@@ -794,10 +803,10 @@ function openOpOverlay(inputEl, { onEnter } = {}) {
   overlay.className = "op-overlay";
 
   overlay.innerHTML = `
-    <div class="top">
-      <input id="opOverlayInput" class="input" inputmode="decimal" />
-      <button id="opOverlayCancel" class="btn btn-blue lift">Cancel</button>
-      <button id="opOverlayOk" class="btn btn-green lift">OK</button>
+    <div class="top" style="flex-direction:column; align-items:stretch;">
+      ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
+      <input id="opOverlayInput" class="input" inputmode="decimal"
+        placeholder="${escapeAttr(placeholder)}" />
     </div>
     <div class="pad-wrap" id="opOverlayPad"></div>
   `;
@@ -805,44 +814,37 @@ function openOpOverlay(inputEl, { onEnter } = {}) {
   document.body.appendChild(overlay);
 
   const topInput = document.getElementById("opOverlayInput");
-  const cancelBtn = document.getElementById("opOverlayCancel");
-  const okBtn = document.getElementById("opOverlayOk");
   const padWrap = document.getElementById("opOverlayPad");
 
-  // sync initial
-  topInput.value = inputEl.value || "";
-
-  // IMPORTANT : caret normal + déplaçable au doigt
+  // init
+  topInput.value = initialValue || "";
   topInput.focus();
 
-  function close() {
-    overlay.remove();
-    // redonner focus au champ d'origine sans scroller
-    try { inputEl.focus({ preventScroll: true }); } catch {}
-  }
-
-  cancelBtn.addEventListener("click", () => {
-    // 👉 option A: on garde ce qui est tapé (on a déjà sync)
-    // 👉 option B: on annule vraiment et on remet l'ancienne valeur:
-    // inputEl.value = topInput._startValue || "";
-    // inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-    close();
-  });
-
-  okBtn.addEventListener("click", () => {
-    close();
-    if (typeof onEnter === "function") onEnter();
-  });
-
-  // à chaque frappe dans l’overlay, on répercute sur le champ réel
+  // IMPORTANT : sync overlay -> input réel (ça déclenche tes règles existantes)
   topInput.addEventListener("input", () => {
     inputEl.value = topInput.value;
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
-  // construire un pad “dans” l’overlay en reprenant ta logique
-  buildCalcPadInto(padWrap, topInput, { onEnter: () => okBtn.click() });
+  function close() {
+    overlay.remove();
+    // pas de refocus (sinon ça relance l’overlay)
+    try { inputEl.blur(); } catch {}
+  }
+
+  // Construire la calculette “comme avant” mais DANS l’overlay
+  buildCalcPadInto(padWrap, topInput, {
+    onOk: () => {
+      close();
+      onOk();
+    },
+    onCancel: () => {
+      close();
+      onCancel();
+    },
+  });
 }
+
 
 function buildCalcPadInto(containerEl, inputEl, { onEnter } = {}) {
   if (!containerEl || !inputEl) return;
