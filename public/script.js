@@ -768,17 +768,23 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
   function ensureInputVisible(padEl){
     requestAnimationFrame(() => {
       const padH = padEl?.offsetHeight || 0;
-      if (padH) document.body.style.paddingBottom = (padH + 12) + "px";
+      if (padH) document.body.style.paddingBottom = (padH + 16) + "px";
 
-      // 1) on essaie scrollIntoView
+      // viewport fiable (iOS/Android)
+      const vv = window.visualViewport;
+      const viewportH = vv?.height || window.innerHeight;
+      const viewportTop = vv?.offsetTop || 0;
+
+      // 1) tentative centrée
       try { inputEl.scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
 
-      // 2) correction fine : si l'input reste sous la zone visible (masqué par le pad)
+      // 2) correction fine : si le bas de l’input est sous la zone visible (au-dessus du pad)
       requestAnimationFrame(() => {
         const rect = inputEl.getBoundingClientRect();
-        const viewportH = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
 
-        const safeBottom = viewportH - padH - 16; // marge
+        // zone visible utile = du haut viewport -> (bas viewport - pad)
+        const safeBottom = viewportTop + viewportH - padH - 12;
+
         if (rect.bottom > safeBottom) {
           const delta = rect.bottom - safeBottom;
           window.scrollBy({ top: delta, left: 0, behavior: "smooth" });
@@ -786,6 +792,7 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
       });
     });
   }
+
 
 
   function insertAtCursor(text) {
