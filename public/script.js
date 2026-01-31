@@ -890,17 +890,26 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
 
           if (key === "CANCEL") {
             inputEl.value = "";
-            inputEl.focus({ preventScroll: true });
             inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+
+            // ✅ option : on garde le pad ouvert, mais on force l’input visible
+            inputEl.focus({ preventScroll: true });
+            ensureInputVisible(document.getElementById("calcpad"));
+
             return;
           }
 
+
           if (key === "OK") {
-            // ✅ on ferme volontairement
             closePad();
+
+            // ✅ libère le focus sinon retaper sur le même input ne relance rien
+            inputEl.blur();
+
             if (typeof onEnter === "function") onEnter();
             return;
           }
+
 
           if (key === "×") return insertAtCursor("*");
           if (key === "÷") return insertAtCursor("/");
@@ -937,6 +946,15 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
     if (isTouch) inputEl.setAttribute("readonly", "readonly");
     buildPad();
   });
+
+  // ✅ important : si déjà focus, un tap doit quand même rouvrir le pad
+  inputEl.addEventListener("pointerdown", (e) => {
+    if (!isTouch) return;
+    e.preventDefault(); // évite clavier natif
+    buildPad();
+    inputEl.focus({ preventScroll: true });
+  });
+
 
   // ✅ si orientation change, on reconstruit le pad (sans perdre l’input)
   window.addEventListener("orientationchange", () => {
