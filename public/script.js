@@ -973,9 +973,10 @@ document.addEventListener("pointerdown", outsideClose, true);
 
   }
 
-    // ✅ Mobile : empêcher le clavier natif sans casser le caret
-  inputEl.setAttribute("readonly", "");     // pas de clavier natif
-  inputEl.setAttribute("inputmode", "none"); // sécurité
+    // ✅ Mobile : on évite le clavier natif SANS readonly (sinon caret disparaît)
+inputEl.removeAttribute("readonly");
+inputEl.setAttribute("inputmode", "none");
+
 
 
 
