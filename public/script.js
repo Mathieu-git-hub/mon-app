@@ -755,6 +755,9 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
     if (pad) pad.remove();
     document.body.style.paddingBottom = ""; // ✅ retire l'espace réservé
     document.removeEventListener("pointerdown", outsideClose, true);
+    // ✅ IMPORTANT : rendre le caret (trait clignotant) à nouveau visible
+    if (isTouch) inputEl.removeAttribute("readonly");
+
   }
 
   function outsideClose(e){
@@ -932,14 +935,14 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
     document.addEventListener("pointerdown", outsideClose, true);
   }
 
-  // ✅ coupe clavier natif (touch)
+  // ✅ mobile : on évite le clavier natif seulement quand le pad est ouvert
   if (isTouch) {
-    inputEl.setAttribute("readonly", "readonly"); // focus sans clavier
+    inputEl.removeAttribute("readonly"); // ✅ caret visible par défaut
     inputEl.setAttribute("inputmode", "none");
   } else {
-    // desktop : laisse le clavier
     inputEl.removeAttribute("readonly");
   }
+
 
   // ✅ ouvrir pad au focus (et le garder)
   inputEl.addEventListener("focus", () => {
