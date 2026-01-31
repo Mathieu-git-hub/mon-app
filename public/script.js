@@ -129,6 +129,54 @@ function fromISODate(s) {
   return new Date(y, m - 1, d);
 }
 
+function addDaysIso(isoDate, deltaDays) {
+  const d = fromISODate(isoDate);
+  d.setDate(d.getDate() + deltaDays);
+  return toISODate(d);
+}
+
+function isFutureIso(isoDate) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const d = fromISODate(isoDate);
+  return isAfterDay(d, today);
+}
+
+function dayHeaderHTML(titleText, { withPrevNext = true } = {}) {
+  if (!withPrevNext) return `<div class="date-title">${titleText}</div>`;
+
+  return `
+    <div class="day-header">
+      <button id="prevDay" class="nav-arrow">←</button>
+      <div class="date-title">${titleText}</div>
+      <button id="nextDay" class="nav-arrow">→</button>
+    </div>
+  `;
+}
+
+function bindPrevNextDayButtons(currentIso, { baseHashPrefix }) {
+  const prev = document.getElementById("prevDay");
+  const next = document.getElementById("nextDay");
+
+  const prevIso = addDaysIso(currentIso, -1);
+  const nextIso = addDaysIso(currentIso, +1);
+
+  if (prev) {
+    prev.addEventListener("click", () => navigateTo(`${baseHashPrefix}${prevIso}`));
+  }
+
+  if (next) {
+    // ✅ on évite d’aller dans le futur (comme ton calendrier)
+    if (isFutureIso(nextIso)) {
+      next.disabled = true;
+      next.classList.add("pseudo-disabled");
+    } else {
+      next.addEventListener("click", () => navigateTo(`${baseHashPrefix}${nextIso}`));
+    }
+  }
+}
+
+
 /**
  * ✅ Conversion robuste : accepte
  * - "100"
@@ -696,9 +744,39 @@ function ensureCalcPadStyles() {
 
 function attachCalcKeyboard(inputEl, { onEnter } = {}) {
   if (!inputEl) return;
-  if (!isMobileNarrow()) return;
+
+  // ✅ Sur téléphone/tablette : on force la calculatrice et on coupe le clavier natif
+  const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
 
   ensureCalcPadStyles();
+
+  function closePad() {
+    const pad = document.getElementById("calcpad");
+    if (pad) pad.remove();
+    document.body.style.paddingBottom = ""; // ✅ retire l'espace réservé
+    document.removeEventListener("pointerdown", outsideClose, true);
+  }
+
+  function outsideClose(e){
+    const pad = document.getElementById("calcpad");
+    if (!pad) return;
+    if (e.target === inputEl) return;
+    if (pad.contains(e.target)) return;
+    closePad();
+  }
+
+  function ensureInputVisible(padEl){
+    // ✅ réserve un espace pour que le bas de page ne soit pas caché par le pad
+    requestAnimationFrame(() => {
+      const h = padEl?.offsetHeight || 0;
+      if (h) document.body.style.paddingBottom = (h + 12) + "px";
+
+      // ✅ scroll pour garder l'input au-dessus du pad
+      try {
+        inputEl.scrollIntoView({ block: "center", behavior: "smooth" });
+      } catch {}
+    });
+  }
 
   function insertAtCursor(text) {
     const start = inputEl.selectionStart ?? inputEl.value.length;
@@ -706,37 +784,52 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
     const v = inputEl.value;
     inputEl.value = v.slice(0, start) + text + v.slice(end);
     const pos = start + text.length;
+
+    // ✅ garde le focus + curseur
+    inputEl.focus({ preventScroll: true });
     inputEl.setSelectionRange(pos, pos);
+
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function backspace() {
     const start = inputEl.selectionStart ?? inputEl.value.length;
     const end = inputEl.selectionEnd ?? inputEl.value.length;
+
     if (start !== end) {
+      // supprime la sélection
       insertAtCursor("");
       return;
     }
     if (start <= 0) return;
+
     const v = inputEl.value;
     inputEl.value = v.slice(0, start - 1) + v.slice(end);
     const pos = start - 1;
+
+    inputEl.focus({ preventScroll: true });
     inputEl.setSelectionRange(pos, pos);
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
-  function closePad() {
-    const pad = document.getElementById("calcpad");
-    if (pad) pad.remove();
-  }
-
   function buildPad() {
-    closePad();
+    // ✅ Si déjà affiché, on ne le détruit pas : calculatrice "permanente"
+    let pad = document.getElementById("calcpad");
+    if (pad) {
+      ensureInputVisible(pad);
+      return;
+    }
 
-    const pad = document.createElement("div");
+    pad = document.createElement("div");
     pad.className = "calcpad";
     pad.id = "calcpad";
 
+    // ✅ empêcher la perte de focus quand on clique sur le pad
+    pad.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+    });
+
+    // ✅ Layout (portrait + paysage)
     const portrait = !isLandscape();
 
     const rowsPortrait = [
@@ -775,17 +868,23 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
         b.type = "button";
 
         b.addEventListener("click", () => {
+          // ✅ ne jamais faire fermer le pad pendant la saisie
           if (key === "⌫") return backspace();
+
           if (key === "CANCEL") {
             inputEl.value = "";
+            inputEl.focus({ preventScroll: true });
             inputEl.dispatchEvent(new Event("input", { bubbles: true }));
             return;
           }
+
           if (key === "OK") {
+            // ✅ on ferme volontairement
             closePad();
             if (typeof onEnter === "function") onEnter();
             return;
           }
+
           if (key === "×") return insertAtCursor("*");
           if (key === "÷") return insertAtCursor("/");
           if (key === "π") return insertAtCursor("3.1415926535");
@@ -799,21 +898,39 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
     });
 
     document.body.appendChild(pad);
+
+    // ✅ input toujours au-dessus
+    ensureInputVisible(pad);
+
+    // ✅ fermer si on tape en dehors
+    document.addEventListener("pointerdown", outsideClose, true);
   }
 
-  inputEl.setAttribute("inputmode", "none");
+  // ✅ coupe clavier natif (touch)
+  if (isTouch) {
+    inputEl.setAttribute("readonly", "readonly"); // focus sans clavier
+    inputEl.setAttribute("inputmode", "none");
+  } else {
+    // desktop : laisse le clavier
+    inputEl.removeAttribute("readonly");
+  }
 
-  inputEl.addEventListener("focus", buildPad);
-  inputEl.addEventListener("blur", () => {
-    setTimeout(() => {
-      if (document.activeElement !== inputEl) closePad();
-    }, 120);
+  // ✅ ouvrir pad au focus (et le garder)
+  inputEl.addEventListener("focus", () => {
+    if (isTouch) inputEl.setAttribute("readonly", "readonly");
+    buildPad();
   });
 
+  // ✅ si orientation change, on reconstruit le pad (sans perdre l’input)
   window.addEventListener("orientationchange", () => {
-    if (document.activeElement === inputEl) buildPad();
+    const pad = document.getElementById("calcpad");
+    if (!pad) return;
+
+    pad.remove();
+    buildPad();
   });
 }
+
 
 
 /* -------------------------
@@ -1880,7 +1997,7 @@ function renderDailyDayPage(isoDate) {
       <button id="back" class="back-btn">← Retour</button>
 
       <div class="day-page">
-        <div class="date-title">${formatFullDate(date)}</div>
+        ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
 
         <div class="form-col">
 
@@ -2218,7 +2335,14 @@ function renderDailyDayPage(isoDate) {
     </div>
   `;
 
-  document.getElementById("back").addEventListener("click", () => history.back());
+      bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#daily/" });
+  // et on redirige vers /sale en interceptant :
+      const prev = document.getElementById("prevDay");
+      const next = document.getElementById("nextDay");
+      if (prev) prev.onclick = () => navigateTo(`#daily/${addDaysIso(isoDate,-1)}/sale`);
+      if (next && !next.disabled) next.onclick = () => navigateTo(`#daily/${addDaysIso(isoDate,+1)}/sale`);
+
+
 
     // -------------------------
   // ✅ Champs numériques simples : chiffres + virgule uniquement
@@ -3046,6 +3170,16 @@ function renderDailyDayPage(isoDate) {
           }
         }
 
+                // ✅ Nouvelle caisse réelle -> caisse départ du lendemain (validée)
+        if (data.nouvelleCaisseReelleFinalized) {
+          const r = evalOperation(data.nouvelleCaisseReelle);
+          if (r !== null) {
+            nextDay.caisseDepart = formatCommaNumber(r);
+            nextDay.caisseDepartFinalized = true;
+          }
+        }
+
+
         data.daySaved = true;
         data.dayMigrated = false; // ✅ Enregistrer > plus “migré”
         await apiSaveData(dailyStore);
@@ -3193,7 +3327,7 @@ function renderGenericDayPage(pageName, isoDate) {
     <div class="page">
       <button id="back" class="back-btn">← Retour</button>
       <div class="day-page">
-        <div class="date-title">${formatFullDate(date)}</div>
+        ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
       </div>
     </div>
   `;

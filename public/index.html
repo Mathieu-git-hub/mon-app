@@ -33,6 +33,66 @@
         padding: 14px 18px; font-size: 18px; cursor: pointer;
         transition: transform 120ms ease; z-index: 10;
       }
+
+      /* =========================================================
+      ✅ TOP BAR (Home / Retour / Calendrier)
+      - Home à gauche du Retour sur toutes les pages "jour"
+      - Calendrier à droite du Retour sur Compte du jour + Vente du jour
+========================================================= */
+      .topbar-left{
+        position:absolute;
+        top:20px; left:20px;
+        display:flex;
+        gap:10px;
+        align-items:center;
+        z-index: 20;
+      }
+
+      .icon-btn{
+        width:48px; height:48px;            /* ≈ hauteur du bouton Retour */
+        border-radius:12px;
+        background:#000;
+        border:1px solid rgba(255,255,255,0.85);
+        color:#fff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        cursor:pointer;
+        transition: transform 120ms ease;
+      }
+
+      .icon-btn:hover{ transform: scale(1.04); }
+      .icon-btn:active{ transform: scale(1.02); }
+
+      .icon-btn svg{
+        width:22px; height:22px;
+        display:block;
+      }
+
+      /* Mobile */
+      @media (max-width:520px){
+        .topbar-left{ top:12px; left:12px; gap:8px; }
+        .icon-btn{ width:40px; height:40px; border-radius:10px; }
+        .icon-btn svg{ width:20px; height:20px; }
+      }
+
+      /* =========================================================
+      ✅ Date avec flèches (jour précédent / suivant)
+      - mêmes flèches que calendrier, proches du titre
+      ========================================================= */
+      .day-header{
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        gap:12px;
+        margin-bottom: 18px;
+      }
+
+      .day-header .date-title{
+        margin:0; /* on gère l’espace via day-header */
+      }
+
+
       .back-btn:hover { transform: scale(1.04); }
       .back-btn:active { transform: scale(1.02); }
 
