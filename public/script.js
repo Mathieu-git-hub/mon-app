@@ -748,23 +748,36 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
   // ✅ Sur téléphone/tablette : on force la calculatrice et on coupe le clavier natif
   const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
 
+    // ✅ handler viewport pour garder l’input visible
+  let vvHandler = null;
+
+
+    // ✅ PC / non-touch : PAS de calculette overlay (sinon ça masque)
+  if (!isTouch) {
+    // On garde seulement "Enter" => onEnter
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (typeof onEnter === "function") onEnter();
+      }
+    });
+    return;
+  }
+
+
   ensureCalcPadStyles();
 
   function closePad() {
-  const pad = document.getElementById("calcpad");
-  if (pad) pad.remove();
-  document.body.style.paddingBottom = "";
-  document.removeEventListener("pointerdown", outsideClose, true);
-
-  // ✅ IMPORTANT : caret visible
-  if (isTouch) inputEl.removeAttribute("readonly");
-
-  // ✅ IMPORTANT : stop listeners viewport
-  const vv = window.visualViewport;
-  if (vv && vvHandler) {
-    vv.removeEventListener("resize", vvHandler);
-    vv.removeEventListener("scroll", vvHandler);
-    vvHandler = null;
+    const pad = document.getElementById("calcpad");
+    if (pad) pad.remove();
+    document.body.style.paddingBottom = "";
+    document.removeEventListener("pointerdown", outsideClose, true);
+   // ✅ IMPORTANT : stop listeners viewport
+    const vv = window.visualViewport;
+      if (vv && vvHandler) {
+      vv.removeEventListener("resize", vvHandler);
+      vv.removeEventListener("scroll", vvHandler);
+      vvHandler = null;
   }
 }
 
@@ -935,14 +948,17 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
       });
     });
 
-    document.body.appendChild(pad);
+    
+   document.body.appendChild(pad);
 
-// ✅ input toujours au-dessus (iOS: relancer après reflow)
+// ✅ 1) scroll immédiat
 ensureInputVisible(pad);
+
+// ✅ 2) rescroll après reflow (mobile)
 setTimeout(() => ensureInputVisible(pad), 80);
 setTimeout(() => ensureInputVisible(pad), 180);
 
-// ✅ suivre les changements de viewport (iOS surtout)
+// ✅ 3) suivre les changements de viewport (mobile surtout)
 const vv = window.visualViewport;
 if (vv) {
   vvHandler = () => ensureInputVisible(pad);
@@ -950,18 +966,17 @@ if (vv) {
   vv.addEventListener("scroll", vvHandler, { passive: true });
 }
 
+
+
 // ✅ fermer si on tape en dehors
 document.addEventListener("pointerdown", outsideClose, true);
 
   }
 
-  // ✅ mobile : on évite le clavier natif seulement quand le pad est ouvert
-  if (isTouch) {
-    inputEl.removeAttribute("readonly"); // ✅ caret visible par défaut
-    inputEl.setAttribute("inputmode", "none");
-  } else {
-    inputEl.removeAttribute("readonly");
-  }
+    // ✅ Mobile : empêcher le clavier natif sans casser le caret
+  inputEl.setAttribute("readonly", "");     // pas de clavier natif
+  inputEl.setAttribute("inputmode", "none"); // sécurité
+
 
 
   // ✅ ouvrir pad au focus (sans readonly -> caret visible)
@@ -978,13 +993,16 @@ inputEl.addEventListener("focus", () => {
 });
 
 
-  // ✅ important : si déjà focus, un tap doit quand même rouvrir le pad
-  inputEl.addEventListener("pointerdown", (e) => {
-    if (!isTouch) return;
-    e.preventDefault(); // évite clavier natif
-    buildPad();
-    inputEl.focus({ preventScroll: true });
+    // ✅ IMPORTANT : on NE bloque PAS le pointerdown, sinon impossible de placer le caret au doigt
+  inputEl.addEventListener("pointerdown", () => {
+    // on laisse le système placer le caret où l’utilisateur touche
+    // puis on ouvre le pad juste après
+    setTimeout(() => {
+      buildPad();
+      inputEl.focus({ preventScroll: true });
+    }, 0);
   });
+
 
 
   // ✅ si orientation change, on reconstruit le pad (sans perdre l’input)
