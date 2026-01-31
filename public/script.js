@@ -2527,6 +2527,11 @@ function renderDailyDayPage(isoDate) {
       data[dataKey] = value;
       markDirty();
       syncButtonAndErrorState(value);
+      // ✅ si effacé totalement en mode modification : on persiste tout de suite (DB)
+      if (value.trim() === "") {
+        safePersistNow();
+      }
+
     });
 
     input.addEventListener("keydown", (e) => {
