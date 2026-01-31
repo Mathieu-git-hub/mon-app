@@ -751,14 +751,23 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
   ensureCalcPadStyles();
 
   function closePad() {
-    const pad = document.getElementById("calcpad");
-    if (pad) pad.remove();
-    document.body.style.paddingBottom = ""; // ✅ retire l'espace réservé
-    document.removeEventListener("pointerdown", outsideClose, true);
-    // ✅ IMPORTANT : rendre le caret (trait clignotant) à nouveau visible
-    if (isTouch) inputEl.removeAttribute("readonly");
+  const pad = document.getElementById("calcpad");
+  if (pad) pad.remove();
+  document.body.style.paddingBottom = "";
+  document.removeEventListener("pointerdown", outsideClose, true);
 
+  // ✅ IMPORTANT : caret visible
+  if (isTouch) inputEl.removeAttribute("readonly");
+
+  // ✅ IMPORTANT : stop listeners viewport
+  const vv = window.visualViewport;
+  if (vv && vvHandler) {
+    vv.removeEventListener("resize", vvHandler);
+    vv.removeEventListener("scroll", vvHandler);
+    vvHandler = null;
   }
+}
+
 
   function outsideClose(e){
     const pad = document.getElementById("calcpad");
@@ -928,11 +937,22 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
 
     document.body.appendChild(pad);
 
-    // ✅ input toujours au-dessus
-    ensureInputVisible(pad);
+// ✅ input toujours au-dessus (iOS: relancer après reflow)
+ensureInputVisible(pad);
+setTimeout(() => ensureInputVisible(pad), 80);
+setTimeout(() => ensureInputVisible(pad), 180);
 
-    // ✅ fermer si on tape en dehors
-    document.addEventListener("pointerdown", outsideClose, true);
+// ✅ suivre les changements de viewport (iOS surtout)
+const vv = window.visualViewport;
+if (vv) {
+  vvHandler = () => ensureInputVisible(pad);
+  vv.addEventListener("resize", vvHandler, { passive: true });
+  vv.addEventListener("scroll", vvHandler, { passive: true });
+}
+
+// ✅ fermer si on tape en dehors
+document.addEventListener("pointerdown", outsideClose, true);
+
   }
 
   // ✅ mobile : on évite le clavier natif seulement quand le pad est ouvert
@@ -944,11 +964,19 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
   }
 
 
-  // ✅ ouvrir pad au focus (et le garder)
-  inputEl.addEventListener("focus", () => {
-    if (isTouch) inputEl.setAttribute("readonly", "readonly");
-    buildPad();
+  // ✅ ouvrir pad au focus (sans readonly -> caret visible)
+inputEl.addEventListener("focus", () => {
+  buildPad();
+
+  // ✅ force affichage du caret sur iOS
+  requestAnimationFrame(() => {
+    try {
+      const pos = inputEl.value.length;
+      inputEl.setSelectionRange(pos, pos);
+    } catch {}
   });
+});
+
 
   // ✅ important : si déjà focus, un tap doit quand même rouvrir le pad
   inputEl.addEventListener("pointerdown", (e) => {
