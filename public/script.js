@@ -2004,7 +2004,28 @@ function renderDailyDayPage(isoDate) {
   // -------------------------
   app.innerHTML = `
     <div class="page">
-      <button id="back" class="back-btn">← Retour</button>
+      <div class="topbar-left">
+        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 10v10h14V10" />
+          </svg>
+        </button>
+
+        <button id="back" class="back-btn">← Retour</button>
+      </div>
+
+      <div class="topbar-right">
+        <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 3v3M17 3v3" />
+            <path d="M3.5 8h17" />
+            <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+          </svg>
+        </button>
+      </div>
+
+
 
       <div class="day-page">
         ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
@@ -2346,6 +2367,14 @@ function renderDailyDayPage(isoDate) {
   `;
 
       bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#daily/" });
+
+      const hb = document.getElementById("homeBtn");
+      if (hb) hb.addEventListener("click", () => navigateTo("#"));
+
+      const cb = document.getElementById("calBtn");
+      if (cb) cb.addEventListener("click", () => navigateTo("#daily"));
+
+
   
 
 
@@ -3346,7 +3375,17 @@ function renderGenericDayPage(pageName, isoDate) {
   const date = fromISODate(isoDate);
   app.innerHTML = `
     <div class="page">
-      <button id="back" class="back-btn">← Retour</button>
+      <div class="topbar-left">
+        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 10v10h14V10" />
+          </svg>
+        </button>
+
+        <button id="back" class="back-btn">← Retour</button>
+    </div>
+
       <div class="day-page">
         ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
       </div>
@@ -3354,6 +3393,10 @@ function renderGenericDayPage(pageName, isoDate) {
   `;
 
   bindPrevNextDayButtons(isoDate, { baseHashPrefix: `#${pageName}/` });
+
+  const hb = document.getElementById("homeBtn");
+  if (hb) hb.addEventListener("click", () => navigateTo("#"));
+
 
   document.getElementById("back").addEventListener("click", () => history.back());
 }
@@ -3366,7 +3409,17 @@ function renderDailyDayMenu(isoDate) {
 
   app.innerHTML = `
     <div class="page">
-      <button id="back" class="back-btn">← Retour</button>
+      <div class="topbar-left">
+        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 10v10h14V10" />
+          </svg>
+        </button>
+
+        <button id="back" class="back-btn">← Retour</button>
+      </div>
+
 
       <div class="day-page">
         ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
@@ -3380,6 +3433,9 @@ function renderDailyDayMenu(isoDate) {
   `;
 
   document.getElementById("back").addEventListener("click", () => history.back());
+  const hb = document.getElementById("homeBtn");
+  if (hb) hb.addEventListener("click", () => navigateTo("#"));
+
   document.getElementById("accountDay").addEventListener("click", () => navigateTo(`#daily/${isoDate}`));
   document.getElementById("saleDay").addEventListener("click", () => navigateTo(`#daily/${isoDate}/sale`));
 }
@@ -3396,7 +3452,28 @@ function renderDailySalePage(isoDate) {
 
   app.innerHTML = `
     <div class="page">
-      <button id="back" class="back-btn">← Retour</button>
+      <div class="topbar-left">
+        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 10v10h14V10" />
+          </svg>
+        </button>
+
+      <div class="topbar-right">
+        <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 3v3M17 3v3" />
+            <path d="M3.5 8h17" />
+            <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+          </svg>
+        </button>
+      </div>
+  
+
+        <button id="back" class="back-btn">← Retour</button>
+      </div>
+
 
       <div class="day-page">
         ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
@@ -3417,6 +3494,14 @@ function renderDailySalePage(isoDate) {
 
 
   document.getElementById("back").addEventListener("click", () => history.back());
+
+  const hb = document.getElementById("homeBtn");
+  if (hb) hb.addEventListener("click", () => navigateTo("#"));
+
+  const cb = document.getElementById("calBtn");
+  if (cb) cb.addEventListener("click", () => navigateTo("#daily"));
+
+
 }
 // ===============================
 // ✅ FIN — renderDailySalePage(isoDate)
