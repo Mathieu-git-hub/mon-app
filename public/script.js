@@ -742,6 +742,204 @@ function ensureCalcPadStyles() {
   document.head.appendChild(st);
 }
 
+function ensureOpOverlayStyles() {
+  if (document.getElementById("opOverlayStyle")) return;
+  const st = document.createElement("style");
+  st.id = "opOverlayStyle";
+  st.textContent = `
+    .op-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+    }
+    .op-overlay .top {
+      padding: 14px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .op-overlay .top input {
+      flex: 1;
+      min-width: 0;
+      font-size: 18px;
+    }
+    .op-overlay .top .btn {
+      min-width: 120px;
+      white-space: nowrap;
+    }
+    .op-overlay .pad-wrap {
+      margin-top: auto;
+      padding: 10px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      background: rgba(10,10,10,0.98);
+    }
+  `;
+  document.head.appendChild(st);
+}
+
+function openOpOverlay(inputEl, { onEnter } = {}) {
+  ensureOpOverlayStyles();
+  ensureCalcPadStyles(); // on réutilise les styles du pad si tu veux garder tes classes
+
+  // évite double overlay
+  const old = document.getElementById("opOverlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "opOverlay";
+  overlay.className = "op-overlay";
+
+  overlay.innerHTML = `
+    <div class="top">
+      <input id="opOverlayInput" class="input" inputmode="decimal" />
+      <button id="opOverlayCancel" class="btn btn-blue lift">Cancel</button>
+      <button id="opOverlayOk" class="btn btn-green lift">OK</button>
+    </div>
+    <div class="pad-wrap" id="opOverlayPad"></div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const topInput = document.getElementById("opOverlayInput");
+  const cancelBtn = document.getElementById("opOverlayCancel");
+  const okBtn = document.getElementById("opOverlayOk");
+  const padWrap = document.getElementById("opOverlayPad");
+
+  // sync initial
+  topInput.value = inputEl.value || "";
+
+  // IMPORTANT : caret normal + déplaçable au doigt
+  topInput.focus();
+
+  function close() {
+    overlay.remove();
+    // redonner focus au champ d'origine sans scroller
+    try { inputEl.focus({ preventScroll: true }); } catch {}
+  }
+
+  cancelBtn.addEventListener("click", () => {
+    // 👉 option A: on garde ce qui est tapé (on a déjà sync)
+    // 👉 option B: on annule vraiment et on remet l'ancienne valeur:
+    // inputEl.value = topInput._startValue || "";
+    // inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    close();
+  });
+
+  okBtn.addEventListener("click", () => {
+    close();
+    if (typeof onEnter === "function") onEnter();
+  });
+
+  // à chaque frappe dans l’overlay, on répercute sur le champ réel
+  topInput.addEventListener("input", () => {
+    inputEl.value = topInput.value;
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // construire un pad “dans” l’overlay en reprenant ta logique
+  buildCalcPadInto(padWrap, topInput, { onEnter: () => okBtn.click() });
+}
+
+function buildCalcPadInto(containerEl, inputEl, { onEnter } = {}) {
+  if (!containerEl || !inputEl) return;
+
+  containerEl.innerHTML = ""; // reset
+
+  const portrait = !isLandscape();
+
+  const rowsPortrait = [
+    ["7","8","9","+","-"],
+    ["4","5","6","×","÷"],
+    ["1","2","3",".",","],
+    ["0","(",")","⌫","CANCEL"],
+    ["OK"]
+  ];
+
+  const rowsLandscape = [
+    ["7","8","9","+","-"],
+    ["4","5","6","×","÷"],
+    ["1","2","3",".",","],
+    ["0","(",")","^","x²"],
+    ["π","⌫","CANCEL","OK"]
+  ];
+
+  const rows = portrait ? rowsPortrait : rowsLandscape;
+
+  function insertAtCursor(text) {
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const end = inputEl.selectionEnd ?? inputEl.value.length;
+    const v = inputEl.value;
+    inputEl.value = v.slice(0, start) + text + v.slice(end);
+    const pos = start + text.length;
+    inputEl.focus({ preventScroll: true });
+    inputEl.setSelectionRange(pos, pos);
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function backspace() {
+    const start = inputEl.selectionStart ?? inputEl.value.length;
+    const end = inputEl.selectionEnd ?? inputEl.value.length;
+
+    if (start !== end) { insertAtCursor(""); return; }
+    if (start <= 0) return;
+
+    const v = inputEl.value;
+    inputEl.value = v.slice(0, start - 1) + v.slice(end);
+    const pos = start - 1;
+
+    inputEl.focus({ preventScroll: true });
+    inputEl.setSelectionRange(pos, pos);
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  rows.forEach((arr) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    if (arr.length === 1) row.style.gridTemplateColumns = "repeat(1, 1fr)";
+    containerEl.appendChild(row);
+
+    arr.forEach((key) => {
+      const b = document.createElement("button");
+      if (["+","-","×","÷","^","(",")","x²","π"].includes(key)) b.classList.add("op");
+      if (key === "CANCEL") b.classList.add("danger");
+      if (key === "OK") b.classList.add("ok");
+      if (key === "OK" && arr.length === 1) b.classList.add("wide");
+
+      b.textContent = key;
+      b.type = "button";
+
+      b.addEventListener("click", () => {
+        if (key === "⌫") return backspace();
+        if (key === "CANCEL") {
+          inputEl.value = "";
+          inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+          inputEl.focus({ preventScroll: true });
+          return;
+        }
+        if (key === "OK") {
+          inputEl.blur();
+          if (typeof onEnter === "function") onEnter();
+          return;
+        }
+        if (key === "×") return insertAtCursor("*");
+        if (key === "÷") return insertAtCursor("/");
+        if (key === "π") return insertAtCursor("3.1415926535");
+        if (key === "x²") return insertAtCursor("^2");
+
+        insertAtCursor(key);
+      });
+
+      row.appendChild(b);
+    });
+  });
+}
+
+
+
 function attachCalcKeyboard(inputEl, { onEnter } = {}) {
   if (!inputEl) return;
 
@@ -2607,9 +2805,47 @@ function renderDailyDayPage(isoDate) {
     const btn = buttonId ? document.getElementById(buttonId) : null;
     if (!input) return;
 
-    attachCalcKeyboard(input, { onEnter: () => {
+    // ✅ Au clic/focus : on ouvre l’overlay de saisie (mobile/touch)
+const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+
+if (isTouch) {
+  const open = () => {
+    openOpOverlay({
+      title: inputId, // tu peux mettre un vrai label (voir étape 3.4)
+      initialValue: data[dataKey] || "",
+      placeholder: input.getAttribute("placeholder") || "(ex: 100+20-5)",
+
+      onChange: (v) => {
+        data[dataKey] = v;
+        markDirty();
+      },
+
+      onCancel: () => {
+        // rien : on laisse la valeur telle quelle (ou tu peux restaurer un backup si tu veux)
+      },
+
+      canValidate: (v) => isOperationPosed(v),
+
+      onValidate: () => {
+        // on déclenche ton bouton "Valider" existant
+        if (btn && btn.style.display !== "none" && !btn.disabled) btn.click();
+      },
+    });
+  };
+
+  // IMPORTANT : ne pas laisser le clavier natif + la page en dessous
+  input.addEventListener("focus", (e) => { e.preventDefault(); input.blur(); open(); });
+  input.addEventListener("pointerdown", (e) => { e.preventDefault(); open(); });
+} else {
+  // PC : Enter => clique valider
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
       if (btn && btn.style.display !== "none" && !btn.disabled) btn.click();
-    }});
+    }
+  });
+}
+
 
 
     let lastValid = data[dataKey] || "";
