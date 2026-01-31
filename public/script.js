@@ -766,17 +766,27 @@ function attachCalcKeyboard(inputEl, { onEnter } = {}) {
   }
 
   function ensureInputVisible(padEl){
-    // ✅ réserve un espace pour que le bas de page ne soit pas caché par le pad
     requestAnimationFrame(() => {
-      const h = padEl?.offsetHeight || 0;
-      if (h) document.body.style.paddingBottom = (h + 12) + "px";
+      const padH = padEl?.offsetHeight || 0;
+      if (padH) document.body.style.paddingBottom = (padH + 12) + "px";
 
-      // ✅ scroll pour garder l'input au-dessus du pad
-      try {
-        inputEl.scrollIntoView({ block: "center", behavior: "smooth" });
-      } catch {}
+      // 1) on essaie scrollIntoView
+      try { inputEl.scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
+
+      // 2) correction fine : si l'input reste sous la zone visible (masqué par le pad)
+      requestAnimationFrame(() => {
+        const rect = inputEl.getBoundingClientRect();
+        const viewportH = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+
+        const safeBottom = viewportH - padH - 16; // marge
+        if (rect.bottom > safeBottom) {
+          const delta = rect.bottom - safeBottom;
+          window.scrollBy({ top: delta, left: 0, behavior: "smooth" });
+        }
+      });
     });
   }
+
 
   function insertAtCursor(text) {
     const start = inputEl.selectionStart ?? inputEl.value.length;
@@ -3345,7 +3355,7 @@ function renderDailyDayMenu(isoDate) {
       <button id="back" class="back-btn">← Retour</button>
 
       <div class="day-page">
-        <div class="date-title">${formatFullDate(date)}</div>
+        ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
 
         <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin-top:18px; flex-wrap:wrap;">
           <button id="saleDay" class="btn btn-blue lift" style="min-width:220px;">Vente du jour</button>
