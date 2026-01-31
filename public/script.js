@@ -846,7 +846,7 @@ function openOpOverlay({
 }
 
 
-function buildCalcPadInto(containerEl, inputEl, { onEnter } = {}) {
+function buildCalcPadInto(containerEl, inputEl, { onOk, onCancel } = {}) {
   if (!containerEl || !inputEl) return;
 
   containerEl.innerHTML = ""; // reset
@@ -917,16 +917,14 @@ function buildCalcPadInto(containerEl, inputEl, { onEnter } = {}) {
       b.addEventListener("click", () => {
         if (key === "⌫") return backspace();
         if (key === "CANCEL") {
-          inputEl.value = "";
-          inputEl.dispatchEvent(new Event("input", { bubbles: true }));
-          inputEl.focus({ preventScroll: true });
-          return;
-        }
-        if (key === "OK") {
-          inputEl.blur();
-          if (typeof onEnter === "function") onEnter();
-          return;
-        }
+  if (typeof onCancel === "function") onCancel();
+  return;
+}
+if (key === "OK") {
+  if (typeof onOk === "function") onOk();
+  return;
+}
+
         if (key === "×") return insertAtCursor("*");
         if (key === "÷") return insertAtCursor("/");
         if (key === "π") return insertAtCursor("3.1415926535");
@@ -2807,37 +2805,49 @@ function renderDailyDayPage(isoDate) {
     const btn = buttonId ? document.getElementById(buttonId) : null;
     if (!input) return;
 
-    // ✅ Au clic/focus : on ouvre l’overlay de saisie (mobile/touch)
+    // ✅ Au clic/focus : overlay avec la calculette (mobile/touch)
 const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
 
 if (isTouch) {
   const open = () => {
     openOpOverlay({
-      title: inputId, // tu peux mettre un vrai label (voir étape 3.4)
+      inputEl: input, // ✅ IMPORTANT : on passe l’input réel
+
+      // Optionnel : si tu veux un titre lisible, tu peux le mettre ici
+      // ex: title: "Recette" / "Nouvelle liquidité" ...
+      title: "",
+
       initialValue: data[dataKey] || "",
       placeholder: input.getAttribute("placeholder") || "(ex: 100+20-5)",
 
-      onChange: (v) => {
-        data[dataKey] = v;
-        markDirty();
-      },
-
+      // CANCEL de la calculette => ferme overlay, ne change rien
       onCancel: () => {
-        // rien : on laisse la valeur telle quelle (ou tu peux restaurer un backup si tu veux)
+        // rien
       },
 
-      canValidate: (v) => isOperationPosed(v),
-
-      onValidate: () => {
-        // on déclenche ton bouton "Valider" existant
-        if (btn && btn.style.display !== "none" && !btn.disabled) btn.click();
+      // OK de la calculette => tente de valider via ton bouton existant
+      onOk: () => {
+        if (btn && btn.style.display !== "none" && !btn.disabled) {
+          btn.click();
+        } else {
+          // feedback si OK alors que l’opération n’est pas validable
+          shake(input);
+        }
       },
     });
   };
 
-  // IMPORTANT : ne pas laisser le clavier natif + la page en dessous
-  input.addEventListener("focus", (e) => { e.preventDefault(); input.blur(); open(); });
-  input.addEventListener("pointerdown", (e) => { e.preventDefault(); open(); });
+  // ✅ Empêcher clavier natif + ouvrir overlay
+  input.addEventListener("focus", (e) => {
+    e.preventDefault();
+    input.blur();
+    open();
+  });
+
+  input.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    open();
+  });
 } else {
   // PC : Enter => clique valider
   input.addEventListener("keydown", (e) => {
@@ -2847,6 +2857,7 @@ if (isTouch) {
     }
   });
 }
+
 
 
 
