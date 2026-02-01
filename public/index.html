@@ -35,16 +35,18 @@
       }
 
       /* =========================================================
-      ✅ TOP BAR (Home / Retour / Calendrier)
-      - Home à gauche, Retour centré, Calendrier à droite
-      - mêmes hauteurs, Retour reste rectangle
+      ✅ TOP BAR (Home / Retour / Calendrier) — VERSION "HAUT GAUCHE"
+      - Les 3 boutons sont alignés en haut à gauche
+      - Ordre conservé : Home / Retour / Calendrier
+      - Dimensions inchangées + espacement (gap) sans qu'ils se touchent
       ========================================================= */
       .topbar{
-        position:absolute;
-        top:20px; left:20px; right:20px;
-        display:flex;
-        align-items:center;
-        gap:10px;
+        position: absolute;
+        top: 20px;
+        left: 20px;           /* ✅ groupe collé à gauche */
+        display: inline-flex; /* ✅ ne prend pas toute la largeur */
+        align-items: center;
+        gap: 10px;            /* ✅ ils ne se touchent pas */
         z-index: 20;
       }
 
@@ -54,9 +56,10 @@
         gap:10px;
       }
 
+      /* ✅ IMPORTANT : on supprime le centrage "plein écran" */
       .topbar .slot.center{
-        flex: 1;
-        justify-content: center; /* ✅ Retour au centre */
+        flex: 0;              /* ✅ plus de flex:1 */
+        justify-content: center;
       }
 
       /* ✅ On neutralise le position:absolute du back-btn quand il est dans la topbar */
@@ -72,8 +75,8 @@
       }
 
       .topbar .back-btn{
-        height:48px;              /* ✅ même hauteur que icon-btn */
-        padding: 0 18px;          /* rectangle, pas carré */
+        height:48px;
+        padding: 0 18px;      /* rectangle, pas carré */
         display:flex;
         align-items:center;
         justify-content:center;
@@ -81,7 +84,7 @@
 
       /* Mobile */
       @media (max-width:520px){
-        .topbar{ top:12px; left:12px; right:12px; gap:8px; }
+        .topbar{ top:12px; left:12px; gap:8px; }
 
         .icon-btn{
           width:40px;
@@ -97,11 +100,8 @@
         }
       }
 
-      
-
-
       .icon-btn{
-        width:48px; height:48px;            /* ≈ hauteur du bouton Retour */
+        width:48px; height:48px;
         border-radius:12px;
         background:#000;
         border:1px solid rgba(255,255,255,0.85);
@@ -121,7 +121,7 @@
         display:block;
       }
 
-      /* Mobile */
+      /* Mobile (tu avais aussi ce bloc, je le laisse) */
       @media (max-width:520px){
         .topbar-left{ top:12px; left:12px; gap:8px; }
         .icon-btn{ width:40px; height:40px; border-radius:10px; }
@@ -130,7 +130,6 @@
 
       /* =========================================================
       ✅ Date avec flèches (jour précédent / suivant)
-      - mêmes flèches que calendrier, proches du titre
       ========================================================= */
       .day-header{
         display:flex;
@@ -141,9 +140,8 @@
       }
 
       .day-header .date-title{
-        margin:0; /* on gère l’espace via day-header */
+        margin:0;
       }
-
 
       .back-btn:hover { transform: scale(1.04); }
       .back-btn:active { transform: scale(1.02); }
@@ -181,10 +179,8 @@
       .day-box.saved { background: #19a34a; color: #fff; }
       .day-empty { border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: transparent; }
 
-      /* --- ✅ Jour migré (bleu) --- */
       .day-box.migrated { background: #1e5eff; color: #fff; }
       .day-box.migrated:hover { transform: scale(1.04); box-shadow: 0 0 0 2px rgba(255,255,255,0.7); }
-
 
       .day-box:hover { transform: scale(1.06); box-shadow: 0 0 0 2px rgba(30, 94, 255, 0.6); cursor: pointer; }
       .day-box.today:hover { transform: scale(1.04); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
@@ -201,40 +197,21 @@
 
       .row { display: flex; flex-direction: column; gap: 8px; }
 
-      /* Mode "enregistré" : intitulé + case blanche alignés */
-      .row-saved {
-        flex-direction: row;
-        align-items: center;
-        gap: 12px;
-      }
+      .row-saved { flex-direction: row; align-items: center; gap: 12px; }
+      .row-saved .label { width: 240px; flex: 0 0 240px; }
+      .row-saved .total-row { margin: 0; }
 
-      .row-saved .label {
-        width: 240px;
-        flex: 0 0 240px;
-      }
-
-      .row-saved .total-row {
-        margin: 0;
-      }
-
-      /* ✅ NC : après Enregistrer, aligner les items suivants sous la 1ère case blanche */
       .stack-after-first{
-       margin-left: 252px; /* 240 label + 12 gap desktop */
-       display: flex;
-       flex-direction: column;
-       gap: 10px;
+        margin-left: 252px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
       @media (max-width: 520px){
-       .stack-after-first{
-        margin-left: 180px; /* 170 label + 10 gap mobile */
-       }
+        .stack-after-first{ margin-left: 180px; }
       }
 
-      .label {
-        font-size: 17px;
-        font-weight: 800;
-        opacity: 0.95;
-      }
+      .label { font-size: 17px; font-weight: 800; opacity: 0.95; }
 
       .input {
         border-radius: 12px; border: 1px solid rgba(255,255,255,0.18);
@@ -284,32 +261,19 @@
       .input.error { border-color: rgba(230, 0, 0, 0.95); box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.25); }
       .btn.shake { animation: shake 180ms ease-in-out; }
 
-      /* ✅ FIX : après Enregistrer, la case blanche doit être juste après ":" */
-     .row.row-saved {
-      align-items: center;
-      gap: 10px;
-     }
-
-     .row.row-saved .label {
-      width: auto !important;
-      flex: 0 0 auto !important;
-      white-space: nowrap;
-     }
-
-     .row.row-saved .total-row {
-      margin: 0;
-      display: inline-flex;
-      align-items: center;
-      flex-wrap: wrap;     /* si écran trop étroit, ça wrap mais reste à droite du label */
-      gap: 10px;
-     }
-
-
-      /* =========================================================
-   ✅ MOBILE / RESPONSIVE (calendrier + pages jour)
-   - évite chevauchement bouton retour / titre
-   - adapte tailles boutons / inputs / cards sans casser desktop
-========================================================= */
+      .row.row-saved { align-items: center; gap: 10px; }
+      .row.row-saved .label {
+        width: auto !important;
+        flex: 0 0 auto !important;
+        white-space: nowrap;
+      }
+      .row.row-saved .total-row {
+        margin: 0;
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
 
 @media (max-width: 520px) {
   .back-btn{
@@ -319,7 +283,6 @@
     border-radius: 10px;
   }
 
-  /* Calendrier : laisse de l’air pour le bouton retour */
   .calendar-header{
     height: 92px;
     padding-top: 18px;
@@ -327,7 +290,6 @@
   }
   .month-title{ font-size: 18px; }
 
-  /* Page jour : évite tout chevauchement avec le bouton retour */
   .day-page{ padding: 104px 14px 18px; }
   .date-title{ font-size: 18px; margin-bottom: 18px; }
 
@@ -353,25 +315,17 @@
   .day-box, .day-empty{ border-radius: 10px; }
 }
 
-/* =========================================================
-   ✅ IMPORTANT : après "Enregistrer", les cases blanches doivent
-   être juste après "Intitulé :"
-   (actuellement elles passent parfois en colonne verticale)
-========================================================= */
-
 .row-saved{
   flex-direction: row;
   align-items: center;
   gap: 10px;
 }
 
-/* largeur intitulé desktop */
 .row-saved .label{
   width: 240px;
   flex: 0 0 240px;
 }
 
-/* contenu à droite : ne force pas le passage à la ligne */
 .row-saved .total-row{
   flex: 1;
   min-width: 0;
@@ -381,7 +335,6 @@
   align-items: center;
 }
 
-/* cartes : autoriser à se “shrink” sans tout casser */
 .row-saved .card-white{
   min-width: 0;
   max-width: 100%;
@@ -390,24 +343,19 @@
   white-space: nowrap;
 }
 
-/* Ajustement mobile : réduire la largeur fixe du label pour que
-   la case blanche reste à côté (juste après :) */
 @media (max-width: 520px){
   .row-saved .label{
     width: 170px;
     flex: 0 0 170px;
   }
   .row-saved .total-row{
-    flex-wrap: wrap;       /* si vraiment trop étroit, ça wrap mais reste à droite du label */
+    flex-wrap: wrap;
     row-gap: 8px;
   }
   .row-saved .card-white{
-    white-space: normal;   /* sur mobile, autoriser 2 lignes si besoin */
+    white-space: normal;
   }
 }
-
-
-
     </style>
   </head>
 
