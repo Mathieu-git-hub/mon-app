@@ -825,13 +825,14 @@ function openOpOverlay({
   overlay.className = "op-overlay";
 
   overlay.innerHTML = `
-    <div class="top" style="flex-direction:column; align-items:stretch;">
-      ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
-      <input id="opOverlayInput" class="input" inputmode="none" readonly
-        placeholder="${escapeAttr(placeholder)}" />
-    </div>
-    <div class="pad-wrap calcpad" id="opOverlayPad"></div>
-  `;
+  <div class="top" style="flex-direction:column; align-items:stretch;">
+    ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
+    <input id="opOverlayInput" class="input" inputmode="none"
+      placeholder="${escapeAttr(placeholder)}" />
+  </div>
+  <div class="pad-wrap calcpad" id="opOverlayPad"></div>
+`;
+
 
   document.body.appendChild(overlay);
 
@@ -839,8 +840,45 @@ function openOpOverlay({
   const padWrap = document.getElementById("opOverlayPad");
 
   // init
-  topInput.value = initialValue || "";
-  topInput.focus();
+topInput.value = initialValue || "";
+
+// ✅ On désactive le clavier natif
+topInput.readOnly = true;
+topInput.setAttribute("inputmode", "none");
+
+// ✅ Caret visible
+topInput.style.caretColor = "#fff";
+
+// ✅ Focus + caret (sans clavier)
+function focusOverlayInputNoKeyboard() {
+  try {
+    // astuce iOS : déverrouille 1 tick, focus, puis re-verrouille
+    topInput.readOnly = false;
+    topInput.focus({ preventScroll: true });
+
+    const pos = topInput.value.length;
+    topInput.setSelectionRange(pos, pos);
+
+    setTimeout(() => {
+      topInput.readOnly = true;
+    }, 0);
+  } catch {
+    // fallback
+    try { topInput.focus({ preventScroll: true }); } catch {}
+  }
+}
+
+// Focus initial
+focusOverlayInputNoKeyboard();
+
+// ✅ Au tap dans la zone, on réaffiche le caret
+topInput.addEventListener("pointerdown", () => {
+  setTimeout(() => focusOverlayInputNoKeyboard(), 0);
+});
+topInput.addEventListener("click", () => {
+  setTimeout(() => focusOverlayInputNoKeyboard(), 0);
+});
+
 
   // IMPORTANT : sync overlay -> input réel (ça déclenche tes règles existantes)
   topInput.addEventListener("input", () => {
