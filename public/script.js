@@ -467,6 +467,10 @@ function getDailyData(isoDate) {
       capital: "",
       capitalFinalized: false,
 
+      // ✅ Apport (comme prélèvements)
+      apport: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
+
+
       caisseDepart: "",
       caisseDepartFinalized: false,
 
@@ -587,6 +591,11 @@ function getDailyData(isoDate) {
   if (!d.prelevement) {
     d.prelevement = { items: [], editing: false, finalized: false, draft: "" };
   }
+  
+  if (!d.apport) {
+  d.apport = { items: [], editing: false, finalized: false, draft: "" };
+  }
+
 
   // ✅ migration dépenses
   if (!d.depenses) {
@@ -1842,6 +1851,7 @@ function renderDailyDayPage(isoDate) {
   const date = fromISODate(isoDate);
   const data = getDailyData(isoDate);
 
+  const pApport = data.apport;
   const pCap = data.prelevement;
   const pCaisse = data.prelevementCaisse;
   const pDep = data.depenses; // ✅ Dépenses = pile comme prélèvements
@@ -2234,6 +2244,7 @@ function renderDailyDayPage(isoDate) {
       data.nouvelleLiquiditeFinalized;
 
     const requiredRecorded =
+     pApport.finalized &&
      pCap.finalized &&
      pCaisse.finalized &&
      pDep.finalized &&
@@ -2261,6 +2272,7 @@ function renderDailyDayPage(isoDate) {
       (pDep && pDep.finalized) ||
       (pCap && pCap.finalized) ||
       (pCaisse && pCaisse.finalized) ||
+      (pApport && pApport.finalized) ||
       data.nouvelleCaisseReelleFinalized ||
       (nc && nc.finalized)
     );
@@ -2279,13 +2291,32 @@ function renderDailyDayPage(isoDate) {
   const caisseDepartAfter = caisseDepartNum - prelevCaisseTotal;
 
     // ✅ capital après prélèvement (affiché si prélèvement sur capital terminé et total ≠ 0)
-  const capitalNum = toNumberLoose(data.capital || "0") ?? 0;
-  const prelevCapTotal = computePrelevementTotal((pCap && pCap.items) ? pCap.items : []);
-  const showCapitalAfterPrelev =
-    !!pCap?.finalized &&
-    Math.abs(prelevCapTotal) > 0.0000001;
+  
+    const capitalNum = toNumberLoose(data.capital || "0") ?? 0;
 
-  const capitalAfter = capitalNum - prelevCapTotal;
+// ✅ Total apport
+const apportTotal = computePrelevementTotal((pApport && pApport.items) ? pApport.items : []);
+const showCapitalAfterApport =
+  !!pApport?.finalized &&
+  Math.abs(apportTotal) > 0.0000001;
+
+// ✅ Capital après apport = capital + apportTotal
+const capitalAfterApport = capitalNum + apportTotal;
+
+// ✅ Total prélèvement sur capital
+const prelevCapTotal = computePrelevementTotal((pCap && pCap.items) ? pCap.items : []);
+const showCapitalAfterPrelev =
+  !!pCap?.finalized &&
+  Math.abs(prelevCapTotal) > 0.0000001;
+
+// ✅ RÈGLE CORRIGÉE :
+// - si apport = 0 => base = capital (inchangé)
+// - si apport ≠ 0 => base = capital après apport
+const baseCapitalForPrelev = showCapitalAfterApport ? capitalAfterApport : capitalNum;
+
+// ✅ Capital après prélèvement
+const capitalAfter = baseCapitalForPrelev - prelevCapTotal;
+
 
 
   // -------------------------
@@ -2370,6 +2401,27 @@ function renderDailyDayPage(isoDate) {
             }
           </div>
 
+          <!-- ✅ APPORT -->
+          ${renderPrelevementSectionHTML(pApport, "apport", "Apport", rowClass, data.daySaved)}
+          ${
+  showCapitalAfterApport
+    ? `
+      <div class="${rowClass}">
+        <div class="label">Capital après apport :</div>
+        <div class="total-row">
+          <div class="card card-white lift">
+            ${escapeHtml(formatInputNumberDisplay(data.capital || "0"))}
+            + ${formatCommaNumber(apportTotal)}
+            = ${formatCommaNumber(capitalAfterApport)}
+          </div>
+        </div>
+      </div>
+    `
+    : ``
+}
+
+
+
           <!-- PRÉLÈVEMENT SUR CAPITAL -->
           ${renderPrelevementSectionHTML(pCap, "prelevCap", "Prélèvement sur capital", rowClass, data.daySaved)}
 
@@ -2380,9 +2432,10 @@ function renderDailyDayPage(isoDate) {
                   <div class="label">Capital après prélèvement :</div>
                   <div class="total-row">
                     <div class="card card-white lift">
-                      ${escapeHtml(formatInputNumberDisplay(data.capital || "0"))}
-                      - ${formatCommaNumber(prelevCapTotal)}
-                      = ${formatCommaNumber(capitalAfter)}
+                      ${formatCommaNumber(baseCapitalForPrelev)}
+- ${formatCommaNumber(prelevCapTotal)}
+= ${formatCommaNumber(capitalAfter)}
+
                     </div>
                   </div>
                 </div>
@@ -2807,6 +2860,7 @@ function renderDailyDayPage(isoDate) {
   // ✅ Prélèvements + Dépenses
   // -------------------------
   bindPrelevementHandlers(pDep, "depenses", isoDate, markDirty);
+  bindPrelevementHandlers(pApport, "apport", isoDate, markDirty);
   bindPrelevementHandlers(pCap, "prelevCap", isoDate, markDirty);
   bindPrelevementHandlers(pCaisse, "prelevCaisse", isoDate, markDirty);
 
@@ -3632,6 +3686,10 @@ if (isTouch) {
         if (pCap?.finalized) {
           dst.prelevement = { items: deepClone(pCap.items || []), editing: false, finalized: true, draft: "" };
         }
+        if (pApport?.finalized) {
+  dst.apport = { items: deepClone(pApport.items || []), editing: false, finalized: true, draft: "" };
+}
+
         if (pCaisse?.finalized) {
           dst.prelevementCaisse = { items: deepClone(pCaisse.items || []), editing: false, finalized: true, draft: "" };
         }
