@@ -827,7 +827,7 @@ function openOpOverlay({
   overlay.innerHTML = `
     <div class="top" style="flex-direction:column; align-items:stretch;">
       ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
-      <input id="opOverlayInput" class="input" inputmode="decimal"
+      <input id="opOverlayInput" class="input" inputmode="none" readonly
         placeholder="${escapeAttr(placeholder)}" />
     </div>
     <div class="pad-wrap calcpad" id="opOverlayPad"></div>
@@ -2872,49 +2872,41 @@ const capitalAfter = baseCapitalForPrelev - prelevCapTotal;
     const btn = buttonId ? document.getElementById(buttonId) : null;
     if (!input) return;
 
-    // ✅ Au clic/focus : overlay avec la calculette (mobile/touch)
+    // ✅ Au clic UNIQUEMENT : overlay avec la calculette (mobile/touch)
 const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
 
 if (isTouch) {
+  // ✅ 1) Désactive le clavier natif sur l'input réel
+  input.setAttribute("readonly", "readonly");   // iOS/Android : empêche le clavier
+  input.setAttribute("inputmode", "none");
+  input.style.caretColor = "transparent";       // optionnel : cache le curseur
+
   const open = () => {
     openOpOverlay({
-      inputEl: input, // ✅ IMPORTANT : on passe l’input réel
-
-      // Optionnel : si tu veux un titre lisible, tu peux le mettre ici
-      // ex: title: "Recette" / "Nouvelle liquidité" ...
+      inputEl: input,
       title: "",
-
       initialValue: data[dataKey] || "",
       placeholder: input.getAttribute("placeholder") || "(ex: 100+20-5)",
-
-      // CANCEL de la calculette => ferme overlay, ne change rien
-      onCancel: () => {
-        // rien
-      },
-
-      // OK de la calculette => tente de valider via ton bouton existant
+      onCancel: () => {},
       onOk: () => {
-        if (btn && btn.style.display !== "none" && !btn.disabled) {
-          btn.click();
-        } else {
-          // feedback si OK alors que l’opération n’est pas validable
-          shake(input);
-        }
+        if (btn && btn.style.display !== "none" && !btn.disabled) btn.click();
+        else shake(input);
       },
     });
   };
 
-  // ✅ Empêcher clavier natif + ouvrir overlay
-  input.addEventListener("focus", (e) => {
+  // ✅ 2) IMPORTANT : on n’ouvre QUE sur "click"
+  // - un scroll ne déclenche pas "click" => navigation fluide
+  input.addEventListener("click", (e) => {
     e.preventDefault();
-    input.blur();
     open();
   });
 
-  input.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    open();
+  // ✅ 3) Si le navigateur force un focus malgré tout, on le retire
+  input.addEventListener("focus", () => {
+    try { input.blur(); } catch {}
   });
+
 } else {
   // PC : Enter => clique valider
   input.addEventListener("keydown", (e) => {
@@ -2924,6 +2916,7 @@ if (isTouch) {
     }
   });
 }
+
 
 
 
