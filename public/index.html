@@ -97,6 +97,29 @@
         }
       }
 
+      /* =========================================================
+   ✅ TOPBAR groupée en haut à gauche (Home + Retour + Calendrier)
+   - mêmes tailles que topbar actuelle
+   ========================================================= */
+.topbar.topbar-leftpack{
+  justify-content: flex-start;
+}
+
+/* Comme on n'a plus .slot, on garde juste un alignement propre */
+.topbar.topbar-leftpack{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+/* Mobile : rapproché pareil */
+@media (max-width:520px){
+  .topbar.topbar-leftpack{
+    gap:8px;
+  }
+}
+
+
       
 
 
