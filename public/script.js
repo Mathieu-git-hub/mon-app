@@ -2261,22 +2261,14 @@ function renderDailyDayPage(isoDate) {
 
   // ✅ Migrate possible ? (au moins un bloc validé/terminé)
   function computeMigrateEligible() {
-    return !!(
-      data.liquiditeFinalized ||
-      data.capitalFinalized ||
-      data.caisseDepartFinalized ||
-      data.recetteFinalized ||
-      data.prtFinalized ||
-      data.beneficeReelFinalized ||
-      data.nouvelleLiquiditeFinalized ||
-      (pDep && pDep.finalized) ||
-      (pCap && pCap.finalized) ||
-      (pCaisse && pCaisse.finalized) ||
-      (pApport && pApport.finalized) ||
-      data.nouvelleCaisseReelleFinalized ||
-      (nc && nc.finalized)
-    );
-  }
+  // ✅ NOUVELLE RÈGLE : seuls NCR + NL + NC comptent
+  return !!(
+    data.nouvelleCaisseReelleFinalized ||
+    data.nouvelleLiquiditeFinalized ||
+    (nc && nc.finalized && (nc.items?.length || 0) > 0)
+  );
+}
+
   const migrateEligible = computeMigrateEligible();
 
   // ✅ caisse départ après prélèvement (affiché seulement après Enregistrer, si total ≠ 0)
@@ -3715,61 +3707,64 @@ if (isTouch) {
       migrateBtn.disabled = true;
 
       try {
-        const nextIso = nextBusinessIso(isoDate);
-        const dst = getDailyData(nextIso);
+  const nextIso = nextBusinessIso(isoDate);
+  const dst = getDailyData(nextIso);
 
-        // ✅ copie “validé/terminé” vers le lendemain (sans supprimer le jour)
-        if (data.liquiditeFinalized) { dst.liquidite = data.liquidite; dst.liquiditeFinalized = true; }
-        if (data.capitalFinalized) { dst.capital = data.capital; dst.capitalFinalized = true; }
-        if (data.caisseDepartFinalized) { dst.caisseDepart = data.caisseDepart; dst.caisseDepartFinalized = true; }
-        if (data.prtFinalized) { dst.prt = data.prt; dst.prtFinalized = true; }
+  // ✅ helper : dernier résultat d’une pile (NC)
+  function lastStackResult(stack) {
+    if (!stack || !Array.isArray(stack.items) || stack.items.length === 0) return null;
+    const last = stack.items[stack.items.length - 1];
+    const r = Number.isFinite(last?.result) ? last.result : null;
+    return r;
+  }
 
-        if (data.nouvelleCaisseReelleFinalized) {
-          dst.nouvelleCaisseReelle = data.nouvelleCaisseReelle;
-          dst.nouvelleCaisseReelleFinalized = true;
-        }
+  // ✅ NOUVELLE RÈGLE MIGRATION :
+  // NCR -> caisseDepart du lendemain
+  // NL  -> liquidite du lendemain
+  // NC  -> capital du lendemain
+  // Rien d’autre ne migre.
 
+  // 1) Nouvelle caisse réelle => caisse départ du lendemain
+  if (data.nouvelleCaisseReelleFinalized) {
+    const r = evalOperation(data.nouvelleCaisseReelle);
+    if (r !== null) {
+      dst.caisseDepart = formatCommaNumber(r);
+      dst.caisseDepartFinalized = true;
+    }
+  }
 
-        if (data.recetteFinalized) { dst.recette = data.recette; dst.recetteFinalized = true; }
-        if (data.beneficeReelFinalized) { dst.beneficeReel = data.beneficeReel; dst.beneficeReelFinalized = true; dst.beneficeReelError = false; }
-        if (data.nouvelleLiquiditeFinalized) { dst.nouvelleLiquidite = data.nouvelleLiquidite; dst.nouvelleLiquiditeFinalized = true; }
+  // 2) Nouvelle liquidité => liquidité du lendemain
+  if (data.nouvelleLiquiditeFinalized) {
+    const r = evalOperation(data.nouvelleLiquidite);
+    if (r !== null) {
+      dst.liquidite = formatCommaNumber(r);
+      dst.liquiditeFinalized = true;
+    }
+  }
 
-        if (pDep?.finalized) {
-          dst.depenses = { items: deepClone(pDep.items || []), editing: false, finalized: true, draft: "" };
-        }
-        if (pCap?.finalized) {
-          dst.prelevement = { items: deepClone(pCap.items || []), editing: false, finalized: true, draft: "" };
-        }
-        if (pApport?.finalized) {
-  dst.apport = { items: deepClone(pApport.items || []), editing: false, finalized: true, draft: "" };
+  // 3) Nouveau capital (pile) => capital du lendemain
+  if (nc?.finalized) {
+    const r = lastStackResult(nc);
+    if (r !== null) {
+      dst.capital = formatCommaNumber(r);
+      dst.capitalFinalized = true;
+    }
+  }
+
+  // ✅ marquer le jour comme migré (bleu)
+  data.dayMigrated = true;
+
+  await apiSaveData(dailyStore);
+  renderDailyDayPage(isoDate);
+  alert("Migré vers le lendemain !");
+} catch (e) {
+  alert("Erreur migration : " + (e?.message || "inconnue"));
+  shake(migrateBtn);
+} finally {
+  const b = document.getElementById("migrateDay");
+  if (b) b.disabled = false;
 }
 
-        if (pCaisse?.finalized) {
-          dst.prelevementCaisse = { items: deepClone(pCaisse.items || []), editing: false, finalized: true, draft: "" };
-        }
-
-
-        if (nc?.finalized) {
-          dst.nouveauCapitalStack = deepClone(nc);
-          dst.nouveauCapitalStack.editIndex = null;
-          dst.nouveauCapitalStack.editDraft = "";
-          dst.nouveauCapitalStack.editError = false;
-          dst.nouveauCapitalStack.draftError = false;
-          dst.nouveauCapitalStack.draft = "";
-          dst.nouveauCapitalStack.finalized = true;
-        }
-
-        data.dayMigrated = true;
-        await apiSaveData(dailyStore);
-        renderDailyDayPage(isoDate);
-        alert("Migré vers le lendemain !");
-      } catch (e) {
-        alert("Erreur migration : " + (e?.message || "inconnue"));
-        shake(migrateBtn);
-      } finally {
-        const b = document.getElementById("migrateDay");
-        if (b) b.disabled = false;
-      }
     });
   }
 
