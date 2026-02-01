@@ -827,8 +827,11 @@ function openOpOverlay({
   overlay.innerHTML = `
     <div class="top" style="flex-direction:column; align-items:stretch;">
       ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
-      <input id="opOverlayInput" class="input" inputmode="none" readonly
-        placeholder="${escapeAttr(placeholder)}" />
+      <input id="opOverlayInput" class="input"
+  inputmode="none"
+  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+  placeholder="${escapeAttr(placeholder)}" />
+
     </div>
     <div class="pad-wrap calcpad" id="opOverlayPad"></div>
   `;
@@ -841,6 +844,19 @@ function openOpOverlay({
   // init
   topInput.value = initialValue || "";
   topInput.focus();
+
+  // ✅ Empêche le clavier / la saisie manuelle tout en gardant le curseur visible et déplaçable
+topInput.addEventListener("beforeinput", (e) => {
+  // empêche la saisie "clavier", mais laisse les changements programmatiques
+  e.preventDefault();
+});
+topInput.addEventListener("keydown", (e) => {
+  e.preventDefault();
+});
+
+// ✅ force caret visible sur fond sombre
+topInput.style.caretColor = "#fff";
+
 
   // IMPORTANT : sync overlay -> input réel (ça déclenche tes règles existantes)
   topInput.addEventListener("input", () => {
