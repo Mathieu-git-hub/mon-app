@@ -825,14 +825,13 @@ function openOpOverlay({
   overlay.className = "op-overlay";
 
   overlay.innerHTML = `
-  <div class="top" style="flex-direction:column; align-items:stretch;">
-    ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
-    <input id="opOverlayInput" class="input" inputmode="none"
-      placeholder="${escapeAttr(placeholder)}" />
-  </div>
-  <div class="pad-wrap calcpad" id="opOverlayPad"></div>
-`;
-
+    <div class="top" style="flex-direction:column; align-items:stretch;">
+      ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
+      <input id="opOverlayInput" class="input" inputmode="none" readonly
+        placeholder="${escapeAttr(placeholder)}" />
+    </div>
+    <div class="pad-wrap calcpad" id="opOverlayPad"></div>
+  `;
 
   document.body.appendChild(overlay);
 
@@ -840,45 +839,8 @@ function openOpOverlay({
   const padWrap = document.getElementById("opOverlayPad");
 
   // init
-topInput.value = initialValue || "";
-
-// ✅ On désactive le clavier natif
-topInput.readOnly = true;
-topInput.setAttribute("inputmode", "none");
-
-// ✅ Caret visible
-topInput.style.caretColor = "#fff";
-
-// ✅ Focus + caret (sans clavier)
-function focusOverlayInputNoKeyboard() {
-  try {
-    // astuce iOS : déverrouille 1 tick, focus, puis re-verrouille
-    topInput.readOnly = false;
-    topInput.focus({ preventScroll: true });
-
-    const pos = topInput.value.length;
-    topInput.setSelectionRange(pos, pos);
-
-    setTimeout(() => {
-      topInput.readOnly = true;
-    }, 0);
-  } catch {
-    // fallback
-    try { topInput.focus({ preventScroll: true }); } catch {}
-  }
-}
-
-// Focus initial
-focusOverlayInputNoKeyboard();
-
-// ✅ Au tap dans la zone, on réaffiche le caret
-topInput.addEventListener("pointerdown", () => {
-  setTimeout(() => focusOverlayInputNoKeyboard(), 0);
-});
-topInput.addEventListener("click", () => {
-  setTimeout(() => focusOverlayInputNoKeyboard(), 0);
-});
-
+  topInput.value = initialValue || "";
+  topInput.focus();
 
   // IMPORTANT : sync overlay -> input réel (ça déclenche tes règles existantes)
   topInput.addEventListener("input", () => {
@@ -3923,16 +3885,22 @@ function renderDailySalePage(isoDate) {
   const date = fromISODate(isoDate);
 
   app.innerHTML = `
-    <div class="page">
-      <div class="topbar-left">
+  <div class="page">
+    <div class="topbar">
+      <div class="slot left">
         <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 10.5L12 3l9 7.5" />
             <path d="M5 10v10h14V10" />
           </svg>
         </button>
+      </div>
 
-      <div class="topbar-right">
+      <div class="slot center">
+        <button id="back" class="back-btn">← Retour</button>
+      </div>
+
+      <div class="slot right">
         <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M7 3v3M17 3v3" />
@@ -3941,20 +3909,17 @@ function renderDailySalePage(isoDate) {
           </svg>
         </button>
       </div>
-  
+    </div>
 
-        <button id="back" class="back-btn">← Retour</button>
-      </div>
-
-
-      <div class="day-page">
-        ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
-        <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
-          Vente du jour (à construire)
-        </div>
+    <div class="day-page">
+      ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
+      <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
+        Vente du jour (à construire)
       </div>
     </div>
-  `;
+  </div>
+`;
+
 
   bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#daily/" });
 
