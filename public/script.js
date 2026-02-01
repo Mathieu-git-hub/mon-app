@@ -3094,11 +3094,54 @@ if (isTouch) {
   // -------------------------
     function bindNcTextFilter(inputEl, getVal, setVal, clearErrorFlag) {
     if (!inputEl) return;
-    attachCalcKeyboard(inputEl, { onEnter: () => {
-      const btnId = resolveValidateBtnId(inputEl.id);
-      const vb = btnId ? document.getElementById(btnId) : null;
-      if (vb && vb.style.display !== "none" && !vb.disabled) vb.click();
-    }});
+    // ✅ MOBILE : overlay (comme recette), PC : comportement normal + Enter
+const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+
+function resolveValidateBtnId(id) {
+  if (id === "ncDraft") return "ncValidate";
+  if (id === "ncEditInput") return "ncEditValidate";
+  if (id === "ncrDraft") return "ncrValidate";
+  if (id === "ncrEditInput") return "ncrEditValidate";
+  return null;
+}
+
+function clickValidateIfPossible() {
+  const btnId = resolveValidateBtnId(inputEl.id);
+  const vb = btnId ? document.getElementById(btnId) : null;
+  if (vb && vb.style.display !== "none" && !vb.disabled) vb.click();
+  else shake(inputEl);
+}
+
+if (isTouch) {
+  // ✅ Désactive clavier natif mais garde caret
+  inputEl.setAttribute("readonly", "readonly");
+  inputEl.setAttribute("inputmode", "none");
+  inputEl.style.caretColor = ""; // caret visible
+
+  // ✅ Ouvre overlay sur click (pas de preventDefault -> caret déplaçable)
+  inputEl.addEventListener("click", () => {
+    setTimeout(() => {
+      openOpOverlay({
+        inputEl,
+        title: "", // tu peux mettre "Nouveau capital" si tu veux
+        initialValue: getVal() || "",
+        placeholder: inputEl.getAttribute("placeholder") || "(ex: 200-10)",
+        onCancel: () => {},
+        onOk: () => clickValidateIfPossible(),
+      });
+    }, 0);
+  });
+
+} else {
+  // PC : Enter => Valider
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      clickValidateIfPossible();
+    }
+  });
+}
+
 
 
     let lastValid = getVal() || "";
