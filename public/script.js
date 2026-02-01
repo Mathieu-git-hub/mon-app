@@ -3842,29 +3842,35 @@ function renderDailyDayMenu(isoDate) {
   const date = fromISODate(isoDate);
 
   app.innerHTML = `
-    <div class="page">
-      <div class="topbar-left">
+  <div class="page">
+    <div class="topbar">
+      <div class="slot left">
         <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 10.5L12 3l9 7.5" />
             <path d="M5 10v10h14V10" />
           </svg>
         </button>
+      </div>
 
+      <div class="slot center">
         <button id="back" class="back-btn">← Retour</button>
       </div>
 
+      <div class="slot right"></div>
+    </div>
 
-      <div class="day-page">
-        ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
+    <div class="day-page">
+      ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
 
-        <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin-top:18px; flex-wrap:wrap;">
-          <button id="saleDay" class="btn btn-blue lift" style="min-width:220px;">Vente du jour</button>
-          <button id="accountDay" class="btn btn-blue lift" style="min-width:220px;">Compte du jour</button>
-        </div>
+      <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin-top:18px; flex-wrap:wrap;">
+        <button id="saleDay" class="btn btn-blue lift" style="min-width:220px;">Vente du jour</button>
+        <button id="accountDay" class="btn btn-blue lift" style="min-width:220px;">Compte du jour</button>
       </div>
     </div>
-  `;
+  </div>
+`;
+
 
   document.getElementById("back").addEventListener("click", () => history.back());
   const hb = document.getElementById("homeBtn");
