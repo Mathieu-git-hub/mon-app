@@ -2876,10 +2876,12 @@ const capitalAfter = baseCapitalForPrelev - prelevCapTotal;
 const isTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
 
 if (isTouch) {
-  // ✅ 1) Désactive le clavier natif sur l'input réel
-  input.setAttribute("readonly", "readonly");   // iOS/Android : empêche le clavier
+  // ✅ 1) Désactive le clavier natif (mobile) MAIS garde le caret
+  input.setAttribute("readonly", "readonly");    // empêche le clavier
   input.setAttribute("inputmode", "none");
-  input.style.caretColor = "transparent";       // optionnel : cache le curseur
+
+  // ✅ IMPORTANT : on NE cache PAS le caret
+  input.style.caretColor = ""; // reset
 
   const open = () => {
     openOpOverlay({
@@ -2895,27 +2897,16 @@ if (isTouch) {
     });
   };
 
-  // ✅ 2) IMPORTANT : on n’ouvre QUE sur "click"
-  // - un scroll ne déclenche pas "click" => navigation fluide
-  input.addEventListener("click", (e) => {
-    e.preventDefault();
-    open();
+  // ✅ 2) Ouvre uniquement au click (pas pendant scroll)
+  // ⚠️ Ne pas preventDefault : laisse le caret se placer
+  input.addEventListener("click", () => {
+    // laisse le caret se placer, puis ouvre l’overlay
+    setTimeout(open, 0);
   });
 
-  // ✅ 3) Si le navigateur force un focus malgré tout, on le retire
-  input.addEventListener("focus", () => {
-    try { input.blur(); } catch {}
-  });
-
-} else {
-  // PC : Enter => clique valider
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (btn && btn.style.display !== "none" && !btn.disabled) btn.click();
-    }
-  });
+  // ✅ 3) On NE blur pas : sinon caret invisible / non déplaçable
 }
+
 
 
 
