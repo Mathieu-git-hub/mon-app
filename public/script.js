@@ -2963,7 +2963,8 @@ function buildOverlaySearchItems() {
       if (cb) cb.addEventListener("click", () => navigateTo("#daily"));
 
       const backBtn = document.getElementById("back");
-      if (backBtn) backBtn.addEventListener("click", () => history.back());
+if (backBtn) backBtn.addEventListener("click", () => smartBack());
+
 
 
 
