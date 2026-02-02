@@ -515,6 +515,7 @@ function getDailyData(isoDate) {
       nouveauCapitalStack: {
         items: [],
         draft: "",
+        draftAutoFilled: false,
         finalized: false,
         editIndex: null,
         editDraft: "",
@@ -769,16 +770,13 @@ function ensureOpOverlayStyles() {
       border-bottom: 1px solid rgba(255,255,255,0.12);
       display: flex;
       gap: 10px;
-      align-items: center;
+      align-items: stretch;
+      flex-direction: column;
     }
     .op-overlay .top input {
       flex: 1;
       min-width: 0;
       font-size: 18px;
-    }
-    .op-overlay .top .btn {
-      min-width: 120px;
-      white-space: nowrap;
     }
     .op-overlay .pad-wrap {
       margin-top: auto;
@@ -786,37 +784,35 @@ function ensureOpOverlayStyles() {
       border-top: 1px solid rgba(255,255,255,0.12);
       background: rgba(10,10,10,0.98);
     }
-          /* ✅ Réutilise le style .calcpad dans l'overlay, mais sans "fixed" */
+    /* ✅ Réutilise le style .calcpad dans l'overlay, mais sans "fixed" */
     .op-overlay .calcpad {
       position: static;
       left: auto; right: auto; bottom: auto;
       border-top: 0;
       padding-bottom: calc(10px + env(safe-area-inset-bottom));
     }
-
-    /* ✅ Optionnel : si tu veux un peu moins “massif” dans l’overlay */
     .op-overlay .calcpad button {
       font-size: 16px;
     }
-
   `;
   document.head.appendChild(st);
 }
 
+
 function openOpOverlay({
-  inputEl,          // input original (celui de ta page)
-  title = "",       // optionnel, si tu veux l’afficher (sinon laisse vide)
+  inputEl,
+  title = "",
   initialValue = "",
   placeholder = "",
+  searchItems = [],        // ✅ AJOUT : liste { key, label, valueText }
   onCancel = () => {},
-  onOk = () => {},  // appelé quand on appuie OK (touche calculette)
+  onOk = () => {},
 } = {}) {
   if (!inputEl) return;
 
   ensureOpOverlayStyles();
   ensureCalcPadStyles();
 
-  // évite double overlay
   const old = document.getElementById("opOverlay");
   if (old) old.remove();
 
@@ -825,14 +821,35 @@ function openOpOverlay({
   overlay.className = "op-overlay";
 
   overlay.innerHTML = `
-    <div class="top" style="flex-direction:column; align-items:stretch;">
+    <div class="top">
       ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
-      <input id="opOverlayInput" class="input"
-  inputmode="none"
-  autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-  placeholder="${escapeAttr(placeholder)}" />
 
+      <input id="opOverlayInput" class="input"
+        inputmode="none"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        placeholder="${escapeAttr(placeholder)}" />
+
+      <!-- ✅ AJOUT : barre de recherche -->
+      <div class="op-search-wrap">
+        <span class="op-search-icon" aria-hidden="true">
+          <!-- loupe simplifiée -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="M20 20l-3.5-3.5"></path>
+          </svg>
+        </span>
+
+        <input id="opSearch" class="input op-search"
+          inputmode="text"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          placeholder="Rechercher (ex: capital, caisse départ...)" />
+
+        <div id="opSuggest" class="op-suggest" style="display:none;"></div>
+      </div>
+
+      <div id="opSearchResult" class="op-search-result" style="display:none;"></div>
     </div>
+
     <div class="pad-wrap calcpad" id="opOverlayPad"></div>
   `;
 
@@ -841,24 +858,19 @@ function openOpOverlay({
   const topInput = document.getElementById("opOverlayInput");
   const padWrap = document.getElementById("opOverlayPad");
 
-  // init
+  const searchInput = document.getElementById("opSearch");
+  const suggestBox = document.getElementById("opSuggest");
+  const resultBox = document.getElementById("opSearchResult");
+
   topInput.value = initialValue || "";
   topInput.focus();
 
-  // ✅ Empêche le clavier / la saisie manuelle tout en gardant le curseur visible et déplaçable
-topInput.addEventListener("beforeinput", (e) => {
-  // empêche la saisie "clavier", mais laisse les changements programmatiques
-  e.preventDefault();
-});
-topInput.addEventListener("keydown", (e) => {
-  e.preventDefault();
-});
+  // ✅ empêche saisie clavier (garde caret)
+  topInput.addEventListener("beforeinput", (e) => e.preventDefault());
+  topInput.addEventListener("keydown", (e) => e.preventDefault());
+  topInput.style.caretColor = "#fff";
 
-// ✅ force caret visible sur fond sombre
-topInput.style.caretColor = "#fff";
-
-
-  // IMPORTANT : sync overlay -> input réel (ça déclenche tes règles existantes)
+  // sync overlay -> input réel
   topInput.addEventListener("input", () => {
     inputEl.value = topInput.value;
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
@@ -866,11 +878,91 @@ topInput.style.caretColor = "#fff";
 
   function close() {
     overlay.remove();
-    // pas de refocus (sinon ça relance l’overlay)
     try { inputEl.blur(); } catch {}
   }
 
-  // Construire la calculette “comme avant” mais DANS l’overlay
+  // -----------------------
+  // ✅ RECHERCHE : suggestions type Google
+  // -----------------------
+  function norm(s){
+    return String(s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+  }
+
+  const items = Array.isArray(searchItems) ? searchItems : [];
+
+  function renderSuggestions(q){
+    const nq = norm(q);
+    if (!nq) {
+      suggestBox.style.display = "none";
+      suggestBox.innerHTML = "";
+      return;
+    }
+
+    const filtered = items
+      .filter(it => norm(it.key).startsWith(nq) || norm(it.label).startsWith(nq))
+      .slice(0, 7);
+
+    if (!filtered.length) {
+      suggestBox.style.display = "none";
+      suggestBox.innerHTML = "";
+      return;
+    }
+
+    suggestBox.innerHTML = filtered.map(it => {
+      const label = it.label || it.key;
+      // petit “gras” sur la partie tapée
+      const base = label;
+      const idx = norm(base).indexOf(nq);
+      let html = escapeHtml(base);
+      if (idx === 0) {
+        const a = base.slice(0, q.length);
+        const b = base.slice(q.length);
+        html = `<span class="op-suggest-strong">${escapeHtml(a)}</span><span class="op-suggest-muted">${escapeHtml(b)}</span>`;
+      }
+      return `<div class="op-suggest-item" data-sel="${escapeAttr(it.key)}">${html}</div>`;
+    }).join("");
+
+    suggestBox.style.display = "";
+  }
+
+  function showResult(item){
+    if (!item) return;
+
+    resultBox.style.display = "";
+    resultBox.innerHTML = `
+      <div class="op-search-title">${escapeHtml(item.label || item.key)}</div>
+      <div class="card card-white lift">${escapeHtml(item.valueText ?? "(...)")}</div>
+    `;
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      renderSuggestions(searchInput.value);
+    });
+
+    suggestBox.addEventListener("click", (e) => {
+      const el = e.target.closest(".op-suggest-item");
+      if (!el) return;
+      const key = el.getAttribute("data-sel") || "";
+      const found = items.find(it => String(it.key) === String(key));
+      suggestBox.style.display = "none";
+      showResult(found);
+    });
+
+    // fermer suggestions si clic ailleurs dans top
+    document.addEventListener("pointerdown", (e) => {
+      if (!suggestBox) return;
+      if (suggestBox.contains(e.target)) return;
+      if (searchInput && searchInput.contains(e.target)) return;
+      suggestBox.style.display = "none";
+    }, { capture: true });
+  }
+
+  // Construire la calculette DANS l’overlay
   buildCalcPadInto(padWrap, topInput, {
     onOk: () => {
       close();
@@ -882,6 +974,7 @@ topInput.style.caretColor = "#fff";
     },
   });
 }
+
 
 
 function buildCalcPadInto(containerEl, inputEl, { onOk, onCancel } = {}) {
@@ -1996,28 +2089,40 @@ function renderDailyDayPage(isoDate) {
   const ncDraftHasText2 = ncDraftVal.trim().length > 0;
   const ncDraftOk = isOperationPosed(ncDraftVal);
 
-  const ncInputHTML = `
-    <div class="inline-actions" style="align-items:flex-start;">
-      <input class="input ${nc.draftError ? "error" : ""}" id="ncDraft"
-        inputmode="decimal"
-        placeholder="(ex: 200-10)"
-        value="${escapeAttr(ncDraftVal)}"
-        style="flex:1; min-width: 220px;" />
-      <button id="ncValidate" class="btn lift btn-blue"
-        style="${ncDraftHasText2 ? "" : "display:none;"}"
-        ${ncDraftOk ? "" : "disabled"}>Valider</button>
-    </div>
+  const showNcIgnore = !!(nc.draftAutoFilled && (nc.draft || "").trim().length > 0);
+
+const ncInputHTML = `
+  <div class="inline-actions" style="align-items:flex-start;">
+    <input class="input ${nc.draftError ? "error" : ""}" id="ncDraft"
+      inputmode="decimal"
+      placeholder="(ex: 200-10)"
+      value="${escapeAttr(ncDraftVal)}"
+      style="flex:1; min-width: 220px;" />
+
+    <button id="ncValidate" class="btn lift btn-blue"
+      style="${ncDraftHasText2 ? "" : "display:none;"}"
+      ${ncDraftOk ? "" : "disabled"}>Valider</button>
 
     ${
-      showNcFinish
-        ? `
-          <div style="display:flex; justify-content:center; margin-top:10px;">
-            <button id="ncFinish" class="btn btn-green lift ${canFinishNc ? "" : "pseudo-disabled"}">Terminer</button>
-          </div>
-        `
+      showNcIgnore
+        ? `<button id="ncIgnore" class="btn btn-ignore lift" type="button">Ignorer</button>`
         : ``
     }
-  `;
+  </div>
+
+  ${
+    showNcFinish
+      ? `
+        <div style="display:flex; justify-content:center; margin-top:10px;">
+          <button id="ncFinish" class="btn btn-green lift ${canFinishNc ? "" : "pseudo-disabled"}">Terminer</button>
+        </div>
+      `
+      : ``
+  }
+`;
+
+
+
 
   const ncFinalList = `
     <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
@@ -3309,8 +3414,12 @@ if (isTouch) {
         return;
       }
 
-      nc.items.push({ raw, result: res }); // ✅ le plus récent se retrouve en dessous
-      nc.draft = "";
+      nc.items.push({ raw, result: res });
+
+      // ✅ le résultat “descend” dans la case à écrire
+      nc.draft = formatCommaNumber(res);
+      nc.draftAutoFilled = true;
+
       nc.draftError = false;
       nc.editIndex = null;
       nc.editDraft = "";
@@ -3402,8 +3511,13 @@ if (isTouch) {
 
       nc.items[nc.editIndex] = { raw, result: res };
 
-      nc.editIndex = null;
-      nc.editDraft = "";
+nc.editIndex = null;
+nc.editDraft = "";
+
+// ✅ le résultat “descend” dans la case à écrire
+nc.draft = formatCommaNumber(res);
+nc.draftAutoFilled = true;
+
       nc.editError = false;
 
       nc.finalized = false;
@@ -3451,6 +3565,18 @@ if (isTouch) {
       await persistAndRerender();
     });
   }
+
+  const ncIgnoreBtn = document.getElementById("ncIgnore");
+if (ncIgnoreBtn) {
+  ncIgnoreBtn.addEventListener("click", async () => {
+    nc.draft = "";
+    nc.draftAutoFilled = false;
+    nc.draftError = false;
+    markDirty();
+    await persistAndRerender();
+  });
+}
+
 
   // ===============================
   // ✅ HANDLERS — NOUVELLE CAISSE RÉELLE (NCR)

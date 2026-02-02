@@ -36,17 +36,14 @@
 
       /* =========================================================
       ✅ TOP BAR (Home / Retour / Calendrier) — VERSION "HAUT GAUCHE"
-      - Les 3 boutons sont alignés en haut à gauche
-      - Ordre conservé : Home / Retour / Calendrier
-      - Dimensions inchangées + espacement (gap) sans qu'ils se touchent
       ========================================================= */
       .topbar{
         position: absolute;
         top: 20px;
-        left: 20px;           /* ✅ groupe collé à gauche */
-        display: inline-flex; /* ✅ ne prend pas toute la largeur */
+        left: 20px;
+        display: inline-flex;
         align-items: center;
-        gap: 10px;            /* ✅ ils ne se touchent pas */
+        gap: 10px;
         z-index: 20;
       }
 
@@ -56,19 +53,16 @@
         gap:10px;
       }
 
-      /* ✅ IMPORTANT : on supprime le centrage "plein écran" */
       .topbar .slot.center{
-        flex: 0;              /* ✅ plus de flex:1 */
+        flex: 0;
         justify-content: center;
       }
 
-      /* ✅ On neutralise le position:absolute du back-btn quand il est dans la topbar */
       .topbar .back-btn{
         position: static;
         top:auto; left:auto;
       }
 
-      /* ✅ Hauteurs identiques */
       .icon-btn{
         width:48px;
         height:48px;
@@ -76,13 +70,12 @@
 
       .topbar .back-btn{
         height:48px;
-        padding: 0 18px;      /* rectangle, pas carré */
+        padding: 0 18px;
         display:flex;
         align-items:center;
         justify-content:center;
       }
 
-      /* Mobile */
       @media (max-width:520px){
         .topbar{ top:12px; left:12px; gap:8px; }
 
@@ -121,7 +114,6 @@
         display:block;
       }
 
-      /* Mobile (tu avais aussi ce bloc, je le laisse) */
       @media (max-width:520px){
         .topbar-left{ top:12px; left:12px; gap:8px; }
         .icon-btn{ width:40px; height:40px; border-radius:10px; }
@@ -129,7 +121,7 @@
       }
 
       /* =========================================================
-      ✅ Date avec flèches (jour précédent / suivant)
+      ✅ Date avec flèches
       ========================================================= */
       .day-header{
         display:flex;
@@ -275,87 +267,158 @@
         gap: 10px;
       }
 
-@media (max-width: 520px) {
-  .back-btn{
-    top: 12px; left: 12px;
-    padding: 10px 12px;
-    font-size: 16px;
-    border-radius: 10px;
-  }
+      @media (max-width: 520px) {
+        .back-btn{
+          top: 12px; left: 12px;
+          padding: 10px 12px;
+          font-size: 16px;
+          border-radius: 10px;
+        }
 
-  .calendar-header{
-    height: 92px;
-    padding-top: 18px;
-    box-sizing: border-box;
-  }
-  .month-title{ font-size: 18px; }
+        .calendar-header{
+          height: 92px;
+          padding-top: 18px;
+          box-sizing: border-box;
+        }
+        .month-title{ font-size: 18px; }
 
-  .day-page{ padding: 104px 14px 18px; }
-  .date-title{ font-size: 18px; margin-bottom: 18px; }
+        .day-page{ padding: 104px 14px 18px; }
+        .date-title{ font-size: 18px; margin-bottom: 18px; }
 
-  .form-col{ gap: 12px; }
-  .label{ font-size: 15px; }
+        .form-col{ gap: 12px; }
+        .label{ font-size: 15px; }
 
-  .input{
-    padding: 12px 12px;
-    font-size: 15px;
-  }
+        .input{
+          padding: 12px 12px;
+          font-size: 15px;
+        }
 
-  .btn{
-    padding: 11px 14px;
-    font-size: 15px;
-    border-radius: 10px;
-  }
+        .btn{
+          padding: 11px 14px;
+          font-size: 15px;
+          border-radius: 10px;
+        }
 
-  .calendar-grid{
-    gap: 8px;
-    padding: 10px;
-  }
+        .calendar-grid{
+          gap: 8px;
+          padding: 10px;
+        }
 
-  .day-box, .day-empty{ border-radius: 10px; }
-}
+        .day-box, .day-empty{ border-radius: 10px; }
+      }
 
-.row-saved{
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-}
+      .row-saved{
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+      }
 
-.row-saved .label{
-  width: 240px;
-  flex: 0 0 240px;
-}
+      .row-saved .label{
+        width: 240px;
+        flex: 0 0 240px;
+      }
 
-.row-saved .total-row{
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-  display: inline-flex;
-  flex-wrap: nowrap;
-  align-items: center;
-}
+      .row-saved .total-row{
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        display: inline-flex;
+        flex-wrap: nowrap;
+        align-items: center;
+      }
 
-.row-saved .card-white{
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+      .row-saved .card-white{
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-@media (max-width: 520px){
-  .row-saved .label{
-    width: 170px;
-    flex: 0 0 170px;
-  }
-  .row-saved .total-row{
-    flex-wrap: wrap;
-    row-gap: 8px;
-  }
-  .row-saved .card-white{
-    white-space: normal;
-  }
-}
+      @media (max-width: 520px){
+        .row-saved .label{
+          width: 170px;
+          flex: 0 0 170px;
+        }
+        .row-saved .total-row{
+          flex-wrap: wrap;
+          row-gap: 8px;
+        }
+        .row-saved .card-white{
+          white-space: normal;
+        }
+      }
+
+      /* =========================================================
+        ✅ AJOUT : Bouton IGNORER (Nouveau capital)
+      ========================================================= */
+      .btn-ignore{
+        background:#000 !important;
+        border: 1px solid rgba(255,255,255,0.9) !important;
+        color: #e60000 !important;
+      }
+      .btn-ignore:hover{ transform: scale(1.03); }
+      .btn-ignore:active{ transform: scale(1.01); }
+
+      /* =========================================================
+        ✅ AJOUT : Overlay recherche (loupe + suggestions)
+      ========================================================= */
+      .op-search-wrap{
+        position: relative;
+      }
+      .op-search{
+        width: 100%;
+        box-sizing: border-box;
+        padding-left: 40px !important; /* place pour la loupe */
+      }
+      .op-search-icon{
+        position:absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 18px;
+        height: 18px;
+        opacity: .9;
+        pointer-events:none;
+        color:#fff;
+      }
+      .op-suggest{
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        background: #0b0b0b;
+        border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 12px;
+        overflow: hidden;
+        z-index: 10001;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+      }
+      .op-suggest-item{
+        padding: 12px 12px;
+        font-weight: 800;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        cursor: pointer;
+      }
+      .op-suggest-item:last-child{ border-bottom: 0; }
+      .op-suggest-item:hover{
+        background: rgba(30,94,255,0.18);
+      }
+      .op-suggest-strong{
+        font-weight: 900;
+      }
+      .op-suggest-muted{
+        opacity: .75;
+        font-weight: 700;
+      }
+      .op-search-result{
+        margin-top: 10px;
+      }
+      .op-search-title{
+        font-weight: 900;
+        opacity: .9;
+        margin-bottom: 8px;
+      }
     </style>
   </head>
 
