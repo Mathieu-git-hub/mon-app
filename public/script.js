@@ -2506,55 +2506,75 @@ const baseCapitalForPrelev = showCapitalAfterApport ? capitalAfterApport : capit
 const capitalAfter = baseCapitalForPrelev - prelevCapTotal;
 
 function buildOverlaySearchItems() {
-  // Totaux = 0 si pas finalisés
   const capBase = capitalNum;
+  const cdBase = caisseDepartNum;
 
   const apTotal = (pApport?.finalized) ? apportTotal : 0;
   const prCap = (pCap?.finalized) ? prelevCapTotal : 0;
 
-  // ✅ RÈGLE CAPITAL (tes consignes) :
-  // si ap=0 ET pr=0 => capital
-  // sinon => capital après prélèvement
   const capitalShown = (Math.abs(apTotal) < 1e-9 && Math.abs(prCap) < 1e-9)
     ? capBase
     : capitalAfter;
 
-  const cdBase = caisseDepartNum;
   const prC = (pCaisse?.finalized) ? prelevCaisseTotal : 0;
   const caisseShown = (Math.abs(prC) < 1e-9) ? cdBase : caisseDepartAfter;
 
-  const items = [];
-
-  // ✅ Capital / Caisse départ
-  if (data.capitalFinalized) {
-    items.push({ key: "capital", label: "Capital", valueText: formatCommaNumber(capitalShown) });
+  function valOrDots(isOk, valueNumber) {
+    return isOk ? formatCommaNumber(valueNumber ?? 0) : "(...)";
+  }
+  function opOrDots(isOk, opResult) {
+    return isOk ? formatCommaNumber(opResult ?? 0) : "(...)";
   }
 
-  if (data.caisseDepartFinalized) {
-    items.push({ key: "caisse depart", label: "Caisse départ", valueText: formatCommaNumber(caisseShown) });
+  // ✅ Dernier résultat "Nouveau capital" (pile NC)
+  function lastNcResult(stack) {
+    if (!stack || !Array.isArray(stack.items) || stack.items.length === 0) return null;
+    const last = stack.items[stack.items.length - 1];
+    return Number.isFinite(last?.result) ? last.result : null;
   }
+  const ncLast = lastNcResult(nc);
 
-  // ✅ AJOUTS DEMANDÉS
-  if (data.nouvelleLiquiditeFinalized) {
-    items.push({ key: "nouvelle liquidite", label: "Nouvelle liquidité", valueText: formatCommaNumber(nlRes ?? 0) });
-  }
-
-  if (data.recetteFinalized) {
-    items.push({ key: "recette", label: "Recette", valueText: formatCommaNumber(recetteRes ?? 0) });
-  }
-
-  if (data.prtFinalized) {
-    const prtNum = toNumberLoose(data.prt || "0") ?? 0;
-    items.push({ key: "prix de revient total", label: "Prix de revient total", valueText: formatCommaNumber(prtNum) });
-  }
-
-  if (data.nouvelleCaisseFinalized) {
-    const ncNum = toNumberLoose(data.nouvelleCaisse || "0") ?? 0;
-    items.push({ key: "nouvelle caisse", label: "Nouvelle caisse", valueText: formatCommaNumber(ncNum) });
-  }
+  const items = [
+    {
+      key: "capital",
+      label: "Capital",
+      valueText: valOrDots(!!data.capitalFinalized, capitalShown),
+    },
+    {
+      key: "nouveau capital",
+      label: "Nouveau capital",
+      valueText: (ncLast !== null) ? formatCommaNumber(ncLast) : "(...)",
+    },
+    {
+      key: "caisse depart",
+      label: "Caisse départ",
+      valueText: valOrDots(!!data.caisseDepartFinalized, caisseShown),
+    },
+    {
+      key: "nouvelle liquidite",
+      label: "Nouvelle liquidité",
+      valueText: opOrDots(!!data.nouvelleLiquiditeFinalized, nlRes),
+    },
+    {
+      key: "recette",
+      label: "Recette",
+      valueText: opOrDots(!!data.recetteFinalized, recetteRes),
+    },
+    {
+      key: "prix de revient total",
+      label: "Prix de revient total",
+      valueText: valOrDots(!!data.prtFinalized, (toNumberLoose(data.prt || "0") ?? 0)),
+    },
+    {
+      key: "nouvelle caisse",
+      label: "Nouvelle caisse",
+      valueText: valOrDots(!!data.nouvelleCaisseFinalized, (toNumberLoose(data.nouvelleCaisse || "0") ?? 0)),
+    },
+  ];
 
   return items;
 }
+
 
 
 
