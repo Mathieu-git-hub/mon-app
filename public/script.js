@@ -421,7 +421,8 @@ function renderCalendarPage(pageName) {
     </div>
   `;
 
-  document.getElementById("back").addEventListener("click", () => history.back());
+  document.getElementById("back").addEventListener("click", () => smartBack());
+
 
   document.getElementById("prevMonth").addEventListener("click", () => {
     monthOffsetByPage[pageName] -= 1;
@@ -2524,6 +2525,7 @@ function buildOverlaySearchItems() {
 
   const items = [];
 
+  // ✅ Capital / Caisse départ
   if (data.capitalFinalized) {
     items.push({ key: "capital", label: "Capital", valueText: formatCommaNumber(capitalShown) });
   }
@@ -2532,19 +2534,28 @@ function buildOverlaySearchItems() {
     items.push({ key: "caisse depart", label: "Caisse départ", valueText: formatCommaNumber(caisseShown) });
   }
 
-  // Bonus utiles (si finalisés)
-  if (data.recetteFinalized) items.push({ key: "recette", label: "Recette", valueText: formatCommaNumber(recetteRes ?? 0) });
-  if (data.nouvelleLiquiditeFinalized) items.push({ key: "nouvelle liquidite", label: "Nouvelle liquidité", valueText: formatCommaNumber(nlRes ?? 0) });
-  if (data.nouvelleCaisseReelleFinalized) items.push({ key: "nouvelle caisse reelle", label: "Nouvelle caisse réelle", valueText: formatCommaNumber(evalOperation(data.nouvelleCaisseReelle) ?? 0) });
+  // ✅ AJOUTS DEMANDÉS
+  if (data.nouvelleLiquiditeFinalized) {
+    items.push({ key: "nouvelle liquidite", label: "Nouvelle liquidité", valueText: formatCommaNumber(nlRes ?? 0) });
+  }
 
-  // Nouveau capital (dernier résultat) si terminé
-  if (nc?.finalized && (nc.items?.length || 0) > 0) {
-    const last = nc.items[nc.items.length - 1];
-    items.push({ key: "nouveau capital", label: "Nouveau capital", valueText: formatCommaNumber(last?.result ?? 0) });
+  if (data.recetteFinalized) {
+    items.push({ key: "recette", label: "Recette", valueText: formatCommaNumber(recetteRes ?? 0) });
+  }
+
+  if (data.prtFinalized) {
+    const prtNum = toNumberLoose(data.prt || "0") ?? 0;
+    items.push({ key: "prix de revient total", label: "Prix de revient total", valueText: formatCommaNumber(prtNum) });
+  }
+
+  if (data.nouvelleCaisseFinalized) {
+    const ncNum = toNumberLoose(data.nouvelleCaisse || "0") ?? 0;
+    items.push({ key: "nouvelle caisse", label: "Nouvelle caisse", valueText: formatCommaNumber(ncNum) });
   }
 
   return items;
 }
+
 
 
 
@@ -4127,7 +4138,7 @@ function renderGenericDayPage(pageName, isoDate) {
   if (hb) hb.addEventListener("click", () => navigateTo("#"));
 
 
-  document.getElementById("back").addEventListener("click", () => history.back());
+  document.getElementById("back").addEventListener("click", () => smartBack());
 }
 
 // ===============================
@@ -4167,7 +4178,7 @@ function renderDailyDayMenu(isoDate) {
 `;
 
 
-  document.getElementById("back").addEventListener("click", () => history.back());
+  document.getElementById("back").addEventListener("click", () => smartBack());
   const hb = document.getElementById("homeBtn");
   if (hb) hb.addEventListener("click", () => navigateTo("#"));
 
@@ -4231,7 +4242,8 @@ function renderDailySalePage(isoDate) {
   if (next && !next.disabled) next.onclick = () => navigateTo(`#daily/${addDaysIso(isoDate,+1)}/sale`);
 
 
-  document.getElementById("back").addEventListener("click", () => history.back());
+  document.getElementById("back").addEventListener("click", () => smartBack());
+
 
   const hb = document.getElementById("homeBtn");
   if (hb) hb.addEventListener("click", () => navigateTo("#"));
@@ -4280,6 +4292,30 @@ function navigateTo(hash) {
   history.pushState({}, "", hash);
   render();
 }
+
+function smartBack() {
+  const route = parseRoute();
+
+  // ✅ Calendriers => accueil
+  if (route.kind === "calendar") return navigateTo("#");
+
+  // ✅ Menu daily => calendrier daily
+  if (route.kind === "dailyMenu") return navigateTo("#daily");
+
+  // ✅ Compte du jour => menu du jour
+  if (route.kind === "day" && route.page === "daily") return navigateTo(`#daily/${route.iso}/menu`);
+
+  // ✅ Vente du jour => menu du jour
+  if (route.kind === "dailySale") return navigateTo(`#daily/${route.iso}/menu`);
+
+  // ✅ Day weekly/buy => leur calendrier
+  if (route.kind === "day" && (route.page === "weekly" || route.page === "buy")) return navigateTo(`#${route.page}`);
+
+  // fallback
+  return navigateTo("#");
+}
+
+
 function renderLogin() {
   app.innerHTML = `
     <div class="page">
