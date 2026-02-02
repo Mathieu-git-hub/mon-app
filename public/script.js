@@ -2430,6 +2430,49 @@ const baseCapitalForPrelev = showCapitalAfterApport ? capitalAfterApport : capit
 // ✅ Capital après prélèvement
 const capitalAfter = baseCapitalForPrelev - prelevCapTotal;
 
+function buildOverlaySearchItems() {
+  // Totaux = 0 si pas finalisés
+  const capBase = capitalNum;
+
+  const apTotal = (pApport?.finalized) ? apportTotal : 0;
+  const prCap = (pCap?.finalized) ? prelevCapTotal : 0;
+
+  // ✅ RÈGLE CAPITAL (tes consignes) :
+  // si ap=0 ET pr=0 => capital
+  // sinon => capital après prélèvement
+  const capitalShown = (Math.abs(apTotal) < 1e-9 && Math.abs(prCap) < 1e-9)
+    ? capBase
+    : capitalAfter;
+
+  const cdBase = caisseDepartNum;
+  const prC = (pCaisse?.finalized) ? prelevCaisseTotal : 0;
+  const caisseShown = (Math.abs(prC) < 1e-9) ? cdBase : caisseDepartAfter;
+
+  const items = [];
+
+  if (data.capitalFinalized) {
+    items.push({ key: "capital", label: "Capital", valueText: formatCommaNumber(capitalShown) });
+  }
+
+  if (data.caisseDepartFinalized) {
+    items.push({ key: "caisse depart", label: "Caisse départ", valueText: formatCommaNumber(caisseShown) });
+  }
+
+  // Bonus utiles (si finalisés)
+  if (data.recetteFinalized) items.push({ key: "recette", label: "Recette", valueText: formatCommaNumber(recetteRes ?? 0) });
+  if (data.nouvelleLiquiditeFinalized) items.push({ key: "nouvelle liquidite", label: "Nouvelle liquidité", valueText: formatCommaNumber(nlRes ?? 0) });
+  if (data.nouvelleCaisseReelleFinalized) items.push({ key: "nouvelle caisse reelle", label: "Nouvelle caisse réelle", valueText: formatCommaNumber(evalOperation(data.nouvelleCaisseReelle) ?? 0) });
+
+  // Nouveau capital (dernier résultat) si terminé
+  if (nc?.finalized && (nc.items?.length || 0) > 0) {
+    const last = nc.items[nc.items.length - 1];
+    items.push({ key: "nouveau capital", label: "Nouveau capital", valueText: formatCommaNumber(last?.result ?? 0) });
+  }
+
+  return items;
+}
+
+
 
 
   // -------------------------
@@ -3002,6 +3045,7 @@ if (isTouch) {
       title: "",
       initialValue: data[dataKey] || "",
       placeholder: input.getAttribute("placeholder") || "(ex: 100+20-5)",
+      searchItems: buildOverlaySearchItems(),
       onCancel: () => {},
       onOk: () => {
         if (btn && btn.style.display !== "none" && !btn.disabled) btn.click();
@@ -3239,6 +3283,7 @@ if (isTouch) {
         title: "", // tu peux mettre "Nouveau capital" si tu veux
         initialValue: getVal() || "",
         placeholder: inputEl.getAttribute("placeholder") || "(ex: 200-10)",
+        searchItems: buildOverlaySearchItems(),
         onCancel: () => {},
         onOk: () => clickValidateIfPossible(),
       });
