@@ -794,6 +794,80 @@ function ensureOpOverlayStyles() {
     .op-overlay .calcpad button {
       font-size: 16px;
     }
+        /* =========================
+       ✅ 3.3 — Search + suggestions (overlay)
+    ========================= */
+
+    .op-search-wrap{
+      position: relative;
+      margin-top: 10px;
+    }
+
+    .op-search{
+      width: 100%;
+      padding-left: 44px; /* place pour la loupe */
+      font-size: 16px;
+      color: #fff;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .op-search-icon{
+      position:absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18px;
+      height: 18px;
+      opacity: .9;
+      pointer-events: none;
+      color: rgba(255,255,255,0.85);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .op-search-icon svg{ width:18px; height:18px; }
+
+    .op-suggest{
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 8px);
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(18,18,18,0.98);
+      z-index: 10001;
+    }
+
+    .op-suggest-item{
+      padding: 12px 12px;
+      font-weight: 900;
+      cursor: pointer;
+      color: #fff;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .op-suggest-item:first-child{ border-top: 0; }
+
+    .op-suggest-item:hover{
+      background: rgba(255,255,255,0.06);
+    }
+
+    .op-suggest-strong{ color: #fff; font-weight: 900; }
+    .op-suggest-muted{ color: rgba(255,255,255,0.70); font-weight: 900; }
+
+    .op-search-result{
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .op-search-title{
+      font-weight: 900;
+      opacity: .9;
+      margin-bottom: 8px;
+    }
+
   `;
   document.head.appendChild(st);
 }
