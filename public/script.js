@@ -410,10 +410,21 @@ function renderCalendarPage(pageName) {
 
             return `
               <button
-                class="day-box ${isToday ? "today" : ""} ${clsSaved} ${clsMigrated} ${isFutureDay ? "disabled" : ""}"
+                class="day-box ${pageName === "buy" ? "buy-day" : ""} ${isToday ? "today" : ""} ${clsSaved} ${clsMigrated} ${isFutureDay ? "disabled" : ""}"
                 data-date="${iso}"
                 ${isFutureDay ? "disabled" : ""}
-              >${n}</button>
+                >${
+    pageName === "buy"
+      ? `
+        <div class="day-num">${n}</div>
+        <div class="buy-juste-row" aria-hidden="true">
+          <span class="buy-juste-circle">juste</span>
+          <span class="buy-juste-circle">juste</span>
+        </div>
+      `
+      : `${n}`
+  }</button>
+
             `;
           })
           .join("")}
