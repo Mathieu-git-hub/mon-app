@@ -1667,6 +1667,29 @@ function computeWeeklyDepensesTotal(cutoffIsoDate) {
   return sum;
 }
 
+// Apport total (hebdo)
+function computeWeeklyApportTotal(cutoffIsoDate) {
+  const cutoff = fromISODate(cutoffIsoDate);
+  const start = startOfWeekMonday(cutoff);
+  const end = endOfWeekSunday(cutoff);
+
+  let sum = 0;
+  for (const iso of Object.keys(dailyStore)) {
+    const d = fromISODate(iso);
+    const t = d.getTime();
+    if (t < start.getTime() || t > end.getTime()) continue;
+    if (t > cutoff.getTime()) continue;
+
+    const dayData = dailyStore[iso];
+    const ap = dayData?.apport;
+    if (!ap || !ap.finalized) continue;
+
+    sum += computePrelevementTotal(ap.items || []);
+  }
+  return sum;
+}
+
+
 
 
 // Recette hebdo
