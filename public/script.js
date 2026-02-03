@@ -4346,6 +4346,134 @@ function renderDailySalePage(isoDate) {
 // ✅ FIN — renderDailySalePage(isoDate)
 // ===============================
 
+// ===============================
+// ✅ DÉBUT — BUY : Catégories
+// ===============================
+function renderBuyCategoriesPage(isoDate) {
+  const date = fromISODate(isoDate);
+
+  app.innerHTML = `
+  <div class="page">
+    <div class="topbar">
+      <div class="slot left">
+        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 10v10h14V10" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="slot center">
+        <button id="back" class="back-btn">← Retour</button>
+      </div>
+
+      <div class="slot right">
+        <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 3v3M17 3v3" />
+            <path d="M3.5 8h17" />
+            <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="day-page">
+      ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
+
+      <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
+        Catégories (à construire)
+      </div>
+    </div>
+  </div>
+  `;
+
+  // flèches => restent sur /categories
+  bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#buy/" });
+  const prev = document.getElementById("prevDay");
+  const next = document.getElementById("nextDay");
+  if (prev) prev.onclick = () => navigateTo(`#buy/${addDaysIso(isoDate,-1)}/categories`);
+  if (next && !next.disabled) next.onclick = () => navigateTo(`#buy/${addDaysIso(isoDate,+1)}/categories`);
+
+  const hb = document.getElementById("homeBtn");
+  if (hb) hb.addEventListener("click", () => navigateTo("#"));
+
+  const cb = document.getElementById("calBtn");
+  if (cb) cb.addEventListener("click", () => navigateTo("#buy"));
+
+  const backBtn = document.getElementById("back");
+  if (backBtn) backBtn.addEventListener("click", () => smartBack());
+}
+// ===============================
+// ✅ FIN — BUY : Catégories
+// ===============================
+
+
+// ===============================
+// ✅ DÉBUT — BUY : Articles
+// ===============================
+function renderBuyArticlesPage(isoDate) {
+  const date = fromISODate(isoDate);
+
+  app.innerHTML = `
+  <div class="page">
+    <div class="topbar">
+      <div class="slot left">
+        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 10v10h14V10" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="slot center">
+        <button id="back" class="back-btn">← Retour</button>
+      </div>
+
+      <div class="slot right">
+        <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 3v3M17 3v3" />
+            <path d="M3.5 8h17" />
+            <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="day-page">
+      ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
+
+      <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
+        Articles (à construire)
+      </div>
+    </div>
+  </div>
+  `;
+
+  // flèches => restent sur /articles
+  bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#buy/" });
+  const prev = document.getElementById("prevDay");
+  const next = document.getElementById("nextDay");
+  if (prev) prev.onclick = () => navigateTo(`#buy/${addDaysIso(isoDate,-1)}/articles`);
+  if (next && !next.disabled) next.onclick = () => navigateTo(`#buy/${addDaysIso(isoDate,+1)}/articles`);
+
+  const hb = document.getElementById("homeBtn");
+  if (hb) hb.addEventListener("click", () => navigateTo("#"));
+
+  const cb = document.getElementById("calBtn");
+  if (cb) cb.addEventListener("click", () => navigateTo("#buy"));
+
+  const backBtn = document.getElementById("back");
+  if (backBtn) backBtn.addEventListener("click", () => smartBack());
+}
+// ===============================
+// ✅ FIN — BUY : Articles
+// ===============================
+
+
 
 // ===============================
 // ✅ DÉBUT — parseRoute()
@@ -4369,6 +4497,17 @@ function parseRoute() {
   if (page === "daily" && parts.length === 3 && parts[2] === "sale") {
     return { kind: "dailySale", page, iso: parts[1] };
   }
+
+  // #buy/YYYY-MM-DD/categories
+if (page === "buy" && parts.length === 3 && parts[2] === "categories") {
+  return { kind: "buyCategories", page, iso: parts[1] };
+}
+
+// #buy/YYYY-MM-DD/articles
+if (page === "buy" && parts.length === 3 && parts[2] === "articles") {
+  return { kind: "buyArticles", page, iso: parts[1] };
+}
+
 
   return { kind: "day", page, iso: parts[1] };
 }
@@ -4396,6 +4535,11 @@ function smartBack() {
 
   // ✅ Vente du jour => menu du jour
   if (route.kind === "dailySale") return navigateTo(`#daily/${route.iso}/menu`);
+
+  // ✅ BUY : Catégories/Articles => revenir au menu du jour (buy)
+if (route.kind === "buyCategories") return navigateTo(`#buy/${route.iso}`);
+if (route.kind === "buyArticles") return navigateTo(`#buy/${route.iso}`);
+
 
   // ✅ Day weekly/buy => leur calendrier
   if (route.kind === "day" && (route.page === "weekly" || route.page === "buy")) return navigateTo(`#${route.page}`);
@@ -4474,6 +4618,10 @@ function render() {
 
   if (route.kind === "dailyMenu") return renderDailyDayMenu(route.iso);
   if (route.kind === "dailySale") return renderDailySalePage(route.iso);
+
+  if (route.kind === "buyCategories") return renderBuyCategoriesPage(route.iso);
+if (route.kind === "buyArticles") return renderBuyArticlesPage(route.iso);
+
 
   if (route.page === "daily") return renderDailyDayPage(route.iso);
   return renderGenericDayPage(route.page, route.iso);
