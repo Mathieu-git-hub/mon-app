@@ -763,6 +763,7 @@ function ensureOpOverlayStyles() {
       inset: 0;
       z-index: 10000;
       background: #000;
+      color: #fff; /* ✅ AJOUT : rend le titre visible */
       display: flex;
       flex-direction: column;
     }
@@ -1666,6 +1667,8 @@ function computeWeeklyDepensesTotal(cutoffIsoDate) {
   return sum;
 }
 
+
+
 // Recette hebdo
 function computeWeeklyRecetteTotal(cutoffIsoDate) {
   const cutoff = fromISODate(cutoffIsoDate);
@@ -2041,6 +2044,7 @@ function renderDailyDayPage(isoDate) {
   const pDep = data.depenses; // ✅ Dépenses = pile comme prélèvements
 
   const depensesWeekTotal = computeWeeklyDepensesTotal(isoDate);
+  const apportWeekTotal = computeWeeklyApportTotal(isoDate);
   const recetteWeekTotal = computeWeeklyRecetteTotal(isoDate);
   const recetteYearTotal = computeYearlyRecetteTotal(isoDate);
 
@@ -2680,6 +2684,20 @@ function buildOverlaySearchItems() {
     `
     : ``
 }
+
+${
+  pApport?.finalized
+    ? `
+      <div class="${rowClass}">
+        <div class="label">Apport total :</div>
+        <div class="total-row">
+          <div class="card card-white lift">Total : ${formatTotal(apportWeekTotal)}</div>
+        </div>
+      </div>
+    `
+    : ``
+}
+
 
 
 
