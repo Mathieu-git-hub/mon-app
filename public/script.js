@@ -4197,8 +4197,13 @@ function renderGenericDayPage(pageName, isoDate) {
       ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
 
       <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin-top:18px; flex-wrap:wrap;">
-        <button id="saleDay" class="btn btn-blue lift" style="min-width:220px;">Vente du jour</button>
-        <button id="accountDay" class="btn btn-blue lift" style="min-width:220px;">Compte du jour</button>
+        <button id="saleDay" class="btn btn-blue lift" style="min-width:220px;">
+  ${pageName === "buy" ? "Catégories" : "Vente du jour"}
+</button>
+<button id="accountDay" class="btn btn-blue lift" style="min-width:220px;">
+  ${pageName === "buy" ? "Articles" : "Compte du jour"}
+</button>
+
       </div>
     </div>
   </div>
@@ -4212,6 +4217,17 @@ function renderGenericDayPage(pageName, isoDate) {
 
 
   document.getElementById("back").addEventListener("click", () => smartBack());
+
+  const saleBtn = document.getElementById("saleDay");
+const accBtn = document.getElementById("accountDay");
+
+if (pageName === "buy") {
+  if (saleBtn) saleBtn.addEventListener("click", () => navigateTo(`#buy/${isoDate}/categories`));
+  if (accBtn) accBtn.addEventListener("click", () => navigateTo(`#buy/${isoDate}/articles`));
+} else {
+  // (weekly) tu peux laisser vide ou garder plus tard ton comportement
+}
+
 }
 
 // ===============================
