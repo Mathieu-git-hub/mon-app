@@ -427,7 +427,7 @@ function renderCalendarPage(pageName) {
         </div>
       </div>
 
-      <div class="calendar-grid" id="calendarGrid">
+      <div class="calendar-grid">
         ${dows.map((d) => `<div class="dow">${d}</div>`).join("")}
 
         ${cells
@@ -471,10 +471,6 @@ function renderCalendarPage(pageName) {
       </div>
     </div>
   `;
-
-  const grid = document.getElementById("calendarGrid");
-if (grid && page === "buy") grid.classList.add("buy-calendar");
-
 
   document.getElementById("back").addEventListener("click", () => smartBack());
 
@@ -4821,14 +4817,32 @@ function renderBuyCategoriesPage(isoDate) {
       ok.addEventListener("click", async () => {
         // ✅ Si supprimée le même jour que création => “n’a jamais existé”
         if (String(cat.createdAtIso || "") === String(isoDate)) {
-          buy.categories = (buy.categories || []).filter(c => c.id !== catId);
-        } else {
-          cat.deletedAtIso = isoDate;
-          cat.deletedAtTs = Date.now();
-        }
+  // ✅ “n’a jamais existé”
+  buy.categories = (buy.categories || []).filter(c => c.id !== catId);
 
-        markBuyTouchedAndPersist();
-        await safePersistNow();
+  // ✅ si plus aucune action catégorie aujourd’hui => cercle NON vert
+  const d = ensureBuyDayMark(isoDate);
+
+  const anyToday =
+    (buy.categories || []).some(c =>
+      String(c.createdAtIso || "") === String(isoDate) ||
+      String(c.deletedAtIso || "") === String(isoDate)
+    );
+
+  d.buyCatTouched = anyToday; // false si plus rien aujourd’hui
+} else {
+  // ✅ suppression normale (catégorie existante avant)
+  cat.deletedAtIso = isoDate;
+  cat.deletedAtTs = Date.now();
+
+  // ✅ là, oui : action du jour
+  markBuyTouchedAndPersist();
+}
+
+await safePersistNow();
+closeDelModal();
+renderBuyCategoriesPage(isoDate);
+
         closeDelModal();
         renderBuyCategoriesPage(isoDate);
       });
