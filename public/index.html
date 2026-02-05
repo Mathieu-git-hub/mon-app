@@ -667,16 +667,35 @@
   font-weight:900;
 }
 
+/* ✅ Séparateur entre sections Catégories */
 .buy-cat-sep{
   display:flex;
   justify-content:center;
-  margin: 6px 0;
+  align-items:center;
 }
-.buy-cat-sep span{
-  width: 100%;
-  height: 1px;
-  background: rgba(255,255,255,0.28);
+
+/* la ligne blanche */
+.buy-cat-sep > span{
+  display:block;
+  width: min(92vw, 720px);
+  height: 2px;
+  background: #fff;
+  opacity: 0.6;
+  border-radius: 999px;
 }
+
+/* ✅ espace “significatif” autour du séparateur */
+.buy-cat-sep.spaced{
+  margin: 28px 0;   /* augmente si tu veux encore + (ex: 36px) */
+}
+
+/* mobile : encore un peu plus lisible */
+@media (max-width:520px){
+  .buy-cat-sep.spaced{
+    margin: 34px 0;
+  }
+}
+
 
 /* ===============================
    ✅ Modal ajout / modif

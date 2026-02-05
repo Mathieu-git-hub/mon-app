@@ -4558,7 +4558,7 @@ function renderBuyCategoriesPage(isoDate) {
 
             ${
               (added.length && deleted.length) || (added.length && normal.length) || (deleted.length && (added.length || normal.length))
-                ? `<div class="buy-cat-sep"><span></span></div>`
+                ? `<div class="buy-cat-sep spaced"><span></span></div>`
                 : ``
             }
 
@@ -4586,7 +4586,7 @@ function renderBuyCategoriesPage(isoDate) {
 
             ${
               (deleted.length && normal.length)
-                ? `<div class="buy-cat-sep"><span></span></div>`
+                ? `<div class="buy-cat-sep spaced"><span></span></div>`
                 : ``
             }
 
