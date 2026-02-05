@@ -4382,8 +4382,33 @@ function renderBuyCategoriesPage(isoDate) {
     <div class="day-page">
       ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
 
-      <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
-        Catégories (à construire)
+      <div class="buy-categories-wrap">
+
+        <!-- ✅ 1) Barre de recherche comme dans l’overlay -->
+        <div class="op-search-wrap">
+          <span class="op-search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="M20 20l-3.5-3.5"></path>
+            </svg>
+          </span>
+
+          <input id="buyCatSearch" class="input op-search"
+            inputmode="text"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+            placeholder="Rechercher une catégorie..." />
+        </div>
+
+        <!-- ✅ 2) Bouton carré + -->
+        <button id="addCatBtn" class="add-cat-btn" type="button" aria-label="Ajouter une catégorie" title="Ajouter">
+          <span>+</span>
+        </button>
+
+        <!-- (le reste de la page catégories viendra après) -->
+        <div style="opacity:0.75; font-weight:800; margin-top:6px;">
+          Catégories (à construire)
+        </div>
+
       </div>
     </div>
   </div>
@@ -4404,6 +4429,84 @@ function renderBuyCategoriesPage(isoDate) {
 
   const backBtn = document.getElementById("back");
   if (backBtn) backBtn.addEventListener("click", () => smartBack());
+
+  // =========================
+  // ✅ MODAL "Nouvelle catégorie"
+  // =========================
+  function closeCatModal() {
+    const bd = document.getElementById("catModalBackdrop");
+    if (bd) bd.remove();
+  }
+
+  function syncOkState() {
+    const nameEl = document.getElementById("catName");
+    const codeEl = document.getElementById("catCode");
+    const okBtn = document.getElementById("catOkBtn");
+    if (!nameEl || !codeEl || !okBtn) return;
+
+    const ok = (nameEl.value || "").trim().length > 0 && (codeEl.value || "").trim().length > 0;
+    okBtn.disabled = !ok;
+    okBtn.classList.toggle("enabled", ok);
+  }
+
+  function openCatModal() {
+    // si déjà ouvert
+    if (document.getElementById("catModalBackdrop")) return;
+
+    const bd = document.createElement("div");
+    bd.id = "catModalBackdrop";
+    bd.className = "cat-modal-backdrop";
+
+    bd.innerHTML = `
+      <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Nouvelle catégorie">
+        <div class="cat-modal-title">Nouvelle catégorie</div>
+
+        <div class="cat-modal-grid">
+          <div class="label">Nom</div>
+          <input id="catName" class="input" placeholder="(ex: Boissons)" autocomplete="off" />
+
+          <div class="label">code</div>
+          <input id="catCode" class="input" placeholder="(ex: B01)" autocomplete="off" />
+        </div>
+
+        <div class="cat-modal-actions">
+          <button id="catCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
+          <button id="catOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
+        </div>
+      </div>
+    `;
+
+    // clic sur backdrop => ferme (optionnel, mais discret)
+    bd.addEventListener("click", (e) => {
+      if (e.target === bd) closeCatModal();
+    });
+
+    document.body.appendChild(bd);
+
+    const nameEl = document.getElementById("catName");
+    const codeEl = document.getElementById("catCode");
+    const cancelBtn = document.getElementById("catCancelBtn");
+    const okBtn = document.getElementById("catOkBtn");
+
+    if (nameEl) nameEl.focus();
+
+    if (nameEl) nameEl.addEventListener("input", syncOkState);
+    if (codeEl) codeEl.addEventListener("input", syncOkState);
+
+    if (cancelBtn) cancelBtn.addEventListener("click", closeCatModal);
+
+    if (okBtn) {
+      okBtn.addEventListener("click", () => {
+        // Ici tu pourras enregistrer (plus tard). Pour l’instant on ferme.
+        closeCatModal();
+      });
+    }
+
+    syncOkState();
+  }
+
+  const addBtn = document.getElementById("addCatBtn");
+  if (addBtn) addBtn.addEventListener("click", openCatModal);
 }
 // ===============================
 // ✅ FIN — BUY : Catégories

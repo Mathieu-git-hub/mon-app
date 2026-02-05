@@ -182,6 +182,51 @@
         opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none;
       }
 
+      /* =========================================================
+   ✅ BUY (Compte d’achat) — 2 cercles "juste" sous le chiffre
+========================================================= */
+.day-box.buy-day{
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.day-box.buy-day .day-num{
+  line-height: 1;
+}
+
+.buy-juste-row{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.buy-juste-circle{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #000;
+  color: #000;
+  background: transparent;
+  border-radius: 999px;
+  width: 20px;
+  height: 20px;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0;
+}
+
+@media (max-width: 520px){
+  .buy-juste-circle{
+    width: 18px;
+    height: 18px;
+    font-size: 8px;
+  }
+}
+
       .day-page { padding: 90px 18px 20px; box-sizing: border-box; }
       .date-title { text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 26px; text-transform: capitalize; }
 
@@ -369,7 +414,7 @@
       .op-search{
         width: 100%;
         box-sizing: border-box;
-        padding-left: 40px !important; /* place pour la loupe */
+        padding-left: 40px !important;
       }
       .op-search-icon{
         position:absolute;
@@ -404,20 +449,128 @@
       .op-suggest-item:hover{
         background: rgba(30,94,255,0.18);
       }
-      .op-suggest-strong{
-        font-weight: 900;
-      }
-      .op-suggest-muted{
-        opacity: .75;
-        font-weight: 700;
-      }
-      .op-search-result{
-        margin-top: 10px;
-      }
+      .op-suggest-strong{ font-weight: 900; }
+      .op-suggest-muted{ opacity: .75; font-weight: 700; }
+      .op-search-result{ margin-top: 10px; }
       .op-search-title{
         font-weight: 900;
         opacity: .9;
         margin-bottom: 8px;
+      }
+
+      /* =========================================================
+        ✅ AJOUT : Catégories — barre recherche + bouton "+" + modal
+      ========================================================= */
+      .buy-categories-wrap{
+        width: min(720px, 92vw);
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .add-cat-btn{
+        width: 56px;               /* un peu + grand que home/cal */
+        height: 56px;
+        border-radius: 14px;
+        background: rgba(255,255,255,0.18);  /* fond gris */
+        border: 1px solid rgba(255,255,255,0.85); /* contours blancs */
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: transform 120ms ease;
+      }
+      .add-cat-btn:hover{ transform: scale(1.04); }
+      .add-cat-btn:active{ transform: scale(1.02); }
+      .add-cat-btn span{
+        font-size: 30px;
+        font-weight: 900;
+        color: #fff;               /* + blanc */
+        line-height: 1;
+      }
+
+      @media (max-width:520px){
+        .add-cat-btn{
+          width: 52px;
+          height: 52px;
+          border-radius: 14px;
+        }
+      }
+
+      /* Modal (rectangle) */
+      .cat-modal-backdrop{
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 20000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+      }
+
+      .cat-modal{
+        width: min(520px, 92vw);
+        background: #000;
+        border: 1px solid rgba(255,255,255,0.85);
+        border-radius: 14px;
+        padding: 16px 16px 14px;
+        box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+      }
+
+      .cat-modal-title{
+        text-align: center;
+        font-weight: 900;
+        margin-bottom: 14px;
+      }
+
+      .cat-modal-grid{
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .cat-modal-actions{
+        margin-top: 14px;
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+      }
+
+      .modal-btn{
+        background: #000;
+        border: 1px solid rgba(255,255,255,0.85);
+        border-radius: 12px;
+        padding: 12px 18px;
+        font-weight: 900;
+        cursor: pointer;
+        min-width: 120px;
+      }
+
+      .modal-btn.cancel{ color: #e60000; }      /* Annuler rouge */
+
+      .modal-btn.ok{
+        color: rgba(255,255,255,0.35);          /* OK grisé au début */
+      }
+      .modal-btn.ok.enabled{
+        color: #1e5eff;                         /* OK bleu une fois champs remplis */
+      }
+      .modal-btn.ok:disabled{
+        cursor: not-allowed;
+        opacity: 0.85;
+      }
+
+      /* Mobile : modal juste au-dessus du clavier (en bas) */
+      @media (max-width:520px){
+        .cat-modal-backdrop{
+          align-items: flex-end;
+          justify-content: center;
+          padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+        }
+        .cat-modal{
+          width: min(520px, 100%);
+        }
       }
     </style>
   </head>
