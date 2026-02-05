@@ -427,7 +427,7 @@ function renderCalendarPage(pageName) {
         </div>
       </div>
 
-      <div class="calendar-grid">
+      <div class="calendar-grid ${page === "buy" ? "buy-calendar" : ""}">
         ${dows.map((d) => `<div class="dow">${d}</div>`).join("")}
 
         ${cells
@@ -3703,7 +3703,9 @@ if (isTouch) {
       const idx = Number(xbtn.getAttribute("data-nc-del"));
       if (!Number.isFinite(idx)) return;
 
+      
       nc.items.splice(idx, 1);
+
 
       // si on supprimait celle en cours d'édition
       if (nc.editIndex === idx) {
@@ -3916,6 +3918,7 @@ if (ncIgnoreBtn) {
       const idx = Number(xbtn.getAttribute("data-ncr-del"));
       if (!Number.isFinite(idx)) return;
 
+      
       ncr.items.splice(idx, 1);
 
       if (ncr.editIndex === idx) {
@@ -4624,6 +4627,8 @@ function renderBuyCategoriesPage(isoDate) {
     if (bd) bd.remove();
   }
 
+  
+
   function openCatModal({ mode = "create", catId = null } = {}) {
     if (document.getElementById("catModalBackdrop")) return;
 
@@ -4776,6 +4781,8 @@ function renderBuyCategoriesPage(isoDate) {
     if (bd) bd.remove();
   }
 
+  
+
   function openDelModal(catId) {
     if (document.getElementById("catDelBackdrop")) return;
 
@@ -4822,6 +4829,9 @@ function renderBuyCategoriesPage(isoDate) {
         renderBuyCategoriesPage(isoDate);
       });
     }
+    
+
+
   }
 
   // =========================
