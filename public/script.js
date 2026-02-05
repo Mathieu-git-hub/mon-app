@@ -3,6 +3,45 @@ const app = document.getElementById("app");
 let currentUser = null;
 let dailyStore = {}; // store chargé depuis la DB
 
+/* ===============================
+   ✅ BUY — CATÉGORIES (stockées en DB via dailyStore)
+   - Stock global: dailyStore.__buy.categories[]
+   - Trace jour: dailyStore[iso].buyCatTouched (pour cercle vert)
+=============================== */
+
+function getBuyStore() {
+  if (!dailyStore.__buy) dailyStore.__buy = {};
+  if (!Array.isArray(dailyStore.__buy.categories)) dailyStore.__buy.categories = [];
+  return dailyStore.__buy;
+}
+
+function ensureBuyDayMark(isoDate) {
+  const d = getDailyData(isoDate);
+  if (d.buyCatTouched == null) d.buyCatTouched = false;
+  return d;
+}
+
+// code tri “croissant” : 1 < 2 < 10, sinon alpha
+function codeCompare(a, b) {
+  const A = String(a ?? "").trim();
+  const B = String(b ?? "").trim();
+  const na = Number(A);
+  const nb = Number(B);
+  const aNum = Number.isFinite(na) && A !== "";
+  const bNum = Number.isFinite(nb) && B !== "";
+  if (aNum && bNum) return na - nb;
+  return A.localeCompare(B, "fr", { numeric: true, sensitivity: "base" });
+}
+
+function normSearch(s) {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+
 /* =========================================================
    ✅ STYLE GLOBAL : griser tous les boutons non cliquables
 ========================================================= */
@@ -415,14 +454,15 @@ function renderCalendarPage(pageName) {
                 ${isFutureDay ? "disabled" : ""}
                 >${
     pageName === "buy"
-      ? `
-        <div class="day-num">${n}</div>
-        <div class="buy-juste-row" aria-hidden="true">
-          <span class="buy-juste-circle">juste</span>
-          <span class="buy-juste-circle">juste</span>
-        </div>
-      `
-      : `${n}`
+  ? `
+    <div class="day-num">${n}</div>
+    <div class="buy-juste-row" aria-hidden="true">
+      <span class="buy-juste-circle ${dailyStore?.[iso]?.buyCatTouched ? "buy-green" : ""}"></span>
+      <span class="buy-juste-circle"></span>
+    </div>
+  `
+  : `${n}`
+
   }</button>
 
             `;
@@ -543,6 +583,8 @@ function getDailyData(isoDate) {
 
       // ✅ Prélèvement sur caisse
       prelevementCaisse: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
+
+      buyCatTouched: false,
 
       // ✅ état "enregistrer"
       daySaved: false,
@@ -4347,71 +4389,215 @@ function renderDailySalePage(isoDate) {
 // ===============================
 
 // ===============================
-// ✅ DÉBUT — BUY : Catégories
+// ✅ DÉBUT — BUY : Catégories (COMPLET)
 // ===============================
 function renderBuyCategoriesPage(isoDate) {
   const date = fromISODate(isoDate);
+  const buy = getBuyStore();
+  ensureBuyDayMark(isoDate);
+
+  // catégories actives = pas supprimées
+  function activeCategories() {
+    return (buy.categories || []).filter(c => !c.deletedAtIso);
+  }
+
+  // catégories visibles ce jour:
+  // - visibles si createdAtIso <= isoDate
+  // - et pas supprimées (deletedAtIso null)
+  function visibleNormalCategories() {
+    return activeCategories()
+      .filter(c => String(c.createdAtIso || "") < String(isoDate))
+      .sort((a,b) => codeCompare(a.code, b.code));
+  }
+
+  // Ajoutées récemment = créées AUJOURD’HUI, ordre “plus récent d’abord”
+  function recentAdded() {
+    return activeCategories()
+      .filter(c => String(c.createdAtIso || "") === String(isoDate))
+      .sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
+  }
+
+  // Supprimées récemment = supprimées AUJOURD’HUI mais créées AVANT aujourd’hui
+  function recentDeleted() {
+    return (buy.categories || [])
+      .filter(c => String(c.deletedAtIso || "") === String(isoDate) && String(c.createdAtIso || "") !== String(isoDate))
+      .sort((a,b) => (b.deletedAtTs || 0) - (a.deletedAtTs || 0));
+  }
+
+  function isNameTaken(name, exceptId = null) {
+    const n = normSearch(name);
+    return activeCategories().some(c => c.id !== exceptId && normSearch(c.name) === n);
+  }
+
+  function findCodeOwner(code, exceptId = null) {
+    const c0 = normSearch(code);
+    return activeCategories().find(c => c.id !== exceptId && normSearch(c.code) === c0) || null;
+  }
+
+  function markBuyTouchedAndPersist() {
+    const d = ensureBuyDayMark(isoDate);
+    d.buyCatTouched = true;
+    safePersistNow();
+  }
+
+  // ----------- UI helpers
+  function cardHTML(cat) {
+    const id = cat.id;
+    return `
+      <div class="buy-cat-card" data-cat-id="${escapeAttr(id)}">
+        <div class="buy-cat-body">
+          <div class="buy-cat-col">
+            <div class="buy-cat-label">Nom</div>
+            <div class="buy-cat-white">${escapeHtml(cat.name || "")}</div>
+          </div>
+
+          <div class="buy-cat-col">
+            <div class="buy-cat-label">Code</div>
+            <div class="buy-cat-white">${escapeHtml(cat.code || "")}</div>
+          </div>
+        </div>
+
+        <div class="buy-cat-actions">
+          <button class="buy-cat-iconbtn" data-cat-edit="${escapeAttr(id)}" title="Modifier" aria-label="Modifier">
+            <!-- crayon simplifié -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+            </svg>
+          </button>
+
+          <button class="buy-cat-iconbtn" data-cat-del="${escapeAttr(id)}" title="Supprimer" aria-label="Supprimer">
+            <!-- poubelle simplifiée -->
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"></path>
+              <path d="M8 6V4h8v2"></path>
+              <path d="M6 6l1 16h10l1-16"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const added = recentAdded();
+  const deleted = recentDeleted();
+  const normal = visibleNormalCategories();
 
   app.innerHTML = `
-  <div class="page">
-    <div class="topbar">
-      <div class="slot left">
-        <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 10.5L12 3l9 7.5" />
-            <path d="M5 10v10h14V10" />
-          </svg>
-        </button>
-      </div>
-
-      <div class="slot center">
-        <button id="back" class="back-btn">← Retour</button>
-      </div>
-
-      <div class="slot right">
-        <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M7 3v3M17 3v3" />
-            <path d="M3.5 8h17" />
-            <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
-          </svg>
-        </button>
-      </div>
-    </div>
-
-    <div class="day-page">
-      ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
-
-      <div class="buy-categories-wrap">
-
-        <!-- ✅ 1) Barre de recherche comme dans l’overlay -->
-        <div class="op-search-wrap">
-          <span class="op-search-icon" aria-hidden="true">
+    <div class="page">
+      <div class="topbar">
+        <div class="slot left">
+          <button id="homeBtn" class="icon-btn" title="Accueil" aria-label="Accueil">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="7"></circle>
-              <path d="M20 20l-3.5-3.5"></path>
+              <path d="M3 10.5L12 3l9 7.5" />
+              <path d="M5 10v10h14V10" />
             </svg>
-          </span>
-
-          <input id="buyCatSearch" class="input op-search"
-            inputmode="text"
-            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-            placeholder="Rechercher une catégorie..." />
+          </button>
         </div>
 
-        <!-- ✅ 2) Bouton carré + -->
-        <button id="addCatBtn" class="add-cat-btn" type="button" aria-label="Ajouter une catégorie" title="Ajouter">
-          <span>+</span>
-        </button>
-
-        <!-- (le reste de la page catégories viendra après) -->
-        <div style="opacity:0.75; font-weight:800; margin-top:6px;">
-          Catégories (à construire)
+        <div class="slot center">
+          <button id="back" class="back-btn">← Retour</button>
         </div>
 
+        <div class="slot right">
+          <button id="calBtn" class="icon-btn" title="Calendrier" aria-label="Calendrier">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 3v3M17 3v3" />
+              <path d="M3.5 8h17" />
+              <path d="M5 6h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="day-page">
+        ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
+
+        <div class="buy-categories-wrap">
+
+          <!-- ✅ Barre de recherche + suggestions dynamiques -->
+          <div class="op-search-wrap" style="margin-top:0;">
+            <span class="op-search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="M20 20l-3.5-3.5"></path>
+              </svg>
+            </span>
+
+            <input id="buyCatSearch" class="input op-search"
+              inputmode="text"
+              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+              placeholder="Rechercher une catégorie (nom ou code)..." />
+
+            <div id="buyCatSuggest" class="op-suggest" style="display:none;"></div>
+          </div>
+
+          <!-- ✅ Bouton carré + -->
+          <button id="addCatBtn" class="add-cat-btn" type="button" aria-label="Ajouter une catégorie" title="Ajouter">
+            <span>+</span>
+          </button>
+
+          <!-- ✅ LISTE -->
+          <div id="buyCatList" class="buy-cat-list">
+
+            ${
+              added.length
+                ? `
+                  <div class="buy-cat-section-title">Ajoutées récemment</div>
+                  ${added.map(cardHTML).join("")}
+                `
+                : ``
+            }
+
+            ${
+              (added.length && deleted.length) || (added.length && normal.length) || (deleted.length && (added.length || normal.length))
+                ? `<div class="buy-cat-sep"><span></span></div>`
+                : ``
+            }
+
+            ${
+              deleted.length
+                ? `
+                  <div class="buy-cat-section-title">Supprimées récemment</div>
+                  ${deleted.map(c => `
+                    <div class="buy-cat-card buy-cat-card-deleted" data-cat-id="${escapeAttr(c.id)}">
+                      <div class="buy-cat-body">
+                        <div class="buy-cat-col">
+                          <div class="buy-cat-label">Nom</div>
+                          <div class="buy-cat-white">${escapeHtml(c.name || "")}</div>
+                        </div>
+                        <div class="buy-cat-col">
+                          <div class="buy-cat-label">Code</div>
+                          <div class="buy-cat-white">${escapeHtml(c.code || "")}</div>
+                        </div>
+                      </div>
+                    </div>
+                  `).join("")}
+                `
+                : ``
+            }
+
+            ${
+              (deleted.length && normal.length)
+                ? `<div class="buy-cat-sep"><span></span></div>`
+                : ``
+            }
+
+            ${normal.map(cardHTML).join("")}
+
+            ${
+              (!added.length && !deleted.length && !normal.length)
+                ? `<div style="opacity:.75; font-weight:800; margin-top:10px;">Aucune catégorie</div>`
+                : ``
+            }
+          </div>
+        </div>
       </div>
     </div>
-  </div>
   `;
 
   // flèches => restent sur /categories
@@ -4431,42 +4617,40 @@ function renderBuyCategoriesPage(isoDate) {
   if (backBtn) backBtn.addEventListener("click", () => smartBack());
 
   // =========================
-  // ✅ MODAL "Nouvelle catégorie"
+  // ✅ MODAL AJOUT / MODIF
   // =========================
   function closeCatModal() {
     const bd = document.getElementById("catModalBackdrop");
     if (bd) bd.remove();
   }
 
-  function syncOkState() {
-    const nameEl = document.getElementById("catName");
-    const codeEl = document.getElementById("catCode");
-    const okBtn = document.getElementById("catOkBtn");
-    if (!nameEl || !codeEl || !okBtn) return;
-
-    const ok = (nameEl.value || "").trim().length > 0 && (codeEl.value || "").trim().length > 0;
-    okBtn.disabled = !ok;
-    okBtn.classList.toggle("enabled", ok);
-  }
-
-  function openCatModal() {
-    // si déjà ouvert
+  function openCatModal({ mode = "create", catId = null } = {}) {
     if (document.getElementById("catModalBackdrop")) return;
+
+    const existing = catId ? (buy.categories || []).find(c => c.id === catId) : null;
+    const initialName = existing?.name || "";
+    const initialCode = existing?.code || "";
 
     const bd = document.createElement("div");
     bd.id = "catModalBackdrop";
     bd.className = "cat-modal-backdrop";
 
     bd.innerHTML = `
-      <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Nouvelle catégorie">
-        <div class="cat-modal-title">Nouvelle catégorie</div>
+      <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Catégorie">
+        ${mode === "create" ? `<div class="cat-modal-title">Nouvelle catégorie</div>` : ``}
 
         <div class="cat-modal-grid">
           <div class="label">Nom</div>
-          <input id="catName" class="input" placeholder="(ex: Boissons)" autocomplete="off" />
+          <div>
+            <input id="catName" class="input" placeholder="(ex: Boissons)" autocomplete="off" value="${escapeAttr(initialName)}"/>
+            <div id="catNameErr" class="cat-err" style="display:none;"></div>
+          </div>
 
-          <div class="label">code</div>
-          <input id="catCode" class="input" placeholder="(ex: B01)" autocomplete="off" />
+          <div class="label">Code</div>
+          <div>
+            <input id="catCode" class="input" placeholder="(ex: 1)" autocomplete="off" value="${escapeAttr(initialCode)}"/>
+            <div id="catCodeErr" class="cat-err" style="display:none;"></div>
+          </div>
         </div>
 
         <div class="cat-modal-actions">
@@ -4476,7 +4660,6 @@ function renderBuyCategoriesPage(isoDate) {
       </div>
     `;
 
-    // clic sur backdrop => ferme (optionnel, mais discret)
     bd.addEventListener("click", (e) => {
       if (e.target === bd) closeCatModal();
     });
@@ -4485,32 +4668,300 @@ function renderBuyCategoriesPage(isoDate) {
 
     const nameEl = document.getElementById("catName");
     const codeEl = document.getElementById("catCode");
-    const cancelBtn = document.getElementById("catCancelBtn");
+    const nameErr = document.getElementById("catNameErr");
+    const codeErr = document.getElementById("catCodeErr");
     const okBtn = document.getElementById("catOkBtn");
+    const cancelBtn = document.getElementById("catCancelBtn");
 
-    if (nameEl) nameEl.focus();
+    function setErr(elInput, elMsg, msg) {
+      if (!elInput || !elMsg) return;
+      if (!msg) {
+        elInput.classList.remove("error");
+        elMsg.style.display = "none";
+        elMsg.textContent = "";
+      } else {
+        elInput.classList.add("error");
+        elMsg.style.display = "";
+        elMsg.textContent = msg;
+      }
+    }
+
+    function syncOkState() {
+      const name = (nameEl.value || "").trim();
+      const code = (codeEl.value || "").trim();
+
+      let ok = name.length > 0 && code.length > 0;
+
+      // unicité
+      const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
+      const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
+
+      setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
+      setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
+
+      if (nameTaken || codeOwner) ok = false;
+
+      okBtn.disabled = !ok;
+      okBtn.classList.toggle("enabled", ok);
+    }
 
     if (nameEl) nameEl.addEventListener("input", syncOkState);
     if (codeEl) codeEl.addEventListener("input", syncOkState);
-
     if (cancelBtn) cancelBtn.addEventListener("click", closeCatModal);
 
     if (okBtn) {
-      okBtn.addEventListener("click", () => {
-        // Ici tu pourras enregistrer (plus tard). Pour l’instant on ferme.
-        closeCatModal();
+      okBtn.addEventListener("click", async () => {
+        const name = (nameEl.value || "").trim();
+        const code = (codeEl.value || "").trim();
+
+        // re-check
+        if (!name || !code) return;
+
+        const nameTaken = isNameTaken(name, existing?.id || null);
+        const codeOwner = findCodeOwner(code, existing?.id || null);
+        if (nameTaken || codeOwner) {
+          syncOkState();
+          return;
+        }
+
+        // ✅ CREATE
+        if (mode === "create") {
+          const id = "cat_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+          buy.categories.unshift({
+            id,
+            name,
+            code,
+            createdAtIso: isoDate,
+            createdAtTs: Date.now(),
+            updatedAtTs: Date.now(),
+            deletedAtIso: null,
+            deletedAtTs: null,
+          });
+
+          // ✅ cercle vert ce jour + DB
+          markBuyTouchedAndPersist();
+          await safePersistNow();
+          closeCatModal();
+          renderBuyCategoriesPage(isoDate);
+          return;
+        }
+
+        // ✅ EDIT
+        if (mode === "edit" && existing) {
+          existing.name = name;
+          existing.code = code;
+          existing.updatedAtTs = Date.now();
+
+          // ✅ si modif le jour-même: il reste “ajouté récemment”
+          // (rien à faire, createdAtIso est déjà bon)
+
+          markBuyTouchedAndPersist();
+          await safePersistNow();
+          closeCatModal();
+          renderBuyCategoriesPage(isoDate);
+          return;
+        }
       });
     }
 
+    if (nameEl) nameEl.focus();
     syncOkState();
   }
 
+  // =========================
+  // ✅ MODAL SUPPRESSION
+  // =========================
+  function closeDelModal() {
+    const bd = document.getElementById("catDelBackdrop");
+    if (bd) bd.remove();
+  }
+
+  function openDelModal(catId) {
+    if (document.getElementById("catDelBackdrop")) return;
+
+    const cat = (buy.categories || []).find(c => c.id === catId);
+    if (!cat) return;
+
+    const bd = document.createElement("div");
+    bd.id = "catDelBackdrop";
+    bd.className = "cat-del-backdrop";
+
+    bd.innerHTML = `
+      <div class="cat-del-modal" role="dialog" aria-modal="true" aria-label="Suppression catégorie">
+        <div class="cat-del-text">Supprimer cette catégorie ?</div>
+        <div class="cat-del-actions">
+          <button id="catDelCancel" class="cat-del-btn cat-del-cancel" type="button">Annuler</button>
+          <button id="catDelOk" class="cat-del-btn cat-del-ok" type="button">confirmer</button>
+        </div>
+      </div>
+    `;
+
+    bd.addEventListener("click", (e) => {
+      if (e.target === bd) closeDelModal();
+    });
+
+    document.body.appendChild(bd);
+
+    const cancel = document.getElementById("catDelCancel");
+    const ok = document.getElementById("catDelOk");
+    if (cancel) cancel.addEventListener("click", closeDelModal);
+
+    if (ok) {
+      ok.addEventListener("click", async () => {
+        // ✅ Si supprimée le même jour que création => “n’a jamais existé”
+        if (String(cat.createdAtIso || "") === String(isoDate)) {
+          buy.categories = (buy.categories || []).filter(c => c.id !== catId);
+        } else {
+          cat.deletedAtIso = isoDate;
+          cat.deletedAtTs = Date.now();
+        }
+
+        markBuyTouchedAndPersist();
+        await safePersistNow();
+        closeDelModal();
+        renderBuyCategoriesPage(isoDate);
+      });
+    }
+  }
+
+  // =========================
+  // ✅ Bouton + (création)
+  // =========================
   const addBtn = document.getElementById("addCatBtn");
-  if (addBtn) addBtn.addEventListener("click", openCatModal);
+  if (addBtn) addBtn.addEventListener("click", () => openCatModal({ mode: "create" }));
+
+  // =========================
+  // ✅ Clic crayon / poubelle
+  // =========================
+  app.querySelectorAll("[data-cat-edit]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-cat-edit");
+      openCatModal({ mode: "edit", catId: id });
+    });
+  });
+
+  app.querySelectorAll("[data-cat-del]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-cat-del");
+      openDelModal(id);
+    });
+  });
+
+  // =========================
+  // ✅ Recherche + suggestions dynamiques (nom OU code)
+  // =========================
+  const search = document.getElementById("buyCatSearch");
+  const suggest = document.getElementById("buyCatSuggest");
+
+  function allVisibleForSearch() {
+    // visibles ce jour = (créées <= isoDate) et pas supprimées
+    return activeCategories().filter(c => String(c.createdAtIso || "") <= String(isoDate));
+  }
+
+  function renderSuggestions(q) {
+    const nq = normSearch(q);
+    if (!nq) {
+      suggest.style.display = "none";
+      suggest.innerHTML = "";
+      // reset affichage complet
+      renderBuyCategoriesPage(isoDate);
+      return;
+    }
+
+    const list = allVisibleForSearch();
+    const filtered = list.filter(c => {
+      const n = normSearch(c.name);
+      const cd = normSearch(c.code);
+      return n.includes(nq) || cd.includes(nq);
+    });
+
+    // suggestions (7 max)
+    const top = filtered.slice(0, 7);
+    if (!top.length) {
+      suggest.style.display = "none";
+      suggest.innerHTML = "";
+    } else {
+      suggest.innerHTML = top.map(c => {
+        const label = `${c.code} — ${c.name}`;
+        return `<div class="op-suggest-item" data-cat-sel="${escapeAttr(c.id)}">${escapeHtml(label)}</div>`;
+      }).join("");
+      suggest.style.display = "";
+    }
+
+    // filtre la liste affichée (sans re-render total)
+    const listEl = document.getElementById("buyCatList");
+    if (listEl) {
+      // on reconstruit 1 seule section “résultats”
+      const sorted = filtered.slice().sort((a,b)=> codeCompare(a.code,b.code));
+      listEl.innerHTML = `
+        <div class="buy-cat-section-title">Résultats</div>
+        ${sorted.map(cardHTML).join("")}
+      `;
+      // rebinde edit/del dans les résultats
+      listEl.querySelectorAll("[data-cat-edit]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          const id = btn.getAttribute("data-cat-edit");
+          openCatModal({ mode: "edit", catId: id });
+        });
+      });
+      listEl.querySelectorAll("[data-cat-del]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          const id = btn.getAttribute("data-cat-del");
+          openDelModal(id);
+        });
+      });
+    }
+  }
+
+  if (search) {
+    search.addEventListener("input", () => renderSuggestions(search.value));
+
+    suggest.addEventListener("click", (e) => {
+      const el = e.target.closest(".op-suggest-item");
+      if (!el) return;
+      const id = el.getAttribute("data-cat-sel");
+      suggest.style.display = "none";
+      suggest.innerHTML = "";
+
+      // affiche uniquement la catégorie sélectionnée
+      const cat = allVisibleForSearch().find(c => c.id === id);
+      const listEl = document.getElementById("buyCatList");
+      if (cat && listEl) {
+        listEl.innerHTML = `
+          <div class="buy-cat-section-title">Résultat</div>
+          ${cardHTML(cat)}
+        `;
+        // rebind
+        listEl.querySelectorAll("[data-cat-edit]").forEach(btn => {
+          btn.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            openCatModal({ mode: "edit", catId: btn.getAttribute("data-cat-edit") });
+          });
+        });
+        listEl.querySelectorAll("[data-cat-del]").forEach(btn => {
+          btn.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            openDelModal(btn.getAttribute("data-cat-del"));
+          });
+        });
+      }
+    });
+
+    document.addEventListener("pointerdown", (e) => {
+      if (suggest.contains(e.target)) return;
+      if (search.contains(e.target)) return;
+      suggest.style.display = "none";
+    }, { capture: true });
+  }
 }
 // ===============================
-// ✅ FIN — BUY : Catégories
+// ✅ FIN — BUY : Catégories (COMPLET)
 // ===============================
+
 
 
 // ===============================
