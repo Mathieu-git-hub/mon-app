@@ -427,7 +427,7 @@ function renderCalendarPage(pageName) {
         </div>
       </div>
 
-      <div class="calendar-grid">
+      <div class="calendar-grid ${page === "buy" ? "buy-calendar" : ""}">
         ${dows.map((d) => `<div class="dow">${d}</div>`).join("")}
 
         ${cells
