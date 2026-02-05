@@ -160,15 +160,7 @@
         box-sizing: border-box;
       }
 
-      /* =================================
-   ✅ BUY — calendrier mobile 4 colonnes
-================================= */
-@media (max-width:520px){
-  .calendar-grid.buy-calendar{
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
+      
       
       .dow { text-align: center; font-size: 14px; opacity: 0.9; padding: 8px 0; }
 
@@ -481,8 +473,8 @@
       }
 
       .add-cat-btn{
-        width: 56px;               /* un peu + grand que home/cal */
-        height: 56px;
+        width: 64px;
+        height: 64px;
         border-radius: 14px;
         background: rgba(255,255,255,0.18);  /* fond gris */
         border: 1px solid rgba(255,255,255,0.85); /* contours blancs */
@@ -495,8 +487,9 @@
       .add-cat-btn:hover{ transform: scale(1.04); }
       .add-cat-btn:active{ transform: scale(1.02); }
       .add-cat-btn span{
-        font-size: 30px;
-        font-weight: 900;
+        font-size: 26px;
+        font-weight: 600;
+
         color: #fff;               /* + blanc */
         line-height: 1;
       }
