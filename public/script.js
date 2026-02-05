@@ -427,7 +427,7 @@ function renderCalendarPage(pageName) {
         </div>
       </div>
 
-      <div class="calendar-grid">
+      <div class="calendar-grid" id="calendarGrid">
         ${dows.map((d) => `<div class="dow">${d}</div>`).join("")}
 
         ${cells
@@ -471,6 +471,10 @@ function renderCalendarPage(pageName) {
       </div>
     </div>
   `;
+
+  const grid = document.getElementById("calendarGrid");
+if (grid && page === "buy") grid.classList.add("buy-calendar");
+
 
   document.getElementById("back").addEventListener("click", () => smartBack());
 
