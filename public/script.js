@@ -427,11 +427,8 @@ function renderCalendarPage(pageName) {
         </div>
       </div>
 
-      <!-- ✅ IMPORTANT : on met un id pour ajouter la classe en JS (zéro risque de template cassé) -->
-      <div class="calendar-grid" id="calendarGrid">
-        <div class="calendar-dows">
-          ${dows.map((d) => `<div class="dow">${d}</div>`).join("")}
-        </div>
+      <div class="calendar-grid">
+        ${dows.map((d) => `<div class="dow">${d}</div>`).join("")}
 
         ${cells
           .map((c) => {
@@ -450,23 +447,24 @@ function renderCalendarPage(pageName) {
             const clsSaved = saved ? "saved" : "";
             const clsMigrated = !saved && migrated ? "migrated" : "";
 
-            // ✅ BUY : on garde ta structure (num + 2 cercles)
-            const inner = (pageName === "buy")
-              ? `
-                <div class="day-num">${n}</div>
-                <div class="buy-juste-row" aria-hidden="true">
-                  <span class="buy-juste-circle ${dailyStore?.[iso]?.buyCatTouched ? "buy-green" : ""}"></span>
-                  <span class="buy-juste-circle"></span>
-                </div>
-              `
-              : `${n}`;
-
             return `
               <button
                 class="day-box ${pageName === "buy" ? "buy-day" : ""} ${isToday ? "today" : ""} ${clsSaved} ${clsMigrated} ${isFutureDay ? "disabled" : ""}"
                 data-date="${iso}"
                 ${isFutureDay ? "disabled" : ""}
-              >${inner}</button>
+                >${
+    pageName === "buy"
+  ? `
+    <div class="day-num">${n}</div>
+    <div class="buy-juste-row" aria-hidden="true">
+      <span class="buy-juste-circle ${dailyStore?.[iso]?.buyCatTouched ? "buy-green" : ""}"></span>
+      <span class="buy-juste-circle"></span>
+    </div>
+  `
+  : `${n}`
+
+  }</button>
+
             `;
           })
           .join("")}
@@ -474,29 +472,19 @@ function renderCalendarPage(pageName) {
     </div>
   `;
 
-  // ✅ Ajout de la classe buy-calendar après render (évite toute erreur de template string)
-  const grid = document.getElementById("calendarGrid");
-  if (grid && pageName === "buy") grid.classList.add("buy-calendar");
+  document.getElementById("back").addEventListener("click", () => smartBack());
 
-  const backBtn = document.getElementById("back");
-  if (backBtn) backBtn.addEventListener("click", () => smartBack());
 
-  const prevBtn = document.getElementById("prevMonth");
-  if (prevBtn) {
-    prevBtn.addEventListener("click", () => {
-      monthOffsetByPage[pageName] -= 1;
-      render();
-    });
-  }
+  document.getElementById("prevMonth").addEventListener("click", () => {
+    monthOffsetByPage[pageName] -= 1;
+    render();
+  });
 
   if (showRight) {
-    const nextBtn = document.getElementById("nextMonth");
-    if (nextBtn) {
-      nextBtn.addEventListener("click", () => {
-        monthOffsetByPage[pageName] = Math.min(0, monthOffsetByPage[pageName] + 1);
-        render();
-      });
-    }
+    document.getElementById("nextMonth").addEventListener("click", () => {
+      monthOffsetByPage[pageName] = Math.min(0, monthOffsetByPage[pageName] + 1);
+      render();
+    });
   }
 
   app.querySelectorAll(".day-box[data-date]").forEach((btn) => {
@@ -509,7 +497,7 @@ function renderCalendarPage(pageName) {
         return;
       }
 
-      // autres pages : direct
+      // autres pages : direct (provisoire)
       navigateTo(`#${pageName}/${iso}`);
     });
   });
