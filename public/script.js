@@ -5479,7 +5479,7 @@ function renderOpRow({ key, finalizedKey, resultKey, errKey, label, hint, boxId,
           <!-- ✅ PC: input direct / Mobile: case cliquable -->
           ${
             // si écran large (= PC), on met un input
-            !isMobileNarrow()
+            !(window.matchMedia && window.matchMedia("(max-width: 520px)").matches)
               ? `
                 <input
                   id="${boxId}Input"
