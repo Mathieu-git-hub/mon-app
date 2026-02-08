@@ -927,10 +927,12 @@ function ensureOpOverlayStyles() {
   document.head.appendChild(st);
 }
 
+  const overlayTitle = hint ? `${title} (${hint})` : title;
+
 
 function openOpOverlay({
   inputEl,
-  title = "",
+  title: overlayTitle,
   initialValue = "",
   placeholder = "",
   searchItems = [],        // ✅ AJOUT : liste { key, label, valueText }
@@ -5768,7 +5770,7 @@ async function validateOpField({ key, finalizedKey, resultKey, errKey, nextKey }
   rerenderArtModalBody();
 }
 
-function openOpFor(key, title) {
+function openOpFor(key, title, hint) {
 
     // ✅ overlay uniquement mobile
   if (!isTouchDevice()) return;
@@ -5815,25 +5817,66 @@ function openOpFor(key, title) {
 
 // ✅ clic sur les cases (non finalisées)
 const pgtBox = document.getElementById("artPGTBox");
-if (pgtBox) pgtBox.addEventListener("click", () => openOpFor("pgt", "PGT"));
+if (pgtBox) pgtBox.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité")
+);
 
 const prgBox = document.getElementById("artPRGBox");
-if (prgBox) prgBox.addEventListener("click", () => openOpFor("prg", "PRG"));
+if (prgBox) prgBox.addEventListener("click", () => openOpForopenOpFor("prg", "PRG", "PGT + extra × (PGT / PE)")
+);
 
 const prBox = document.getElementById("artPRBox");
-if (prBox) prBox.addEventListener("click", () => openOpFor("pr", "PR"));
+if (prBox) prBox.addEventListener("click", () => openOpForopenOpFor("pr", "PR", "PRG / quantité")
+);
 
 // ✅ bouton Modifier (finalisées)
 const pgtMod = document.getElementById("artPGTModifyOp");
-if (pgtMod) pgtMod.addEventListener("click", () => openOpFor("pgt", "PGT"));
+if (pgtMod) pgtMod.addEventListener("click", () => openOpForopenOpFor("pgt", "PGT", "PGU × quantité")
+);
 
 const prgMod = document.getElementById("artPRGModifyOp");
-if (prgMod) prgMod.addEventListener("click", () => openOpFor("prg", "PRG"));
+if (prgMod) prgMod.addEventListener("click", () => openOpForopenOpFor("prg", "PRG", "PGT + extra × (PGT / PE)")
+);
 
 const prMod = document.getElementById("artPRModifyOp");
-if (prMod) prMod.addEventListener("click", () => openOpFor("pr", "PR"));
+if (prMod) prMod.addEventListener("click", () => openOpForopenOpFor("pr", "PR", "PRG / quantité")
+);
 
 }
+
+  // =========================
+  // ✅ PC: input direct pour PGT/PRG/PR
+  // =========================
+  function bindOpInputPc(key, boxId) {
+    const input = document.getElementById(boxId + "Input");
+    const vBtn = document.getElementById(boxId + "Validate");
+    if (!input || !vBtn) return;
+
+    // active/désactive le bouton en live
+    input.addEventListener("input", async () => {
+      draft[key] = input.value;               // on garde les espaces
+      draft[key + "Finalized"] = false;
+
+      const posed = (typeof isOperationPosed === "function") ? isOperationPosed(draft[key]) : false;
+      vBtn.disabled = !posed;
+      vBtn.style.background = posed ? "#1e5eff" : "";
+      vBtn.style.opacity = posed ? "1" : "";
+
+      await safePersistNow();
+    });
+
+    // Enter = valider
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!vBtn.disabled) vBtn.click();
+      }
+    });
+  }
+
+  bindOpInputPc("pgt", "artPGTBox");
+  bindOpInputPc("prg", "artPRGBox");
+  bindOpInputPc("pr",  "artPRBox");
+
 
 }
 
