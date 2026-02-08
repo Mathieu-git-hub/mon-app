@@ -5080,7 +5080,7 @@ if (!Array.isArray(buy.articles)) buy.articles = [];
   if (backBtn) backBtn.addEventListener("click", () => smartBack());
 
   // =========================
-// ✅ MODAL ARTICLE — AJOUT
+// ✅ MODAL ARTICLE — AJOUT (scrollable)
 // =========================
 function closeArtModal() {
   const bd = document.getElementById("artModalBackdrop");
@@ -5114,76 +5114,99 @@ function openArtModal() {
   bd.id = "artModalBackdrop";
   bd.className = "cat-modal-backdrop";
 
+  // ✅ modal même “gabarit” que catégories + contenu scroll
   bd.innerHTML = `
-    <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Article">
-      <div class="cat-modal-title">Nouvel article</div>
+    <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Article"
+         style="display:flex; flex-direction:column; max-height: min(78vh, 560px);">
 
-      <div class="cat-modal-grid">
-        <div class="label">Nom</div>
-        <div>
-          <input id="artName" class="input" autocomplete="off" />
-          <div id="artNameErr" class="cat-err" style="display:none;"></div>
-        </div>
+      <!-- ✅ Titre figé -->
+      <div class="cat-modal-title" style="flex:0 0 auto;">
+        Nouvel article
+      </div>
 
-        <div class="label">Code</div>
-        <div>
-          <input id="artCode" class="input" autocomplete="off" />
-          <div id="artCodeErr" class="cat-err" style="display:none;"></div>
-        </div>
+      <!-- ✅ CONTENU scrollable -->
+      <div id="artModalBody" style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+        <div class="cat-modal-grid">
 
-        <div class="label">Quantité</div>
-        <div>
-          <input id="artQty" class="input" autocomplete="off" />
-          <div id="artQtyErr" class="cat-err" style="display:none;"></div>
-        </div>
+          <div class="label">Nom</div>
+          <div>
+            <input id="artName" class="input" autocomplete="off" />
+            <div id="artNameErr" class="cat-err" style="display:none;"></div>
+          </div>
 
-        <div class="label">Extra</div>
-        <div>
-          <input id="artExtra" class="input" autocomplete="off" />
-          <div id="artExtraErr" class="cat-err" style="display:none;"></div>
-        </div>
+          <div class="label">Code</div>
+          <div>
+            <input id="artCode" class="input" autocomplete="off" />
+            <div id="artCodeErr" class="cat-err" style="display:none;"></div>
+          </div>
 
-        <div class="label">Pris d’ensemble (PE)</div>
-        <div>
-          <input id="artPE" class="input" autocomplete="off" />
-          <div id="artPEErr" class="cat-err" style="display:none;"></div>
-        </div>
+          <div class="label">Quantité</div>
+          <div>
+            <input id="artQty" class="input" autocomplete="off" />
+            <div id="artQtyErr" class="cat-err" style="display:none;"></div>
+          </div>
 
-        <div class="label">Prix de gros unitaire (PGU)</div>
-        <div>
-          <input id="artPGU" class="input" autocomplete="off" />
-          <div id="artPGUErr" class="cat-err" style="display:none;"></div>
-        </div>
+          <div class="label">Extra</div>
+          <div>
+            <input id="artExtra" class="input" autocomplete="off" />
+            <div id="artExtraErr" class="cat-err" style="display:none;"></div>
+          </div>
 
-        <div class="label">Prix de gros total (PGT)</div>
-        <div>
-          <input id="artPGT" class="input" autocomplete="off" />
-          <div style="font-size:12px; opacity:.8; font-weight:800;">(PGU x quantité)</div>
-          <div id="artPGTErr" class="cat-err" style="display:none;"></div>
-        </div>
+          <div class="label">Pris d’ensemble (PE)</div>
+          <div>
+            <input id="artPE" class="input" autocomplete="off" />
+            <div id="artPEErr" class="cat-err" style="display:none;"></div>
+          </div>
 
-        <div class="label">Prix de revient global (PRG)</div>
-        <div>
-          <input id="artPRG" class="input" autocomplete="off" />
-          <div style="font-size:12px; opacity:.8; font-weight:800;">(PGT + extra x (PGT / PE))</div>
-          <div id="artPRGErr" class="cat-err" style="display:none;"></div>
-        </div>
+          <div class="label">Prix de gros unitaire (PGU)</div>
+          <div>
+            <input id="artPGU" class="input" autocomplete="off" />
+            <div id="artPGUErr" class="cat-err" style="display:none;"></div>
+          </div>
 
-        <div class="label">Prix de revient (PR)</div>
-        <div>
-          <input id="artPR" class="input" autocomplete="off" />
-          <div style="font-size:12px; opacity:.8; font-weight:800;">(PRG / quantité)</div>
-          <div id="artPRErr" class="cat-err" style="display:none;"></div>
+          <!-- ✅ PGT : formule ENTRE intitulé et case -->
+          <div class="label">Prix de gros total (PGT)</div>
+          <div>
+            <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+              (PGU x quantité)
+            </div>
+            <input id="artPGT" class="input" autocomplete="off" />
+            <div id="artPGTErr" class="cat-err" style="display:none;"></div>
+          </div>
+
+          <!-- ✅ PRG : formule ENTRE intitulé et case -->
+          <div class="label">Prix de revient global (PRG)</div>
+          <div>
+            <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+              (PGT + extra x (PGT / PE))
+            </div>
+            <input id="artPRG" class="input" autocomplete="off" />
+            <div id="artPRGErr" class="cat-err" style="display:none;"></div>
+          </div>
+
+          <!-- ✅ PR : formule ENTRE intitulé et case -->
+          <div class="label">Prix de revient (PR)</div>
+          <div>
+            <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+              (PRG / quantité)
+            </div>
+            <input id="artPR" class="input" autocomplete="off" />
+            <div id="artPRErr" class="cat-err" style="display:none;"></div>
+          </div>
+
         </div>
       </div>
 
-      <div class="cat-modal-actions">
+      <!-- ✅ Boutons figés -->
+      <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
         <button id="artCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
         <button id="artOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
       </div>
+
     </div>
   `;
 
+  // ✅ clic en dehors => fermer
   bd.addEventListener("click", (e) => {
     if (e.target === bd) closeArtModal();
   });
@@ -5197,7 +5220,7 @@ function openArtModal() {
   const okBtn = document.getElementById("artOkBtn");
   const cancelBtn = document.getElementById("artCancelBtn");
 
-  let showUniqErrors = false; // ✅ afficher doublons seulement après OK
+  let showUniqErrors = false; // ✅ doublons visibles seulement après OK
 
   function setErr(elInput, elMsg, msg) {
     if (!elInput || !elMsg) return;
@@ -5254,7 +5277,7 @@ function openArtModal() {
       return;
     }
 
-    // ✅ CREATE article (stocké en DB via safePersistNow)
+    // ✅ CREATE (stock DB via safePersistNow)
     const id = "art_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
     buy.articles.unshift({
       id,
@@ -5264,7 +5287,6 @@ function openArtModal() {
       createdAtTs: Date.now(),
       deletedAtIso: null,
       deletedAtTs: null,
-      // champs autres (tu les brancheras ensuite sur les validations)
       qty: "",
       extra: "",
       pe: "",
@@ -5274,7 +5296,7 @@ function openArtModal() {
       pr: "",
     });
 
-    // ✅ marquer “articles touchés” (2e cercle) : on met un flag dédié
+    // ✅ 2e cercle : on pose un flag (on branchera l’affichage après)
     const d = ensureBuyDayMark(isoDate);
     d.buyArtTouched = true;
 
@@ -5287,7 +5309,9 @@ function openArtModal() {
   nameEl.focus();
 }
 
-// bouton +
+// =========================
+// ✅ Bouton + (création)
+// =========================
 const addArtBtn = document.getElementById("addArtBtn");
 if (addArtBtn) addArtBtn.addEventListener("click", openArtModal);
 
