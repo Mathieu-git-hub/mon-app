@@ -5432,31 +5432,34 @@ function bindOneSimpleNum({ key, finalizedKey, inputId, validateId, modifyId }) 
   if (input) {
     // bouton Valider actif dès qu'on tape
     input.addEventListener("input", async () => {
-      const filtered = digitsCommaOnly(input.value);
-      if (filtered !== input.value) {
-        input.value = filtered;
-        if (typeof shake === "function") shake(input);
-      }
+  const filtered = digitsCommaOnly(input.value);
+  if (filtered !== input.value) {
+    input.value = filtered;
+    if (typeof shake === "function") shake(input);
+  }
 
-      draft[key] = filtered;
-      draft[finalizedKey] = false; // tant que pas validé
-      markBuyTouchedAndPersist();  // touche articles, on gère plus tard buyArtTouched mais on persiste l’état
-      await safePersistNow();
+  // ✅ 1) UI d’abord (réactivité immédiate)
+  if (vBtn) {
+    const hasTextNow = filtered.trim().length > 0;
+    vBtn.disabled = !hasTextNow;
+    vBtn.classList.toggle("started", hasTextNow);
+  }
 
-      // couleur du texte du bouton (gris -> bleu) + enabled state
-      if (vBtn) {
-        const hasText = filtered.trim().length > 0;
-        vBtn.disabled = !hasText;
-        vBtn.classList.toggle("started", hasText);
-      }
+  // ✅ 2) logique existante inchangée
+  draft[key] = filtered;
+  draft[finalizedKey] = false; // tant que pas validé
+  markBuyTouchedAndPersist();  // on garde ton comportement
 
-      // ✅ si effacement total => suppression définitive (DB)
-      if (filtered.trim() === "") {
-        draft[key] = "";
-        draft[finalizedKey] = false;
-        await safePersistNow();
-      }
-    });
+  // ✅ 3) si effacement total => suppression définitive (DB)
+  if (filtered.trim() === "") {
+    draft[key] = "";
+    draft[finalizedKey] = false;
+  }
+
+  // ✅ 4) persistance (une seule fois)
+  await safePersistNow();
+});
+
 
     // Enter = Valider
     input.addEventListener("keydown", (e) => {
