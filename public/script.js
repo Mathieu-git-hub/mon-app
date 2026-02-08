@@ -4678,6 +4678,8 @@ function renderBuyCategoriesPage(isoDate) {
     const okBtn = document.getElementById("catOkBtn");
     const cancelBtn = document.getElementById("catCancelBtn");
 
+
+
     function setErr(elInput, elMsg, msg) {
       if (!elInput || !elMsg) return;
       if (!msg) {
@@ -4701,8 +4703,7 @@ function renderBuyCategoriesPage(isoDate) {
       const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
       const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
 
-      setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
-      setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
+      
 
       if (nameTaken || codeOwner) ok = false;
 
@@ -4998,6 +4999,11 @@ renderBuyCategoriesPage(isoDate);
 function renderBuyArticlesPage(isoDate) {
   const date = fromISODate(isoDate);
 
+  const buy = getBuyStore();
+ensureBuyDayMark(isoDate);
+if (!Array.isArray(buy.articles)) buy.articles = [];
+
+
   app.innerHTML = `
   <div class="page">
     <div class="topbar">
@@ -5028,9 +5034,31 @@ function renderBuyArticlesPage(isoDate) {
     <div class="day-page">
       ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
 
-      <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
-        Articles (à construire)
-      </div>
+      <div class="buy-categories-wrap">
+
+  <div class="op-search-wrap" style="margin-top:0;">
+    <span class="op-search-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"></circle>
+        <path d="M20 20l-3.5-3.5"></path>
+      </svg>
+    </span>
+
+    <input id="buyArtSearch" class="input op-search"
+      inputmode="text"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+      placeholder="Rechercher un article (nom ou code)..." />
+
+    <div id="buyArtSuggest" class="op-suggest" style="display:none;"></div>
+  </div>
+
+  <button id="addArtBtn" class="add-cat-btn" type="button" aria-label="Ajouter un article" title="Ajouter">
+    <span>+</span>
+  </button>
+
+  <div id="buyArtList" class="buy-cat-list"></div>
+</div>
+
     </div>
   </div>
   `;
