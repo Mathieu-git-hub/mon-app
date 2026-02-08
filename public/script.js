@@ -5332,6 +5332,81 @@ function digitsCommaOnly(raw) {
   return cleaned;
 }
 
+function formatResultNumber(n) {
+  if (!Number.isFinite(n)) return "(...)";
+  // format en string avec virgule
+  const s = String(n).replace(".", ",");
+  if (typeof formatInputNumberDisplay === "function") return formatInputNumberDisplay(s);
+  if (typeof formatCommaNumber === "function") return formatCommaNumber(n);
+  return s;
+}
+
+function formatOpDisplay(raw) {
+  // ✅ met espaces autour des opérateurs + formate les nombres (milliers)
+  let s = String(raw || "");
+
+  // normalise opérateurs clavier -> symboles affichés
+  s = s.replace(/\*/g, "×").replace(/\//g, "÷");
+
+  // tokenisation simple : nombres vs opérateurs
+  const tokens = [];
+  let i = 0;
+
+  function isDigit(ch){ return /[0-9]/.test(ch); }
+
+  while (i < s.length) {
+    const ch = s[i];
+
+    // nombres (digits + espaces + , .)
+    if (isDigit(ch) || ch === "," || ch === "." || ch === " ") {
+      let start = i;
+      i++;
+      while (i < s.length && (isDigit(s[i]) || s[i] === "," || s[i] === "." || s[i] === " ")) i++;
+      const part = s.slice(start, i);
+
+      // nettoie espaces dans le nombre puis parse
+      const numRaw = part.replace(/\s+/g, "").replace(/\./g, ",");
+      const n = (typeof toNumberLoose === "function") ? toNumberLoose(numRaw) : Number(numRaw.replace(",", "."));
+      if (Number.isFinite(n)) {
+        tokens.push({ t:"num", v: formatResultNumber(n) });
+      } else {
+        tokens.push({ t:"txt", v: part.trim() });
+      }
+      continue;
+    }
+
+    // opérateurs
+    if ("+-×÷^()".includes(ch)) {
+      tokens.push({ t:"op", v: ch });
+      i++;
+      continue;
+    }
+
+    // autres caractères (on garde)
+    tokens.push({ t:"txt", v: ch });
+    i++;
+  }
+
+  // rebuild avec espaces autour des opérateurs binaires
+  let out = "";
+  for (const tk of tokens) {
+    if (tk.t === "op") {
+      if (tk.v === "(") { out += "("; continue; }
+      if (tk.v === ")") { out = out.replace(/\s+$/,""); out += ")"; continue; }
+      out = out.replace(/\s+$/,"");
+      out += " " + tk.v + " ";
+      continue;
+    }
+    out += tk.v;
+  }
+
+  out = out.replace(/\s+/g, " ").trim();
+  out = out.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+
+  return out;
+}
+
+
 
 // 2) état "draft" de la modale (persisté en DB pour survivre au refresh)
 // On stocke ça dans buy.articleDraftByIso[isoDate] (n'apparaît PAS dans la liste tant que OK n'a pas créé l'article)
@@ -5345,10 +5420,11 @@ const draft = buy.articleDraftByIso[isoDate] || {
   pe: "", peFinalized: false,
   pgu: "", pguFinalized: false,
 
-  // opérations (on fera après)
-  pgt: "", pgtFinalized: false,
-  prg: "", prgFinalized: false,
-  pr: "", prFinalized: false,
+    // opérations
+  pgt: "", pgtFinalized: false, pgtResult: null, pgtErr: "",
+  prg: "", prgFinalized: false, prgResult: null, prgErr: "",
+  pr:  "", prFinalized: false,  prResult: null,  prErr: "",
+
 };
 buy.articleDraftByIso[isoDate] = draft;
 
@@ -5383,6 +5459,52 @@ function renderSimpleNumRow({ key, finalizedKey, label, inputId, validateId, mod
   `;
 }
 
+function renderOpRow({ key, finalizedKey, resultKey, errKey, label, hint, boxId, modId }) {
+  const isFinal = !!draft[finalizedKey];
+  const raw = String(draft[key] || "");
+  const err = String(draft[errKey] || "");
+
+  if (!isFinal) {
+    return `
+      <div class="label">${label}</div>
+      <div>
+        ${hint ? `<div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">${hint}</div>` : ``}
+        <div id="${boxId}" class="input" style="cursor:pointer; user-select:none;">
+          ${raw ? escapeHtml(raw) : `<span style="opacity:.65; font-weight:800;">(poser l’opération…)</span>`}
+        </div>
+        ${err ? `<div class="cat-err" style="display:block;">${escapeHtml(err)}</div>` : ``}
+      </div>
+    `;
+  }
+
+  const opDisplay = formatOpDisplay(raw);
+  const res = draft[resultKey];
+  const resDisplay = (res === null || res === undefined) ? "(...)" : formatResultNumber(res);
+
+  return `
+    <div class="label">${label}</div>
+    <div>
+      <div class="card card-white lift" style="width:100%;">
+        ${escapeHtml(opDisplay)} = ${escapeHtml(resDisplay)}
+      </div>
+      <button id="${modId}" type="button"
+        style="
+          margin-top:10px;
+          width:100%;
+          background:#000;
+          border:1px solid rgba(255,255,255,0.9);
+          color:#1e5eff;
+          font-weight:900;
+          border-radius:12px;
+          padding:12px 10px;
+          cursor:pointer;
+        "
+      >Modifier</button>
+    </div>
+  `;
+}
+
+
 // 4) re-render du contenu modal (sans la fermer)
 function rerenderArtModalBody() {
   const grid = document.getElementById("artModalGrid");
@@ -5406,32 +5528,30 @@ function rerenderArtModalBody() {
     ${renderSimpleNumRow({ key:"pe",    finalizedKey:"peFinalized",    label:"Pris d’ensemble (PE)", inputId:"artPE", validateId:"artPEValidate", modifyId:"artPEModify" })}
     ${renderSimpleNumRow({ key:"pgu",   finalizedKey:"pguFinalized",   label:"Prix de gros unitaire (PGU)", inputId:"artPGU", validateId:"artPGUValidate", modifyId:"artPGUModify" })}
 
-    <div class="label">Prix de gros total (PGT)</div>
-    <div>
-      <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-        (PGU x quantité)
-      </div>
-      <input id="artPGT" class="input" autocomplete="off" value="${escapeAttr(draft.pgt || "")}"/>
-      <div id="artPGTErr" class="cat-err" style="display:none;"></div>
-    </div>
+    ${renderOpRow({
+  key:"pgt", finalizedKey:"pgtFinalized", resultKey:"pgtResult", errKey:"pgtErr",
+  label:"Prix de gros total (PGT)",
+  hint:"(PGU × quantité)",
+  boxId:"artPGTBox",
+  modId:"artPGTModifyOp"
+})}
 
-    <div class="label">Prix de revient global (PRG)</div>
-    <div>
-      <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-        (PGT + extra x (PGT / PE))
-      </div>
-      <input id="artPRG" class="input" autocomplete="off" value="${escapeAttr(draft.prg || "")}"/>
-      <div id="artPRGErr" class="cat-err" style="display:none;"></div>
-    </div>
+${renderOpRow({
+  key:"prg", finalizedKey:"prgFinalized", resultKey:"prgResult", errKey:"prgErr",
+  label:"Prix de revient global (PRG)",
+  hint:"(PGT + extra × (PGT / PE))",
+  boxId:"artPRGBox",
+  modId:"artPRGModifyOp"
+})}
 
-    <div class="label">Prix de revient (PR)</div>
-    <div>
-      <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-        (PRG / quantité)
-      </div>
-      <input id="artPR" class="input" autocomplete="off" value="${escapeAttr(draft.pr || "")}"/>
-      <div id="artPRErr" class="cat-err" style="display:none;"></div>
-    </div>
+${renderOpRow({
+  key:"pr", finalizedKey:"prFinalized", resultKey:"prResult", errKey:"prErr",
+  label:"Prix de revient (PR)",
+  hint:"(PRG / quantité)",
+  boxId:"artPRBox",
+  modId:"artPRModifyOp"
+})}
+
   `;
 
   bindArtModalHandlers(); // rebind events
@@ -5550,6 +5670,122 @@ if (cancelBtn) {
     // fermeture modale
     closeArtModal();
   });
+
+  function buildOverlaySearchItems() {
+  const items = [];
+  if (draft.qtyFinalized) items.push({ key:"quantite", label:"Quantité", valueText: formatWhiteNumber(draft.qty || "0") });
+  if (draft.extraFinalized) items.push({ key:"extra", label:"Extra", valueText: formatWhiteNumber(draft.extra || "0") });
+  if (draft.peFinalized) items.push({ key:"pe", label:"PE", valueText: formatWhiteNumber(draft.pe || "0") });
+  if (draft.pguFinalized) items.push({ key:"pgu", label:"PGU", valueText: formatWhiteNumber(draft.pgu || "0") });
+  return items;
+}
+
+async function validateOpField({ key, finalizedKey, resultKey, errKey, nextKey }) {
+  const raw = String(draft[key] || "").trim();
+
+  // ✅ suppression définitive si vide
+  if (!raw) {
+    draft[key] = "";
+    draft[finalizedKey] = false;
+    draft[resultKey] = null;
+    draft[errKey] = "";
+    await safePersistNow();
+    rerenderArtModalBody();
+    return;
+  }
+
+  // ✅ caractères autorisés + évaluation
+  if (typeof charsAllowedForOpInput === "function" && !charsAllowedForOpInput(raw)) {
+    draft[errKey] = "Caractères invalides.";
+    draft[finalizedKey] = false;
+    await safePersistNow();
+    rerenderArtModalBody();
+    return;
+  }
+
+  const res = (typeof evalOperation === "function") ? evalOperation(raw) : null;
+  if (res === null) {
+    draft[errKey] = "Opération invalide.";
+    draft[finalizedKey] = false;
+    await safePersistNow();
+    rerenderArtModalBody();
+    return;
+  }
+
+  draft[errKey] = "";
+  draft[resultKey] = res;
+  draft[finalizedKey] = true;
+
+  // ✅ bascule du résultat dans le prochain (sauf PR)
+  if (nextKey && !draft[nextKey]) {
+    draft[nextKey] = formatResultNumber(res); // ex "1 234,56" (avec espaces)
+  }
+
+  await safePersistNow();
+  rerenderArtModalBody();
+}
+
+function openOpFor(key, title) {
+  // on utilise un input DOM “fantôme” pour openOpOverlay (il a besoin d’un inputEl)
+  const ghost = document.createElement("input");
+  ghost.type = "text";
+  ghost.value = String(draft[key] || "");
+  document.body.appendChild(ghost);
+  ghost.style.position = "fixed";
+  ghost.style.opacity = "0";
+  ghost.style.pointerEvents = "none";
+  ghost.style.height = "0";
+  ghost.style.width = "0";
+
+  openOpOverlay({
+    inputEl: ghost,
+    title,
+    initialValue: String(draft[key] || ""),
+    placeholder: "(poser une opération)",
+    searchItems: buildOverlaySearchItems(),
+    onCancel: () => {
+      // on récupère l’état tapé au cas où (optionnel)
+      draft[key] = String(ghost.value || "");
+      ghost.remove();
+      safePersistNow();
+      rerenderArtModalBody();
+    },
+    onOk: async () => {
+      // ✅ OK = validation
+      draft[key] = String(ghost.value || "");
+      ghost.remove();
+
+      if (key === "pgt") {
+        await validateOpField({ key:"pgt", finalizedKey:"pgtFinalized", resultKey:"pgtResult", errKey:"pgtErr", nextKey:"prg" });
+      } else if (key === "prg") {
+        await validateOpField({ key:"prg", finalizedKey:"prgFinalized", resultKey:"prgResult", errKey:"prgErr", nextKey:"pr" });
+      } else if (key === "pr") {
+        await validateOpField({ key:"pr", finalizedKey:"prFinalized", resultKey:"prResult", errKey:"prErr", nextKey:null });
+      }
+    },
+  });
+}
+
+// ✅ clic sur les cases (non finalisées)
+const pgtBox = document.getElementById("artPGTBox");
+if (pgtBox) pgtBox.addEventListener("click", () => openOpFor("pgt", "PGT"));
+
+const prgBox = document.getElementById("artPRGBox");
+if (prgBox) prgBox.addEventListener("click", () => openOpFor("prg", "PRG"));
+
+const prBox = document.getElementById("artPRBox");
+if (prBox) prBox.addEventListener("click", () => openOpFor("pr", "PR"));
+
+// ✅ bouton Modifier (finalisées)
+const pgtMod = document.getElementById("artPGTModifyOp");
+if (pgtMod) pgtMod.addEventListener("click", () => openOpFor("pgt", "PGT"));
+
+const prgMod = document.getElementById("artPRGModifyOp");
+if (prgMod) prgMod.addEventListener("click", () => openOpFor("prg", "PRG"));
+
+const prMod = document.getElementById("artPRModifyOp");
+if (prMod) prMod.addEventListener("click", () => openOpFor("pr", "PR"));
+
 }
 
 }
@@ -5632,13 +5868,18 @@ rerenderArtModalBody();
             deletedAtTs: null,
 
             // champs (on branchera validation/opérations après)
-            qty: (document.getElementById("artQty")?.value || "").trim(),
-            extra: (document.getElementById("artExtra")?.value || "").trim(),
-            pe: (document.getElementById("artPE")?.value || "").trim(),
-            pgu: (document.getElementById("artPGU")?.value || "").trim(),
-            pgt: (document.getElementById("artPGT")?.value || "").trim(),
-            prg: (document.getElementById("artPRG")?.value || "").trim(),
-            pr: (document.getElementById("artPR")?.value || "").trim(),
+            qty: String(draft.qty || "").trim(),
+extra: String(draft.extra || "").trim(),
+pe: String(draft.pe || "").trim(),
+pgu: String(draft.pgu || "").trim(),
+
+pgt: String(draft.pgt || "").trim(),
+pgtResult: draft.pgtResult,
+prg: String(draft.prg || "").trim(),
+prgResult: draft.prgResult,
+pr: String(draft.pr || "").trim(),
+prResult: draft.prResult,
+
           });
 
           // ✅ 2e cercle => vert (on affichera ensuite)
