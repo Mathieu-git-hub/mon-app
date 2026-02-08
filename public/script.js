@@ -4994,15 +4994,93 @@ renderBuyCategoriesPage(isoDate);
 
 
 // ===============================
-// ✅ DÉBUT — BUY : Articles
+// ✅ DÉBUT — BUY : Articles (COMPLET - base UI + liste + modals)
 // ===============================
 function renderBuyArticlesPage(isoDate) {
   const date = fromISODate(isoDate);
-
   const buy = getBuyStore();
-ensureBuyDayMark(isoDate);
-if (!Array.isArray(buy.articles)) buy.articles = [];
+  ensureBuyDayMark(isoDate);
 
+  // ✅ articles actifs = pas supprimés
+  function activeArticles() {
+    return (buy.articles || []).filter(a => !a.deletedAtIso);
+  }
+
+  // ✅ visibles ce jour UNIQUEMENT = createdAtIso === isoDate
+  function visibleTodayArticles() {
+    return activeArticles()
+      .filter(a => String(a.createdAtIso || "") === String(isoDate))
+      .sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0)); // plus récent au-dessus
+  }
+
+  function isNameTaken(name, exceptId = null) {
+    const n = normSearch(name);
+    return activeArticles().some(a =>
+      a.id !== exceptId &&
+      String(a.createdAtIso || "") === String(isoDate) &&
+      normSearch(a.name) === n
+    );
+  }
+
+  function findCodeOwner(code, exceptId = null) {
+    const c0 = normSearch(code);
+    return activeArticles().find(a =>
+      a.id !== exceptId &&
+      String(a.createdAtIso || "") === String(isoDate) &&
+      normSearch(a.code) === c0
+    ) || null;
+  }
+
+  function markBuyTouchedAndPersist() {
+    const d = ensureBuyDayMark(isoDate);
+    d.buyArtTouched = true;
+    safePersistNow();
+  }
+
+  // ----------- UI helpers (rectangle article)
+  function cardHTML(a) {
+    const id = a.id;
+
+    // ✅ Cases blanches sous intitulés, boutons crayon/poubelle en colonne à droite
+    return `
+      <div class="buy-cat-card" data-art-id="${escapeAttr(id)}">
+        <div class="buy-cat-body">
+          <div class="buy-cat-col">
+            <div class="buy-cat-label">Nom</div>
+            <div class="buy-cat-white">${escapeHtml(a.name || "")}</div>
+          </div>
+
+          <div class="buy-cat-col">
+            <div class="buy-cat-label">Code</div>
+            <div class="buy-cat-white">${escapeHtml(a.code || "")}</div>
+          </div>
+        </div>
+
+        <div class="buy-cat-actions" style="flex-direction:column; gap:10px;">
+          <button class="buy-cat-iconbtn" data-art-edit="${escapeAttr(id)}" title="Modifier" aria-label="Modifier">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+            </svg>
+          </button>
+
+          <button class="buy-cat-iconbtn" data-art-del="${escapeAttr(id)}" title="Supprimer" aria-label="Supprimer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"></path>
+              <path d="M8 6V4h8v2"></path>
+              <path d="M6 6l1 16h10l1-16"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  const listToday = visibleTodayArticles();
 
   app.innerHTML = `
   <div class="page">
@@ -5036,29 +5114,39 @@ if (!Array.isArray(buy.articles)) buy.articles = [];
 
       <div class="buy-categories-wrap">
 
-  <div class="op-search-wrap" style="margin-top:0;">
-    <span class="op-search-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="11" cy="11" r="7"></circle>
-        <path d="M20 20l-3.5-3.5"></path>
-      </svg>
-    </span>
+        <!-- ✅ Barre de recherche + suggestions dynamiques -->
+        <div class="op-search-wrap" style="margin-top:0;">
+          <span class="op-search-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="M20 20l-3.5-3.5"></path>
+            </svg>
+          </span>
 
-    <input id="buyArtSearch" class="input op-search"
-      inputmode="text"
-      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-      placeholder="Rechercher un article (nom ou code)..." />
+          <input id="buyArtSearch" class="input op-search"
+            inputmode="text"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+            placeholder="Rechercher un article (nom ou code)..." />
 
-    <div id="buyArtSuggest" class="op-suggest" style="display:none;"></div>
-  </div>
+          <div id="buyArtSuggest" class="op-suggest" style="display:none;"></div>
+        </div>
 
-  <button id="addArtBtn" class="add-cat-btn" type="button" aria-label="Ajouter un article" title="Ajouter">
-    <span>+</span>
-  </button>
+        <!-- ✅ Bouton carré + -->
+        <button id="addArtBtn" class="add-cat-btn" type="button" aria-label="Ajouter un article" title="Ajouter">
+          <span>+</span>
+        </button>
 
-  <div id="buyArtList" class="buy-cat-list"></div>
-</div>
+        <!-- ✅ LISTE -->
+        <div id="buyArtList" class="buy-cat-list">
+          ${listToday.map(cardHTML).join("")}
+          ${
+            !listToday.length
+              ? `<div style="opacity:.75; font-weight:800; margin-top:10px;">Aucun article ce jour</div>`
+              : ``
+          }
+        </div>
 
+      </div>
     </div>
   </div>
   `;
@@ -5080,245 +5168,435 @@ if (!Array.isArray(buy.articles)) buy.articles = [];
   if (backBtn) backBtn.addEventListener("click", () => smartBack());
 
   // =========================
-// ✅ MODAL ARTICLE — AJOUT (scrollable)
-// =========================
-function closeArtModal() {
-  const bd = document.getElementById("artModalBackdrop");
-  if (bd) bd.remove();
-}
+  // ✅ MODAL ARTICLE — AJOUT (scrollable)
+  // =========================
+  function closeArtModal() {
+    const bd = document.getElementById("artModalBackdrop");
+    if (bd) bd.remove();
+  }
 
-function isArtNameTaken(name, exceptId = null) {
-  const n = normSearch(name);
-  return (buy.articles || []).some(a =>
-    !a.deletedAtIso &&
-    a.id !== exceptId &&
-    String(a.createdAtIso || "") === String(isoDate) &&
-    normSearch(a.name) === n
-  );
-}
+  function openArtModal({ mode = "create", artId = null } = {}) {
+    if (document.getElementById("artModalBackdrop")) return;
 
-function findArtCodeOwner(code, exceptId = null) {
-  const c0 = normSearch(code);
-  return (buy.articles || []).find(a =>
-    !a.deletedAtIso &&
-    a.id !== exceptId &&
-    String(a.createdAtIso || "") === String(isoDate) &&
-    normSearch(a.code) === c0
-  ) || null;
-}
+    const existing = artId ? (buy.articles || []).find(a => a.id === artId) : null;
 
-function openArtModal() {
-  if (document.getElementById("artModalBackdrop")) return;
+    const initialName = existing?.name || "";
+    const initialCode = existing?.code || "";
 
-  const bd = document.createElement("div");
-  bd.id = "artModalBackdrop";
-  bd.className = "cat-modal-backdrop";
+    const bd = document.createElement("div");
+    bd.id = "artModalBackdrop";
+    bd.className = "cat-modal-backdrop";
 
-  // ✅ modal même “gabarit” que catégories + contenu scroll
-  bd.innerHTML = `
-    <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Article"
-         style="display:flex; flex-direction:column; max-height: min(78vh, 560px);">
+    bd.innerHTML = `
+      <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Article"
+           style="display:flex; flex-direction:column; max-height: min(78vh, 560px);">
 
-      <!-- ✅ Titre figé -->
-      <div class="cat-modal-title" style="flex:0 0 auto;">
-        Nouvel article
-      </div>
+        <div class="cat-modal-title" style="flex:0 0 auto;">
+          ${mode === "create" ? "Nouvel article" : "Modifier l’article"}
+        </div>
 
-      <!-- ✅ CONTENU scrollable -->
-      <div id="artModalBody" style="flex:1 1 auto; overflow:auto; padding-right:6px;">
-        <div class="cat-modal-grid">
+        <div id="artModalBody" style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+          <div class="cat-modal-grid">
 
-          <div class="label">Nom</div>
-          <div>
-            <input id="artName" class="input" autocomplete="off" />
-            <div id="artNameErr" class="cat-err" style="display:none;"></div>
-          </div>
-
-          <div class="label">Code</div>
-          <div>
-            <input id="artCode" class="input" autocomplete="off" />
-            <div id="artCodeErr" class="cat-err" style="display:none;"></div>
-          </div>
-
-          <div class="label">Quantité</div>
-          <div>
-            <input id="artQty" class="input" autocomplete="off" />
-            <div id="artQtyErr" class="cat-err" style="display:none;"></div>
-          </div>
-
-          <div class="label">Extra</div>
-          <div>
-            <input id="artExtra" class="input" autocomplete="off" />
-            <div id="artExtraErr" class="cat-err" style="display:none;"></div>
-          </div>
-
-          <div class="label">Pris d’ensemble (PE)</div>
-          <div>
-            <input id="artPE" class="input" autocomplete="off" />
-            <div id="artPEErr" class="cat-err" style="display:none;"></div>
-          </div>
-
-          <div class="label">Prix de gros unitaire (PGU)</div>
-          <div>
-            <input id="artPGU" class="input" autocomplete="off" />
-            <div id="artPGUErr" class="cat-err" style="display:none;"></div>
-          </div>
-
-          <!-- ✅ PGT : formule ENTRE intitulé et case -->
-          <div class="label">Prix de gros total (PGT)</div>
-          <div>
-            <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-              (PGU x quantité)
+            <div class="label">Nom</div>
+            <div>
+              <input id="artName" class="input" autocomplete="off" value="${escapeAttr(initialName)}"/>
+              <div id="artNameErr" class="cat-err" style="display:none;"></div>
             </div>
-            <input id="artPGT" class="input" autocomplete="off" />
-            <div id="artPGTErr" class="cat-err" style="display:none;"></div>
-          </div>
 
-          <!-- ✅ PRG : formule ENTRE intitulé et case -->
-          <div class="label">Prix de revient global (PRG)</div>
-          <div>
-            <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-              (PGT + extra x (PGT / PE))
+            <div class="label">Code</div>
+            <div>
+              <input id="artCode" class="input" autocomplete="off" value="${escapeAttr(initialCode)}"/>
+              <div id="artCodeErr" class="cat-err" style="display:none;"></div>
             </div>
-            <input id="artPRG" class="input" autocomplete="off" />
-            <div id="artPRGErr" class="cat-err" style="display:none;"></div>
-          </div>
 
-          <!-- ✅ PR : formule ENTRE intitulé et case -->
-          <div class="label">Prix de revient (PR)</div>
-          <div>
-            <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-              (PRG / quantité)
+            <div class="label">Quantité</div>
+            <div>
+              <input id="artQty" class="input" autocomplete="off" value="${escapeAttr(existing?.qty || "")}"/>
+              <div id="artQtyErr" class="cat-err" style="display:none;"></div>
             </div>
-            <input id="artPR" class="input" autocomplete="off" />
-            <div id="artPRErr" class="cat-err" style="display:none;"></div>
-          </div>
 
+            <div class="label">Extra</div>
+            <div>
+              <input id="artExtra" class="input" autocomplete="off" value="${escapeAttr(existing?.extra || "")}"/>
+              <div id="artExtraErr" class="cat-err" style="display:none;"></div>
+            </div>
+
+            <div class="label">Pris d’ensemble (PE)</div>
+            <div>
+              <input id="artPE" class="input" autocomplete="off" value="${escapeAttr(existing?.pe || "")}"/>
+              <div id="artPEErr" class="cat-err" style="display:none;"></div>
+            </div>
+
+            <div class="label">Prix de gros unitaire (PGU)</div>
+            <div>
+              <input id="artPGU" class="input" autocomplete="off" value="${escapeAttr(existing?.pgu || "")}"/>
+              <div id="artPGUErr" class="cat-err" style="display:none;"></div>
+            </div>
+
+            <div class="label">Prix de gros total (PGT)</div>
+            <div>
+              <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+                (PGU x quantité)
+              </div>
+              <input id="artPGT" class="input" autocomplete="off" value="${escapeAttr(existing?.pgt || "")}"/>
+              <div id="artPGTErr" class="cat-err" style="display:none;"></div>
+            </div>
+
+            <div class="label">Prix de revient global (PRG)</div>
+            <div>
+              <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+                (PGT + extra x (PGT / PE))
+              </div>
+              <input id="artPRG" class="input" autocomplete="off" value="${escapeAttr(existing?.prg || "")}"/>
+              <div id="artPRGErr" class="cat-err" style="display:none;"></div>
+            </div>
+
+            <div class="label">Prix de revient (PR)</div>
+            <div>
+              <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+                (PRG / quantité)
+              </div>
+              <input id="artPR" class="input" autocomplete="off" value="${escapeAttr(existing?.pr || "")}"/>
+              <div id="artPRErr" class="cat-err" style="display:none;"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
+          <button id="artCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
+          <button id="artOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
         </div>
       </div>
+    `;
 
-      <!-- ✅ Boutons figés -->
-      <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
-        <button id="artCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
-        <button id="artOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
+    bd.addEventListener("click", (e) => {
+      if (e.target === bd) closeArtModal();
+    });
+
+    document.body.appendChild(bd);
+
+    const nameEl = document.getElementById("artName");
+    const codeEl = document.getElementById("artCode");
+    const nameErr = document.getElementById("artNameErr");
+    const codeErr = document.getElementById("artCodeErr");
+    const okBtn = document.getElementById("artOkBtn");
+    const cancelBtn = document.getElementById("artCancelBtn");
+
+    let showUniqErrors = false; // ✅ doublons visibles seulement après OK
+
+    function setErr(elInput, elMsg, msg) {
+      if (!elInput || !elMsg) return;
+      if (!msg) {
+        elInput.classList.remove("error");
+        elMsg.style.display = "none";
+        elMsg.textContent = "";
+      } else {
+        elInput.classList.add("error");
+        elMsg.style.display = "";
+        elMsg.textContent = msg;
+      }
+    }
+
+    function syncOkState() {
+      const name = (nameEl.value || "").trim();
+      const code = (codeEl.value || "").trim();
+
+      let ok = name.length > 0 && code.length > 0;
+
+      const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
+      const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
+
+      if (showUniqErrors) {
+        setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
+        setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
+      } else {
+        setErr(nameEl, nameErr, "");
+        setErr(codeEl, codeErr, "");
+      }
+
+      if (nameTaken || codeOwner) ok = false;
+
+      okBtn.disabled = !ok;
+      okBtn.classList.toggle("enabled", ok);
+    }
+
+    if (nameEl) nameEl.addEventListener("input", syncOkState);
+    if (codeEl) codeEl.addEventListener("input", syncOkState);
+    if (cancelBtn) cancelBtn.addEventListener("click", closeArtModal);
+
+    if (okBtn) {
+      okBtn.addEventListener("click", async () => {
+        showUniqErrors = true;
+
+        const name = (nameEl.value || "").trim();
+        const code = (codeEl.value || "").trim();
+
+        if (!name || !code) return;
+
+        const nameTaken = isNameTaken(name, existing?.id || null);
+        const codeOwner = findCodeOwner(code, existing?.id || null);
+
+        if (nameTaken || codeOwner) {
+          syncOkState();
+          return;
+        }
+
+        // ✅ CREATE
+        if (mode === "create") {
+          const id = "art_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+          buy.articles = buy.articles || [];
+          buy.articles.unshift({
+            id,
+            name,
+            code,
+            createdAtIso: isoDate,
+            createdAtTs: Date.now(),
+            updatedAtTs: Date.now(),
+            deletedAtIso: null,
+            deletedAtTs: null,
+
+            // champs (on branchera validation/opérations après)
+            qty: (document.getElementById("artQty")?.value || "").trim(),
+            extra: (document.getElementById("artExtra")?.value || "").trim(),
+            pe: (document.getElementById("artPE")?.value || "").trim(),
+            pgu: (document.getElementById("artPGU")?.value || "").trim(),
+            pgt: (document.getElementById("artPGT")?.value || "").trim(),
+            prg: (document.getElementById("artPRG")?.value || "").trim(),
+            pr: (document.getElementById("artPR")?.value || "").trim(),
+          });
+
+          // ✅ 2e cercle => vert (on affichera ensuite)
+          markBuyTouchedAndPersist();
+          await safePersistNow();
+
+          closeArtModal();
+          renderBuyArticlesPage(isoDate);
+          return;
+        }
+
+        // ✅ EDIT (provisoire)
+        if (mode === "edit" && existing) {
+          existing.name = name;
+          existing.code = code;
+          existing.updatedAtTs = Date.now();
+          markBuyTouchedAndPersist();
+          await safePersistNow();
+          closeArtModal();
+          renderBuyArticlesPage(isoDate);
+        }
+      });
+    }
+
+    if (nameEl) nameEl.focus();
+    syncOkState();
+  }
+
+  // =========================
+  // ✅ MODAL SUPPRESSION (article)
+  // =========================
+  function closeArtDelModal() {
+    const bd = document.getElementById("artDelBackdrop");
+    if (bd) bd.remove();
+  }
+
+  function openArtDelModal(artId) {
+    if (document.getElementById("artDelBackdrop")) return;
+
+    const art = (buy.articles || []).find(a => a.id === artId);
+    if (!art) return;
+
+    const bd = document.createElement("div");
+    bd.id = "artDelBackdrop";
+    bd.className = "cat-del-backdrop";
+
+    bd.innerHTML = `
+      <div class="cat-del-modal" role="dialog" aria-modal="true" aria-label="Suppression article">
+        <div class="cat-del-text">Supprimer cet article ?</div>
+        <div class="cat-del-actions">
+          <button id="artDelCancel" class="cat-del-btn cat-del-cancel" type="button">Annuler</button>
+          <button id="artDelOk" class="cat-del-btn cat-del-ok" type="button">confirmer</button>
+        </div>
       </div>
+    `;
 
-    </div>
-  `;
+    bd.addEventListener("click", (e) => {
+      if (e.target === bd) closeArtDelModal();
+    });
 
-  // ✅ clic en dehors => fermer
-  bd.addEventListener("click", (e) => {
-    if (e.target === bd) closeArtModal();
+    document.body.appendChild(bd);
+
+    const cancel = document.getElementById("artDelCancel");
+    const ok = document.getElementById("artDelOk");
+    if (cancel) cancel.addEventListener("click", closeArtDelModal);
+
+    if (ok) {
+      ok.addEventListener("click", async () => {
+        // ✅ supprimé le même jour => “n’a jamais existé”
+        if (String(art.createdAtIso || "") === String(isoDate)) {
+          buy.articles = (buy.articles || []).filter(a => a.id !== artId);
+
+          // ✅ si plus aucune action article aujourd’hui => cercle NON vert
+          const d = ensureBuyDayMark(isoDate);
+          const anyToday =
+            (buy.articles || []).some(a =>
+              String(a.createdAtIso || "") === String(isoDate) ||
+              String(a.deletedAtIso || "") === String(isoDate)
+            );
+          d.buyArtTouched = anyToday;
+        } else {
+          art.deletedAtIso = isoDate;
+          art.deletedAtTs = Date.now();
+          markBuyTouchedAndPersist();
+        }
+
+        await safePersistNow();
+        closeArtDelModal();
+        renderBuyArticlesPage(isoDate);
+      });
+    }
+  }
+
+  // =========================
+  // ✅ Bouton + (création)
+  // =========================
+  const addBtn = document.getElementById("addArtBtn");
+  if (addBtn) addBtn.addEventListener("click", () => openArtModal({ mode: "create" }));
+
+  // =========================
+  // ✅ Clic crayon / poubelle
+  // =========================
+  app.querySelectorAll("[data-art-edit]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-art-edit");
+      openArtModal({ mode: "edit", artId: id });
+    });
   });
 
-  document.body.appendChild(bd);
+  app.querySelectorAll("[data-art-del]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const id = btn.getAttribute("data-art-del");
+      openArtDelModal(id);
+    });
+  });
 
-  const nameEl = document.getElementById("artName");
-  const codeEl = document.getElementById("artCode");
-  const nameErr = document.getElementById("artNameErr");
-  const codeErr = document.getElementById("artCodeErr");
-  const okBtn = document.getElementById("artOkBtn");
-  const cancelBtn = document.getElementById("artCancelBtn");
+  // =========================
+  // ✅ Recherche + suggestions dynamiques (nom OU code)
+  // =========================
+  const search = document.getElementById("buyArtSearch");
+  const suggest = document.getElementById("buyArtSuggest");
 
-  let showUniqErrors = false; // ✅ doublons visibles seulement après OK
-
-  function setErr(elInput, elMsg, msg) {
-    if (!elInput || !elMsg) return;
-    if (!msg) {
-      elInput.classList.remove("error");
-      elMsg.style.display = "none";
-      elMsg.textContent = "";
-    } else {
-      elInput.classList.add("error");
-      elMsg.style.display = "";
-      elMsg.textContent = msg;
-    }
+  function allVisibleForSearch() {
+    // visibles ce jour uniquement
+    return visibleTodayArticles();
   }
 
-  function syncOkState() {
-    const name = (nameEl.value || "").trim();
-    const code = (codeEl.value || "").trim();
-
-    let ok = name.length > 0 && code.length > 0;
-
-    const nameTaken = name ? isArtNameTaken(name) : false;
-    const codeOwner = code ? findArtCodeOwner(code) : null;
-
-    if (showUniqErrors) {
-      setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
-      setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
-    } else {
-      setErr(nameEl, nameErr, "");
-      setErr(codeEl, codeErr, "");
-    }
-
-    if (nameTaken || codeOwner) ok = false;
-
-    okBtn.disabled = !ok;
-    okBtn.classList.toggle("enabled", ok);
-  }
-
-  nameEl.addEventListener("input", syncOkState);
-  codeEl.addEventListener("input", syncOkState);
-
-  cancelBtn.addEventListener("click", closeArtModal);
-
-  okBtn.addEventListener("click", async () => {
-    showUniqErrors = true;
-
-    const name = (nameEl.value || "").trim();
-    const code = (codeEl.value || "").trim();
-    if (!name || !code) return;
-
-    const nameTaken = isArtNameTaken(name);
-    const codeOwner = findArtCodeOwner(code);
-    if (nameTaken || codeOwner) {
-      syncOkState();
+  function renderSuggestions(q) {
+    const nq = normSearch(q);
+    if (!nq) {
+      suggest.style.display = "none";
+      suggest.innerHTML = "";
+      // reset liste
+      const listEl = document.getElementById("buyArtList");
+      if (listEl) {
+        listEl.innerHTML = `
+          ${listToday.map(cardHTML).join("")}
+          ${!listToday.length ? `<div style="opacity:.75; font-weight:800; margin-top:10px;">Aucun article ce jour</div>` : ``}
+        `;
+      }
       return;
     }
 
-    // ✅ CREATE (stock DB via safePersistNow)
-    const id = "art_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
-    buy.articles.unshift({
-      id,
-      name,
-      code,
-      createdAtIso: isoDate,
-      createdAtTs: Date.now(),
-      deletedAtIso: null,
-      deletedAtTs: null,
-      qty: "",
-      extra: "",
-      pe: "",
-      pgu: "",
-      pgt: "",
-      prg: "",
-      pr: "",
+    const list = allVisibleForSearch();
+    const filtered = list.filter(a => {
+      const n = normSearch(a.name);
+      const cd = normSearch(a.code);
+      return n.includes(nq) || cd.includes(nq);
     });
 
-    // ✅ 2e cercle : on pose un flag (on branchera l’affichage après)
-    const d = ensureBuyDayMark(isoDate);
-    d.buyArtTouched = true;
+    const top = filtered.slice(0, 7);
+    if (!top.length) {
+      suggest.style.display = "none";
+      suggest.innerHTML = "";
+    } else {
+      suggest.innerHTML = top.map(a => {
+        const label = `${a.code} — ${a.name}`;
+        return `<div class="op-suggest-item" data-art-sel="${escapeAttr(a.id)}">${escapeHtml(label)}</div>`;
+      }).join("");
+      suggest.style.display = "";
+    }
 
-    await safePersistNow();
-    closeArtModal();
-    renderBuyArticlesPage(isoDate);
-  });
+    const listEl = document.getElementById("buyArtList");
+    if (listEl) {
+      listEl.innerHTML = `
+        <div class="buy-cat-section-title">Résultats</div>
+        ${filtered.map(cardHTML).join("")}
+      `;
 
-  syncOkState();
-  nameEl.focus();
-}
+      // rebind edit/del sur résultats
+      listEl.querySelectorAll("[data-art-edit]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          openArtModal({ mode: "edit", artId: btn.getAttribute("data-art-edit") });
+        });
+      });
+      listEl.querySelectorAll("[data-art-del]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.preventDefault();
+          openArtDelModal(btn.getAttribute("data-art-del"));
+        });
+      });
+    }
+  }
 
-// =========================
-// ✅ Bouton + (création)
-// =========================
-const addArtBtn = document.getElementById("addArtBtn");
-if (addArtBtn) addArtBtn.addEventListener("click", openArtModal);
+  if (search && suggest) {
+    search.addEventListener("input", () => renderSuggestions(search.value));
 
+    suggest.addEventListener("click", (e) => {
+      const el = e.target.closest(".op-suggest-item");
+      if (!el) return;
+      const id = el.getAttribute("data-art-sel");
+
+      suggest.style.display = "none";
+      suggest.innerHTML = "";
+
+      const art = allVisibleForSearch().find(a => a.id === id);
+      const listEl = document.getElementById("buyArtList");
+      if (art && listEl) {
+        listEl.innerHTML = `
+          <div class="buy-cat-section-title">Résultat</div>
+          ${cardHTML(art)}
+        `;
+        // rebind
+        listEl.querySelectorAll("[data-art-edit]").forEach(btn => {
+          btn.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            openArtModal({ mode: "edit", artId: btn.getAttribute("data-art-edit") });
+          });
+        });
+        listEl.querySelectorAll("[data-art-del]").forEach(btn => {
+          btn.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            openArtDelModal(btn.getAttribute("data-art-del") );
+          });
+        });
+      }
+    });
+
+    document.addEventListener("pointerdown", (e) => {
+      if (suggest.contains(e.target)) return;
+      if (search.contains(e.target)) return;
+      suggest.style.display = "none";
+    }, { capture: true });
+  }
 }
 // ===============================
 // ✅ FIN — BUY : Articles
 // ===============================
+
 
 
 
