@@ -5716,6 +5716,7 @@ function isTouchDevice() {
   );
 
 
+
   function buildOverlaySearchItems() {
   const items = [];
   if (draft.qtyFinalized) items.push({ key:"quantite", label:"Quantité", valueText: formatWhiteNumber(draft.qty || "0") });
