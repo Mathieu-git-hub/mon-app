@@ -18,7 +18,10 @@ const PORT = process.env.PORT || 3000;
 /** ---------------------------
  *  2) Sécurité & parsing
  * -------------------------- */
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false,
+}));
+
 app.use(express.json({ limit: "1mb" }));
 
 app.use(
