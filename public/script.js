@@ -5688,6 +5688,15 @@ if (cancelBtn) {
     closeArtModal();
   });
 
+  function isTouchDevice() {
+  return (
+    ("ontouchstart" in window) ||
+    (navigator.maxTouchPoints > 0) ||
+    window.matchMedia("(pointer: coarse)").matches
+  );
+}
+
+
   function buildOverlaySearchItems() {
   const items = [];
   if (draft.qtyFinalized) items.push({ key:"quantite", label:"Quantité", valueText: formatWhiteNumber(draft.qty || "0") });
@@ -5743,6 +5752,10 @@ async function validateOpField({ key, finalizedKey, resultKey, errKey, nextKey }
 }
 
 function openOpFor(key, title) {
+
+    // ✅ overlay uniquement mobile
+  if (!isTouchDevice()) return;
+
   // on utilise un input DOM “fantôme” pour openOpOverlay (il a besoin d’un inputEl)
   const ghost = document.createElement("input");
   ghost.type = "text";
