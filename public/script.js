@@ -5706,14 +5706,14 @@ if (cancelBtn) {
     // fermeture modale
     closeArtModal();
   });
+}
 
-  function isTouchDevice() {
+function isTouchDevice() {
   return (
     ("ontouchstart" in window) ||
     (navigator.maxTouchPoints > 0) ||
     window.matchMedia("(pointer: coarse)").matches
   );
-}
 
 
   function buildOverlaySearchItems() {
@@ -5817,29 +5817,23 @@ function openOpFor(key, title, hint) {
 
 // ✅ clic sur les cases (non finalisées)
 const pgtBox = document.getElementById("artPGTBox");
-if (pgtBox) pgtBox.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité")
-);
+if (pgtBox) pgtBox.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité"));
 
 const prgBox = document.getElementById("artPRGBox");
-if (prgBox) prgBox.addEventListener("click", () => openOpForopenOpFor("prg", "PRG", "PGT + extra × (PGT / PE)")
-);
+if (prgBox) prgBox.addEventListener("click", () => openOpFor("prg", "PRG", "PGT + extra × (PGT / PE)"));
 
 const prBox = document.getElementById("artPRBox");
-if (prBox) prBox.addEventListener("click", () => openOpForopenOpFor("pr", "PR", "PRG / quantité")
-);
+if (prBox) prBox.addEventListener("click", () => openOpFor("pr", "PR", "PRG / quantité"));
 
-// ✅ bouton Modifier (finalisées)
 const pgtMod = document.getElementById("artPGTModifyOp");
-if (pgtMod) pgtMod.addEventListener("click", () => openOpForopenOpFor("pgt", "PGT", "PGU × quantité")
-);
+if (pgtMod) pgtMod.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité"));
 
 const prgMod = document.getElementById("artPRGModifyOp");
-if (prgMod) prgMod.addEventListener("click", () => openOpForopenOpFor("prg", "PRG", "PGT + extra × (PGT / PE)")
-);
+if (prgMod) prgMod.addEventListener("click", () => openOpFor("prg", "PRG", "PGT + extra × (PGT / PE)"));
 
 const prMod = document.getElementById("artPRModifyOp");
-if (prMod) prMod.addEventListener("click", () => openOpForopenOpFor("pr", "PR", "PRG / quantité")
-);
+if (prMod) prMod.addEventListener("click", () => openOpFor("pr", "PR", "PRG / quantité"));
+
 
 }
 
