@@ -5239,27 +5239,21 @@ function renderBuyArticlesPage(isoDate) {
 
         <div class="label">Prix de gros total (PGT)</div>
         <div>
-          <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-            (PGU x quantité)
-          </div>
+          
           <input id="artPGT" class="input" autocomplete="off" value="${escapeAttr(existing?.pgt || "")}"/>
           <div id="artPGTErr" class="cat-err" style="display:none;"></div>
         </div>
 
         <div class="label">Prix de revient global (PRG)</div>
         <div>
-          <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-            (PGT + extra x (PGT / PE))
-          </div>
+          
           <input id="artPRG" class="input" autocomplete="off" value="${escapeAttr(existing?.prg || "")}"/>
           <div id="artPRGErr" class="cat-err" style="display:none;"></div>
         </div>
 
         <div class="label">Prix de revient (PR)</div>
         <div>
-          <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-            (PRG / quantité)
-          </div>
+          
           <input id="artPR" class="input" autocomplete="off" value="${escapeAttr(existing?.pr || "")}"/>
           <div id="artPRErr" class="cat-err" style="display:none;"></div>
         </div>
@@ -5463,10 +5457,12 @@ function renderOpRow({ key, finalizedKey, resultKey, errKey, label, hint, boxId,
 
       if (!isFinal) {
     const posed = (typeof isOperationPosed === "function") ? isOperationPosed(raw) : false;
-    const hintHtml = hint ? `<span style="opacity:.85; font-weight:900;"> ${escapeHtml(hint)}</span>` : ``;
+    
+
 
     return `
-      <div class="label">${label}${hintHtml}</div>
+      <div class="label">${label}</div>
+
 
       <div>
         <div class="art-inline-actions">
