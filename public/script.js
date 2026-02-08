@@ -5672,13 +5672,15 @@ function bindOneSimpleNum({ key, finalizedKey, inputId, validateId, modifyId }) 
 }
 
 function bindArtModalHandlers() {
-  // Nom / Code (handlers simples pour conserver le texte)
+  // Nom / Code
   const nameEl = document.getElementById("artName");
   const codeEl = document.getElementById("artCode");
+
   if (nameEl) nameEl.addEventListener("input", async () => {
     draft.name = nameEl.value;
     await safePersistNow();
   });
+
   if (codeEl) codeEl.addEventListener("input", async () => {
     draft.code = codeEl.value;
     await safePersistNow();
@@ -5690,165 +5692,148 @@ function bindArtModalHandlers() {
   bindOneSimpleNum({ key:"pe",    finalizedKey:"peFinalized",    inputId:"artPE",    validateId:"artPEValidate",    modifyId:"artPEModify" });
   bindOneSimpleNum({ key:"pgu",   finalizedKey:"pguFinalized",   inputId:"artPGU",   validateId:"artPGUValidate",   modifyId:"artPGUModify" });
 
-  // boutons bas modale (si présents)
+  // bouton Annuler
   const cancelBtn = document.getElementById("artCancelBtn");
-if (cancelBtn) {
-  cancelBtn.addEventListener("click", async () => {
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", async () => {
+      if (buy.articleDraftByIso && buy.articleDraftByIso[isoDate]) {
+        delete buy.articleDraftByIso[isoDate];
+      }
+      await safePersistNow();
+      closeArtModal();
+    });
+  }
 
-    // ✅ suppression complète du draft article
-    if (buy.articleDraftByIso && buy.articleDraftByIso[isoDate]) {
-      delete buy.articleDraftByIso[isoDate];
+  // ✅ 1) isTouchDevice (bien fermé)
+  function isTouchDevice() {
+    return (
+      ("ontouchstart" in window) ||
+      (navigator.maxTouchPoints > 0) ||
+      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
+    );
+  }
+
+  // ✅ 2) buildOverlaySearchItems
+  function buildOverlaySearchItems() {
+    const items = [];
+    if (draft.qtyFinalized) items.push({ key:"quantite", label:"Quantité", valueText: formatWhiteNumber(draft.qty || "0") });
+    if (draft.extraFinalized) items.push({ key:"extra", label:"Extra", valueText: formatWhiteNumber(draft.extra || "0") });
+    if (draft.peFinalized) items.push({ key:"pe", label:"PE", valueText: formatWhiteNumber(draft.pe || "0") });
+    if (draft.pguFinalized) items.push({ key:"pgu", label:"PGU", valueText: formatWhiteNumber(draft.pgu || "0") });
+    return items;
+  }
+
+  // ✅ 3) validateOpField
+  async function validateOpField({ key, finalizedKey, resultKey, errKey, nextKey }) {
+    const raw = String(draft[key] || "").trim();
+
+    if (!raw) {
+      draft[key] = "";
+      draft[finalizedKey] = false;
+      draft[resultKey] = null;
+      draft[errKey] = "";
+      await safePersistNow();
+      rerenderArtModalBody();
+      return;
     }
 
-    // ✅ persistance immédiate (effacé même après refresh)
-    await safePersistNow();
-
-    // fermeture modale
-    closeArtModal();
-  });
-}
-
-function isTouchDevice() {
-  return (
-    ("ontouchstart" in window) ||
-    (navigator.maxTouchPoints > 0) ||
-    window.matchMedia("(pointer: coarse)").matches
-  );
-
-
-
-  function buildOverlaySearchItems() {
-  const items = [];
-  if (draft.qtyFinalized) items.push({ key:"quantite", label:"Quantité", valueText: formatWhiteNumber(draft.qty || "0") });
-  if (draft.extraFinalized) items.push({ key:"extra", label:"Extra", valueText: formatWhiteNumber(draft.extra || "0") });
-  if (draft.peFinalized) items.push({ key:"pe", label:"PE", valueText: formatWhiteNumber(draft.pe || "0") });
-  if (draft.pguFinalized) items.push({ key:"pgu", label:"PGU", valueText: formatWhiteNumber(draft.pgu || "0") });
-  return items;
-}
-
-async function validateOpField({ key, finalizedKey, resultKey, errKey, nextKey }) {
-  const raw = String(draft[key] || "").trim();
-
-  // ✅ suppression définitive si vide
-  if (!raw) {
-    draft[key] = "";
-    draft[finalizedKey] = false;
-    draft[resultKey] = null;
-    draft[errKey] = "";
-    await safePersistNow();
-    rerenderArtModalBody();
-    return;
-  }
-
-  // ✅ caractères autorisés + évaluation
-  if (typeof charsAllowedForOpInput === "function" && !charsAllowedForOpInput(raw)) {
-    draft[errKey] = "Caractères invalides.";
-    draft[finalizedKey] = false;
-    await safePersistNow();
-    rerenderArtModalBody();
-    return;
-  }
-
-  const res = (typeof evalOperation === "function") ? evalOperation(raw) : null;
-  if (res === null) {
-    draft[errKey] = "Opération invalide.";
-    draft[finalizedKey] = false;
-    await safePersistNow();
-    rerenderArtModalBody();
-    return;
-  }
-
-  draft[errKey] = "";
-  draft[resultKey] = res;
-  draft[finalizedKey] = true;
-
-  // ✅ bascule du résultat dans le prochain (sauf PR)
-  if (nextKey && !draft[nextKey]) {
-    draft[nextKey] = formatResultNumber(res); // ex "1 234,56" (avec espaces)
-  }
-
-  await safePersistNow();
-  rerenderArtModalBody();
-}
-
-function openOpFor(key, title, hint) {
-
-    // ✅ overlay uniquement mobile
-  if (!isTouchDevice()) return;
-
-  // on utilise un input DOM “fantôme” pour openOpOverlay (il a besoin d’un inputEl)
-  const ghost = document.createElement("input");
-  ghost.type = "text";
-  ghost.value = String(draft[key] || "");
-  document.body.appendChild(ghost);
-  ghost.style.position = "fixed";
-  ghost.style.opacity = "0";
-  ghost.style.pointerEvents = "none";
-  ghost.style.height = "0";
-  ghost.style.width = "0";
-
-  openOpOverlay({
-    inputEl: ghost,
-    title,
-    initialValue: String(draft[key] || ""),
-    placeholder: "(poser une opération)",
-    searchItems: buildOverlaySearchItems(),
-    onCancel: () => {
-      // on récupère l’état tapé au cas où (optionnel)
-      draft[key] = String(ghost.value || "");
-      ghost.remove();
-      safePersistNow();
+    if (typeof charsAllowedForOpInput === "function" && !charsAllowedForOpInput(raw)) {
+      draft[errKey] = "Caractères invalides.";
+      draft[finalizedKey] = false;
+      await safePersistNow();
       rerenderArtModalBody();
-    },
-    onOk: async () => {
-      // ✅ OK = validation
-      draft[key] = String(ghost.value || "");
-      ghost.remove();
+      return;
+    }
 
-      if (key === "pgt") {
-        await validateOpField({ key:"pgt", finalizedKey:"pgtFinalized", resultKey:"pgtResult", errKey:"pgtErr", nextKey:"prg" });
-      } else if (key === "prg") {
-        await validateOpField({ key:"prg", finalizedKey:"prgFinalized", resultKey:"prgResult", errKey:"prgErr", nextKey:"pr" });
-      } else if (key === "pr") {
-        await validateOpField({ key:"pr", finalizedKey:"prFinalized", resultKey:"prResult", errKey:"prErr", nextKey:null });
-      }
-    },
-  });
-}
+    const res = (typeof evalOperation === "function") ? evalOperation(raw) : null;
+    if (res === null) {
+      draft[errKey] = "Opération invalide.";
+      draft[finalizedKey] = false;
+      await safePersistNow();
+      rerenderArtModalBody();
+      return;
+    }
 
-// ✅ clic sur les cases (non finalisées)
-const pgtBox = document.getElementById("artPGTBox");
-if (pgtBox) pgtBox.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité"));
+    draft[errKey] = "";
+    draft[resultKey] = res;
+    draft[finalizedKey] = true;
 
-const prgBox = document.getElementById("artPRGBox");
-if (prgBox) prgBox.addEventListener("click", () => openOpFor("prg", "PRG", "PGT + extra × (PGT / PE)"));
+    if (nextKey && !draft[nextKey]) {
+      draft[nextKey] = formatResultNumber(res);
+    }
 
-const prBox = document.getElementById("artPRBox");
-if (prBox) prBox.addEventListener("click", () => openOpFor("pr", "PR", "PRG / quantité"));
+    await safePersistNow();
+    rerenderArtModalBody();
+  }
 
-const pgtMod = document.getElementById("artPGTModifyOp");
-if (pgtMod) pgtMod.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité"));
+  // ✅ 4) openOpFor
+  function openOpFor(key, title, hint) {
+    if (!isTouchDevice()) return;
 
-const prgMod = document.getElementById("artPRGModifyOp");
-if (prgMod) prgMod.addEventListener("click", () => openOpFor("prg", "PRG", "PGT + extra × (PGT / PE)"));
+    const ghost = document.createElement("input");
+    ghost.type = "text";
+    ghost.value = String(draft[key] || "");
+    document.body.appendChild(ghost);
+    ghost.style.position = "fixed";
+    ghost.style.opacity = "0";
+    ghost.style.pointerEvents = "none";
+    ghost.style.height = "0";
+    ghost.style.width = "0";
 
-const prMod = document.getElementById("artPRModifyOp");
-if (prMod) prMod.addEventListener("click", () => openOpFor("pr", "PR", "PRG / quantité"));
+    openOpOverlay({
+      inputEl: ghost,
+      title,
+      initialValue: String(draft[key] || ""),
+      placeholder: "(poser une opération)",
+      searchItems: buildOverlaySearchItems(),
+      onCancel: () => {
+        draft[key] = String(ghost.value || "");
+        ghost.remove();
+        safePersistNow();
+        rerenderArtModalBody();
+      },
+      onOk: async () => {
+        draft[key] = String(ghost.value || "");
+        ghost.remove();
 
+        if (key === "pgt") {
+          await validateOpField({ key:"pgt", finalizedKey:"pgtFinalized", resultKey:"pgtResult", errKey:"pgtErr", nextKey:"prg" });
+        } else if (key === "prg") {
+          await validateOpField({ key:"prg", finalizedKey:"prgFinalized", resultKey:"prgResult", errKey:"prgErr", nextKey:"pr" });
+        } else if (key === "pr") {
+          await validateOpField({ key:"pr", finalizedKey:"prFinalized", resultKey:"prResult", errKey:"prErr", nextKey:null });
+        }
+      },
+    });
+  }
 
-}
+  // binds overlay (mobile)
+  const pgtBox = document.getElementById("artPGTBox");
+  if (pgtBox) pgtBox.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité"));
 
-  // =========================
-  // ✅ PC: input direct pour PGT/PRG/PR
-  // =========================
+  const prgBox = document.getElementById("artPRGBox");
+  if (prgBox) prgBox.addEventListener("click", () => openOpFor("prg", "PRG", "PGT + extra × (PGT / PE)"));
+
+  const prBox = document.getElementById("artPRBox");
+  if (prBox) prBox.addEventListener("click", () => openOpFor("pr", "PR", "PRG / quantité"));
+
+  const pgtMod = document.getElementById("artPGTModifyOp");
+  if (pgtMod) pgtMod.addEventListener("click", () => openOpFor("pgt", "PGT", "PGU × quantité"));
+
+  const prgMod = document.getElementById("artPRGModifyOp");
+  if (prgMod) prgMod.addEventListener("click", () => openOpFor("prg", "PRG", "PGT + extra × (PGT / PE)"));
+
+  const prMod = document.getElementById("artPRModifyOp");
+  if (prMod) prMod.addEventListener("click", () => openOpFor("pr", "PR", "PRG / quantité"));
+
+  // PC inputs
   function bindOpInputPc(key, boxId) {
     const input = document.getElementById(boxId + "Input");
     const vBtn = document.getElementById(boxId + "Validate");
     if (!input || !vBtn) return;
 
-    // active/désactive le bouton en live
     input.addEventListener("input", async () => {
-      draft[key] = input.value;               // on garde les espaces
+      draft[key] = input.value;
       draft[key + "Finalized"] = false;
 
       const posed = (typeof isOperationPosed === "function") ? isOperationPosed(draft[key]) : false;
@@ -5859,7 +5844,6 @@ if (prMod) prMod.addEventListener("click", () => openOpFor("pr", "PR", "PRG / qu
       await safePersistNow();
     });
 
-    // Enter = valider
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -5871,9 +5855,8 @@ if (prMod) prMod.addEventListener("click", () => openOpFor("pr", "PR", "PRG / qu
   bindOpInputPc("pgt", "artPGTBox");
   bindOpInputPc("prg", "artPRGBox");
   bindOpInputPc("pr",  "artPRBox");
+} // ✅ FIN bindArtModalHandlers()
 
-
-}
 
 // 6) premier rendu body + bind
 rerenderArtModalBody();
