@@ -5312,16 +5312,26 @@ function formatWhiteNumber(v) {
 
 function digitsCommaOnly(raw) {
   // si tu as déjà filterDigitsComma global, on l’utilise
-  if (typeof filterDigitsComma === "function") return filterDigitsComma(raw);
+  // ⚠️ IMPORTANT : si ton filterDigitsComma supprime les espaces, on ne l'utilise PAS ici.
   let s = String(raw || "");
   s = s.replace(/\./g, ",");
-  let cleaned = s.replace(/[^0-9,]/g, "");
+  // ✅ autorise chiffres, virgule, espaces
+  let cleaned = s.replace(/[^0-9,\s]/g, "");
+
+  // ✅ une seule virgule
   const firstComma = cleaned.indexOf(",");
   if (firstComma !== -1) {
-    cleaned = cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, "");
+    cleaned =
+      cleaned.slice(0, firstComma + 1) +
+      cleaned.slice(firstComma + 1).replace(/,/g, "");
   }
+
+  // ✅ compacte les espaces (optionnel mais propre)
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+
   return cleaned;
 }
+
 
 // 2) état "draft" de la modale (persisté en DB pour survivre au refresh)
 // On stocke ça dans buy.articleDraftByIso[isoDate] (n'apparaît PAS dans la liste tant que OK n'a pas créé l'article)
