@@ -1114,20 +1114,25 @@ function buildCalcPadInto(containerEl, inputEl, { onOk, onCancel } = {}) {
   const portrait = !isLandscape();
 
   const rowsPortrait = [
-    ["7","8","9","+","-"],
-    ["4","5","6","×","÷"],
-    ["1","2","3",".",","],
-    ["0","(",")","⌫","CANCEL"],
-    ["OK"]
-  ];
+  ["7","8","9","+","-"],
+  ["4","5","6","×","÷"],
+  ["1","2","3",".",","],
+  ["0","(",")","⌫","CANCEL"],
+  ["␣"],     // ✅ touche espace AU-DESSUS de OK
+  ["OK"]
+];
+
 
   const rowsLandscape = [
-    ["7","8","9","+","-"],
-    ["4","5","6","×","÷"],
-    ["1","2","3",".",","],
-    ["0","(",")","^","x²"],
-    ["π","⌫","CANCEL","OK"]
-  ];
+  ["7","8","9","+","-"],
+  ["4","5","6","×","÷"],
+  ["1","2","3",".",","],
+  ["0","(",")","^","x²"],
+  ["π","⌫","CANCEL"],  // ✅ OK retiré de cette ligne
+  ["␣"],              // ✅ espace
+  ["OK"]              // ✅ OK dessous
+];
+
 
   const rows = portrait ? rowsPortrait : rowsLandscape;
 
@@ -1184,7 +1189,8 @@ if (key === "OK") {
   if (typeof onOk === "function") onOk();
   return;
 }
-
+      
+        if (key === "␣") return insertAtCursor(" ");  
         if (key === "×") return insertAtCursor("*");
         if (key === "÷") return insertAtCursor("/");
         if (key === "π") return insertAtCursor("3.1415926535");
