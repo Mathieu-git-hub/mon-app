@@ -5520,10 +5520,22 @@ function bindArtModalHandlers() {
 
   // boutons bas modale (si présents)
   const cancelBtn = document.getElementById("artCancelBtn");
-  if (cancelBtn) cancelBtn.addEventListener("click", () => {
-    const bd = document.getElementById("artModalBackdrop");
-    if (bd) bd.remove();
+if (cancelBtn) {
+  cancelBtn.addEventListener("click", async () => {
+
+    // ✅ suppression complète du draft article
+    if (buy.articleDraftByIso && buy.articleDraftByIso[isoDate]) {
+      delete buy.articleDraftByIso[isoDate];
+    }
+
+    // ✅ persistance immédiate (effacé même après refresh)
+    await safePersistNow();
+
+    // fermeture modale
+    closeArtModal();
   });
+}
+
 }
 
 // 6) premier rendu body + bind
