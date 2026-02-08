@@ -5464,18 +5464,35 @@ function renderOpRow({ key, finalizedKey, resultKey, errKey, label, hint, boxId,
   const raw = String(draft[key] || "");
   const err = String(draft[errKey] || "");
 
-  if (!isFinal) {
+    if (!isFinal) {
+    const posed = (typeof isOperationPosed === "function") ? isOperationPosed(raw) : false;
+
     return `
       <div class="label">${label}</div>
       <div>
         ${hint ? `<div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">${hint}</div>` : ``}
-        <div id="${boxId}" class="input" style="cursor:pointer; user-select:none;">
-          ${raw ? escapeHtml(raw) : `<span style="opacity:.65; font-weight:800;">(poser l’opération…)</span>`}
+
+        <div class="art-inline-actions">
+          <!-- ✅ case d'opération (click mobile => overlay, PC => input direct plus bas, voir point 3) -->
+          <div id="${boxId}" class="input" style="cursor:pointer; user-select:none; flex:1;">
+            ${raw ? escapeHtml(raw) : `<span style="opacity:.65; font-weight:800;">(poser l’opération…)</span>`}
+          </div>
+
+          <!-- ✅ bouton Valider à droite -->
+          <button
+            id="${boxId}Validate"
+            class="art-mini-btn art-mini-validate"
+            type="button"
+            ${posed ? "" : "disabled"}
+            style="${posed ? "background:#1e5eff; opacity:1;" : ""}"
+          >Valider</button>
         </div>
+
         ${err ? `<div class="cat-err" style="display:block;">${escapeHtml(err)}</div>` : ``}
       </div>
     `;
   }
+
 
   const opDisplay = formatOpDisplay(raw);
   const res = draft[resultKey];
