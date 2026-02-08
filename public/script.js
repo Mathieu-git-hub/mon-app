@@ -929,16 +929,8 @@ function ensureOpOverlayStyles() {
 
   const overlayTitle = hint ? `${title} (${hint})` : title;
 
+function openOpOverlay({ inputEl, title, hint = "", initialValue, placeholder, searchItems, onCancel, onOk }) {
 
-function openOpOverlay({
-  inputEl,
-  title: overlayTitle,
-  initialValue = "",
-  placeholder = "",
-  searchItems = [],        // ✅ AJOUT : liste { key, label, valueText }
-  onCancel = () => {},
-  onOk = () => {},
-} = {}) {
   if (!inputEl) return;
 
   ensureOpOverlayStyles();
@@ -5783,6 +5775,7 @@ function bindArtModalHandlers() {
     openOpOverlay({
       inputEl: ghost,
       title,
+      hint,
       initialValue: String(draft[key] || ""),
       placeholder: "(poser une opération)",
       searchItems: buildOverlaySearchItems(),
