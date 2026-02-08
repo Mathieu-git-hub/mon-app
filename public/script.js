@@ -5464,21 +5464,37 @@ function renderOpRow({ key, finalizedKey, resultKey, errKey, label, hint, boxId,
   const raw = String(draft[key] || "");
   const err = String(draft[errKey] || "");
 
-    if (!isFinal) {
+      if (!isFinal) {
     const posed = (typeof isOperationPosed === "function") ? isOperationPosed(raw) : false;
+    const hintHtml = hint ? `<span style="opacity:.85; font-weight:900;"> ${escapeHtml(hint)}</span>` : ``;
 
     return `
-      <div class="label">${label}</div>
+      <div class="label">${label}${hintHtml}</div>
+
       <div>
-        ${hint ? `<div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">${hint}</div>` : ``}
-
         <div class="art-inline-actions">
-          <!-- ✅ case d'opération (click mobile => overlay, PC => input direct plus bas, voir point 3) -->
-          <div id="${boxId}" class="input" style="cursor:pointer; user-select:none; flex:1;">
-            ${raw ? escapeHtml(raw) : `<span style="opacity:.65; font-weight:800;">(poser l’opération…)</span>`}
-          </div>
 
-          <!-- ✅ bouton Valider à droite -->
+          <!-- ✅ PC: input direct / Mobile: case cliquable -->
+          ${
+            // si écran large (= PC), on met un input
+            !isMobileNarrow()
+              ? `
+                <input
+                  id="${boxId}Input"
+                  class="input"
+                  autocomplete="off"
+                  value="${escapeAttr(raw)}"
+                  placeholder="(poser l’opération…)"
+                  style="flex:1;"
+                />
+              `
+              : `
+                <div id="${boxId}" class="input" style="cursor:pointer; user-select:none; flex:1;">
+                  ${raw ? escapeHtml(raw) : `<span style="opacity:.65; font-weight:800;">(poser l’opération…)</span>`}
+                </div>
+              `
+          }
+
           <button
             id="${boxId}Validate"
             class="art-mini-btn art-mini-validate"
@@ -5492,6 +5508,7 @@ function renderOpRow({ key, finalizedKey, resultKey, errKey, label, hint, boxId,
       </div>
     `;
   }
+
 
 
   const opDisplay = formatOpDisplay(raw);
