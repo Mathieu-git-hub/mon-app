@@ -814,7 +814,7 @@ function ensureOpOverlayStyles() {
     .op-overlay {
       position: fixed;
       inset: 0;
-      z-index: 10000;
+      z-index: 30000;
       background: #000;
       color: #fff; /* ✅ AJOUT : rend le titre visible */
       display: flex;
@@ -892,7 +892,7 @@ function ensureOpOverlayStyles() {
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.12);
       background: rgba(18,18,18,0.98);
-      z-index: 10001;
+      z-index: 30001;
     }
 
     .op-suggest-item{
