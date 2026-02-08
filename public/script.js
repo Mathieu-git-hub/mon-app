@@ -4684,35 +4684,49 @@ function renderBuyCategoriesPage(isoDate) {
 
 
     function setErr(elInput, elMsg, msg) {
-      if (!elInput || !elMsg) return;
-      if (!msg) {
-        elInput.classList.remove("error");
-        elMsg.style.display = "none";
-        elMsg.textContent = "";
-      } else {
-        elInput.classList.add("error");
-        elMsg.style.display = "";
-        elMsg.textContent = msg;
-      }
-    }
+  if (!elInput || !elMsg) return;
+  if (!msg) {
+    elInput.classList.remove("error");
+    elMsg.style.display = "none";
+    elMsg.textContent = "";
+  } else {
+    elInput.classList.add("error");
+    elMsg.style.display = "";
+    elMsg.textContent = msg;
+  }
+}
 
-    function syncOkState() {
-      const name = (nameEl.value || "").trim();
-      const code = (codeEl.value || "").trim();
+function syncOkState() {
+  const { nameEl, codeEl, nameErr, codeErr, okBtn } = getArtEls();
+  if (!nameEl || !codeEl || !okBtn) return;
 
-      let ok = name.length > 0 && code.length > 0;
+  const name = (nameEl.value || "").trim();
+  const code = (codeEl.value || "").trim();
 
-      // unicité
-      const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
-      const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
+  // ✅ conditions de base (texte)
+  let ok =
+    name.length > 0 &&
+    code.length > 0 &&
+    allFieldsValidated();
 
-      
+  // ✅ doublons (uniquement visibles après clic sur OK)
+  const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
+  const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
 
-      if (nameTaken || codeOwner) ok = false;
+  if (showUniqErrors) {
+    setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
+    setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
+  } else {
+    setErr(nameEl, nameErr, "");
+    setErr(codeEl, codeErr, "");
+  }
 
-      okBtn.disabled = !ok;
-      okBtn.classList.toggle("enabled", ok);
-    }
+  if (nameTaken || codeOwner) ok = false;
+
+  okBtn.disabled = !ok;
+  okBtn.classList.toggle("enabled", ok);
+}
+
 
     if (nameEl) nameEl.addEventListener("input", syncOkState);
     if (codeEl) codeEl.addEventListener("input", syncOkState);
@@ -5275,12 +5289,71 @@ function renderBuyArticlesPage(isoDate) {
 
     document.body.appendChild(bd);
 
-    const nameEl = document.getElementById("artName");
-    const codeEl = document.getElementById("artCode");
-    const nameErr = document.getElementById("artNameErr");
-    const codeErr = document.getElementById("artCodeErr");
-    const okBtn = document.getElementById("artOkBtn");
-    const cancelBtn = document.getElementById("artCancelBtn");
+    document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#artOkBtn");
+  if (!btn) return;
+
+  showUniqErrors = true;
+  syncOkState(); // affiche les erreurs si doublon
+
+  const { nameEl, codeEl } = getArtEls();
+  if (!nameEl || !codeEl) return;
+
+  const name = (nameEl.value || "").trim();
+  const code = (codeEl.value || "").trim();
+
+  if (!name || !code) return;
+  if (!allFieldsValidated()) return;
+
+  const nameTaken = isNameTaken(name, existing?.id || null);
+  const codeOwner = findCodeOwner(code, existing?.id || null);
+  if (nameTaken || codeOwner) return;
+
+  // ... ensuite ton CREATE / EDIT comme tu l'as déjà
+}, true);
+
+
+    let showUniqErrors = false;
+
+// récupère toujours les éléments ACTUELS (après rerender)
+function getArtEls() {
+  return {
+    nameEl: document.getElementById("artName"),
+    codeEl: document.getElementById("artCode"),
+    nameErr: document.getElementById("artNameErr"),
+    codeErr: document.getElementById("artCodeErr"),
+    okBtn: document.getElementById("artOkBtn"),
+  };
+}
+
+function allFieldsValidated() {
+  return (
+    !!draft.qtyFinalized &&
+    !!draft.extraFinalized &&
+    !!draft.peFinalized &&
+    !!draft.pguFinalized &&
+    !!draft.pgtFinalized &&
+    !!draft.prgFinalized &&
+    !!draft.prFinalized
+  );
+}
+
+function syncOkState() {
+  const { nameEl, codeEl, nameErr, codeErr, okBtn } = getArtEls();
+  if (!nameEl || !codeEl || !okBtn) return;
+
+  const name = (nameEl.value || "").trim();
+  const code = (codeEl.value || "").trim();
+
+  let ok =
+    name.length > 0 &&
+    code.length > 0 &&
+    allFieldsValidated();
+
+  okBtn.disabled = !ok;
+  okBtn.classList.toggle("enabled", ok);
+}
+
 
     // =========================
 // ✅ ARTICLES — VALIDER / MODIFIER (NUMÉRIQUES SIMPLES)
@@ -5581,7 +5654,9 @@ ${renderOpRow({
 
   `;
 
-  bindArtModalHandlers(); // rebind events
+  bindArtModalHandlers();
+syncOkState();
+
 }
 
 
@@ -5668,14 +5743,17 @@ function bindArtModalHandlers() {
   const codeEl = document.getElementById("artCode");
 
   if (nameEl) nameEl.addEventListener("input", async () => {
-    draft.name = nameEl.value;
-    await safePersistNow();
-  });
+  draft.name = nameEl.value;
+  await safePersistNow();
+  syncOkState();
+});
 
-  if (codeEl) codeEl.addEventListener("input", async () => {
-    draft.code = codeEl.value;
-    await safePersistNow();
-  });
+if (codeEl) codeEl.addEventListener("input", async () => {
+  draft.code = codeEl.value;
+  await safePersistNow();
+  syncOkState();
+});
+
 
   // champs num simples
   bindOneSimpleNum({ key:"qty",   finalizedKey:"qtyFinalized",   inputId:"artQty",   validateId:"artQtyValidate",   modifyId:"artQtyModify" });
@@ -5854,119 +5932,17 @@ function bindArtModalHandlers() {
 rerenderArtModalBody();
 
 
-    let showUniqErrors = false; // ✅ doublons visibles seulement après OK
 
-    function setErr(elInput, elMsg, msg) {
-      if (!elInput || !elMsg) return;
-      if (!msg) {
-        elInput.classList.remove("error");
-        elMsg.style.display = "none";
-        elMsg.textContent = "";
-      } else {
-        elInput.classList.add("error");
-        elMsg.style.display = "";
-        elMsg.textContent = msg;
-      }
-    }
 
-    function syncOkState() {
-      const name = (nameEl.value || "").trim();
-      const code = (codeEl.value || "").trim();
+    
 
-      let ok = name.length > 0 && code.length > 0;
+    const { nameEl } = getArtEls();
+if (nameEl) nameEl.focus();
+syncOkState();
 
-      const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
-      const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
+} // ✅ FIN openArtModal()
 
-      if (showUniqErrors) {
-        setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
-        setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
-      } else {
-        setErr(nameEl, nameErr, "");
-        setErr(codeEl, codeErr, "");
-      }
 
-      if (nameTaken || codeOwner) ok = false;
-
-      okBtn.disabled = !ok;
-      okBtn.classList.toggle("enabled", ok);
-    }
-
-    if (nameEl) nameEl.addEventListener("input", syncOkState);
-    if (codeEl) codeEl.addEventListener("input", syncOkState);
-    if (cancelBtn) cancelBtn.addEventListener("click", closeArtModal);
-
-    if (okBtn) {
-      okBtn.addEventListener("click", async () => {
-        showUniqErrors = true;
-
-        const name = (nameEl.value || "").trim();
-        const code = (codeEl.value || "").trim();
-
-        if (!name || !code) return;
-
-        const nameTaken = isNameTaken(name, existing?.id || null);
-        const codeOwner = findCodeOwner(code, existing?.id || null);
-
-        if (nameTaken || codeOwner) {
-          syncOkState();
-          return;
-        }
-
-        // ✅ CREATE
-        if (mode === "create") {
-          const id = "art_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
-          buy.articles = buy.articles || [];
-          buy.articles.unshift({
-            id,
-            name,
-            code,
-            createdAtIso: isoDate,
-            createdAtTs: Date.now(),
-            updatedAtTs: Date.now(),
-            deletedAtIso: null,
-            deletedAtTs: null,
-
-            // champs (on branchera validation/opérations après)
-            qty: String(draft.qty || "").trim(),
-extra: String(draft.extra || "").trim(),
-pe: String(draft.pe || "").trim(),
-pgu: String(draft.pgu || "").trim(),
-
-pgt: String(draft.pgt || "").trim(),
-pgtResult: draft.pgtResult,
-prg: String(draft.prg || "").trim(),
-prgResult: draft.prgResult,
-pr: String(draft.pr || "").trim(),
-prResult: draft.prResult,
-
-          });
-
-          // ✅ 2e cercle => vert (on affichera ensuite)
-          markBuyTouchedAndPersist();
-          await safePersistNow();
-
-          closeArtModal();
-          renderBuyArticlesPage(isoDate);
-          return;
-        }
-
-        // ✅ EDIT (provisoire)
-        if (mode === "edit" && existing) {
-          existing.name = name;
-          existing.code = code;
-          existing.updatedAtTs = Date.now();
-          markBuyTouchedAndPersist();
-          await safePersistNow();
-          closeArtModal();
-          renderBuyArticlesPage(isoDate);
-        }
-      });
-    }
-
-    if (nameEl) nameEl.focus();
-    syncOkState();
-  }
 
   // =========================
   // ✅ MODAL SUPPRESSION (article)
