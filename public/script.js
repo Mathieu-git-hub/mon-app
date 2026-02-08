@@ -927,7 +927,7 @@ function ensureOpOverlayStyles() {
   document.head.appendChild(st);
 }
 
-  const overlayTitle = hint ? `${title} (${hint})` : title;
+
 
 function openOpOverlay({ inputEl, title, hint = "", initialValue, placeholder, searchItems, onCancel, onOk }) {
 
@@ -935,6 +935,8 @@ function openOpOverlay({ inputEl, title, hint = "", initialValue, placeholder, s
 
   ensureOpOverlayStyles();
   ensureCalcPadStyles();
+
+  const overlayTitle = hint ? `${title} (${hint})` : title;
 
   const old = document.getElementById("opOverlay");
   if (old) old.remove();
@@ -945,7 +947,8 @@ function openOpOverlay({ inputEl, title, hint = "", initialValue, placeholder, s
 
   overlay.innerHTML = `
     <div class="top">
-      ${title ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(title)}</div>` : ``}
+      ${overlayTitle ? `<div style="font-weight:900; opacity:.9; margin-bottom:8px;">${escapeHtml(overlayTitle)}</div>` : ``}
+
 
       <input id="opOverlayInput" class="input"
         inputmode="none"
