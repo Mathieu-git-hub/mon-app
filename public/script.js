@@ -5390,11 +5390,37 @@ function rerenderArtModalBody() {
     ${renderSimpleNumRow({ key:"pe",    finalizedKey:"peFinalized",    label:"Pris d’ensemble (PE)", inputId:"artPE", validateId:"artPEValidate", modifyId:"artPEModify" })}
     ${renderSimpleNumRow({ key:"pgu",   finalizedKey:"pguFinalized",   label:"Prix de gros unitaire (PGU)", inputId:"artPGU", validateId:"artPGUValidate", modifyId:"artPGUModify" })}
 
-    <!-- opérations PGT / PRG / PR seront ajoutées juste après, étape suivante -->
+    <div class="label">Prix de gros total (PGT)</div>
+    <div>
+      <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+        (PGU x quantité)
+      </div>
+      <input id="artPGT" class="input" autocomplete="off" value="${escapeAttr(draft.pgt || "")}"/>
+      <div id="artPGTErr" class="cat-err" style="display:none;"></div>
+    </div>
+
+    <div class="label">Prix de revient global (PRG)</div>
+    <div>
+      <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+        (PGT + extra x (PGT / PE))
+      </div>
+      <input id="artPRG" class="input" autocomplete="off" value="${escapeAttr(draft.prg || "")}"/>
+      <div id="artPRGErr" class="cat-err" style="display:none;"></div>
+    </div>
+
+    <div class="label">Prix de revient (PR)</div>
+    <div>
+      <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+        (PRG / quantité)
+      </div>
+      <input id="artPR" class="input" autocomplete="off" value="${escapeAttr(draft.pr || "")}"/>
+      <div id="artPRErr" class="cat-err" style="display:none;"></div>
+    </div>
   `;
 
   bindArtModalHandlers(); // rebind events
 }
+
 
 // 5) bind handlers (input + validate + modify + effacement)
 function bindOneSimpleNum({ key, finalizedKey, inputId, validateId, modifyId }) {
