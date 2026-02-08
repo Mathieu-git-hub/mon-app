@@ -5188,88 +5188,89 @@ function renderBuyArticlesPage(isoDate) {
     bd.className = "cat-modal-backdrop";
 
     bd.innerHTML = `
-      <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Article"
-           style="display:flex; flex-direction:column; max-height: min(78vh, 560px);">
+  <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Article"
+       style="display:flex; flex-direction:column; max-height: min(78vh, 560px);">
 
-        <div class="cat-modal-title" style="flex:0 0 auto;">
-          ${mode === "create" ? "Nouvel article" : "Modifier l’article"}
+    <div class="cat-modal-title" style="flex:0 0 auto;">
+      ${mode === "create" ? "Nouvel article" : "Modifier l’article"}
+    </div>
+
+    <div id="artModalBody" style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+      <div id="artModalGrid" class="cat-modal-grid">
+
+        <div class="label">Nom</div>
+        <div>
+          <input id="artName" class="input" autocomplete="off" value="${escapeAttr(initialName)}"/>
+          <div id="artNameErr" class="cat-err" style="display:none;"></div>
         </div>
 
-        <div id="artModalBody" style="flex:1 1 auto; overflow:auto; padding-right:6px;">
-          <div class="cat-modal-grid">
+        <div class="label">Code</div>
+        <div>
+          <input id="artCode" class="input" autocomplete="off" value="${escapeAttr(initialCode)}"/>
+          <div id="artCodeErr" class="cat-err" style="display:none;"></div>
+        </div>
 
-            <div class="label">Nom</div>
-            <div>
-              <input id="artName" class="input" autocomplete="off" value="${escapeAttr(initialName)}"/>
-              <div id="artNameErr" class="cat-err" style="display:none;"></div>
-            </div>
+        <div class="label">Quantité</div>
+        <div>
+          <input id="artQty" class="input" autocomplete="off" value="${escapeAttr(existing?.qty || "")}"/>
+          <div id="artQtyErr" class="cat-err" style="display:none;"></div>
+        </div>
 
-            <div class="label">Code</div>
-            <div>
-              <input id="artCode" class="input" autocomplete="off" value="${escapeAttr(initialCode)}"/>
-              <div id="artCodeErr" class="cat-err" style="display:none;"></div>
-            </div>
+        <div class="label">Extra</div>
+        <div>
+          <input id="artExtra" class="input" autocomplete="off" value="${escapeAttr(existing?.extra || "")}"/>
+          <div id="artExtraErr" class="cat-err" style="display:none;"></div>
+        </div>
 
-            <div class="label">Quantité</div>
-            <div>
-              <input id="artQty" class="input" autocomplete="off" value="${escapeAttr(existing?.qty || "")}"/>
-              <div id="artQtyErr" class="cat-err" style="display:none;"></div>
-            </div>
+        <div class="label">Pris d’ensemble (PE)</div>
+        <div>
+          <input id="artPE" class="input" autocomplete="off" value="${escapeAttr(existing?.pe || "")}"/>
+          <div id="artPEErr" class="cat-err" style="display:none;"></div>
+        </div>
 
-            <div class="label">Extra</div>
-            <div>
-              <input id="artExtra" class="input" autocomplete="off" value="${escapeAttr(existing?.extra || "")}"/>
-              <div id="artExtraErr" class="cat-err" style="display:none;"></div>
-            </div>
+        <div class="label">Prix de gros unitaire (PGU)</div>
+        <div>
+          <input id="artPGU" class="input" autocomplete="off" value="${escapeAttr(existing?.pgu || "")}"/>
+          <div id="artPGUErr" class="cat-err" style="display:none;"></div>
+        </div>
 
-            <div class="label">Pris d’ensemble (PE)</div>
-            <div>
-              <input id="artPE" class="input" autocomplete="off" value="${escapeAttr(existing?.pe || "")}"/>
-              <div id="artPEErr" class="cat-err" style="display:none;"></div>
-            </div>
-
-            <div class="label">Prix de gros unitaire (PGU)</div>
-            <div>
-              <input id="artPGU" class="input" autocomplete="off" value="${escapeAttr(existing?.pgu || "")}"/>
-              <div id="artPGUErr" class="cat-err" style="display:none;"></div>
-            </div>
-
-            <div class="label">Prix de gros total (PGT)</div>
-            <div>
-              <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-                (PGU x quantité)
-              </div>
-              <input id="artPGT" class="input" autocomplete="off" value="${escapeAttr(existing?.pgt || "")}"/>
-              <div id="artPGTErr" class="cat-err" style="display:none;"></div>
-            </div>
-
-            <div class="label">Prix de revient global (PRG)</div>
-            <div>
-              <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-                (PGT + extra x (PGT / PE))
-              </div>
-              <input id="artPRG" class="input" autocomplete="off" value="${escapeAttr(existing?.prg || "")}"/>
-              <div id="artPRGErr" class="cat-err" style="display:none;"></div>
-            </div>
-
-            <div class="label">Prix de revient (PR)</div>
-            <div>
-              <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
-                (PRG / quantité)
-              </div>
-              <input id="artPR" class="input" autocomplete="off" value="${escapeAttr(existing?.pr || "")}"/>
-              <div id="artPRErr" class="cat-err" style="display:none;"></div>
-            </div>
-
+        <div class="label">Prix de gros total (PGT)</div>
+        <div>
+          <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+            (PGU x quantité)
           </div>
+          <input id="artPGT" class="input" autocomplete="off" value="${escapeAttr(existing?.pgt || "")}"/>
+          <div id="artPGTErr" class="cat-err" style="display:none;"></div>
         </div>
 
-        <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
-          <button id="artCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
-          <button id="artOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
+        <div class="label">Prix de revient global (PRG)</div>
+        <div>
+          <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+            (PGT + extra x (PGT / PE))
+          </div>
+          <input id="artPRG" class="input" autocomplete="off" value="${escapeAttr(existing?.prg || "")}"/>
+          <div id="artPRGErr" class="cat-err" style="display:none;"></div>
         </div>
+
+        <div class="label">Prix de revient (PR)</div>
+        <div>
+          <div style="font-size:12px; opacity:.8; font-weight:800; margin:-2px 0 6px 0;">
+            (PRG / quantité)
+          </div>
+          <input id="artPR" class="input" autocomplete="off" value="${escapeAttr(existing?.pr || "")}"/>
+          <div id="artPRErr" class="cat-err" style="display:none;"></div>
+        </div>
+
       </div>
-    `;
+    </div>
+
+    <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
+      <button id="artCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
+      <button id="artOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
+    </div>
+  </div>
+`;
+
 
     bd.addEventListener("click", (e) => {
       if (e.target === bd) closeArtModal();
@@ -5283,6 +5284,222 @@ function renderBuyArticlesPage(isoDate) {
     const codeErr = document.getElementById("artCodeErr");
     const okBtn = document.getElementById("artOkBtn");
     const cancelBtn = document.getElementById("artCancelBtn");
+
+    // =========================
+// ✅ ARTICLES — VALIDER / MODIFIER (NUMÉRIQUES SIMPLES)
+// Quantité / Extra / PE / PGU
+// =========================
+
+// 1) helpers format + filtre (tu as déjà filterDigitsComma et formatInputNumberDisplay côté daily)
+// => ici, on réutilise ton format d'affichage "milliers" via formatInputNumberDisplay si dispo.
+// Sinon fallback: formatCommaNumber(toNumberLoose(...))
+
+function formatWhiteNumber(v) {
+  // v est stocké en string avec virgule possible
+  if (typeof formatInputNumberDisplay === "function") return formatInputNumberDisplay(v || "0");
+  // fallback
+  const n = (typeof toNumberLoose === "function") ? toNumberLoose(v || "0") : Number(String(v||"0").replace(",", "."));
+  if (!Number.isFinite(n)) return String(v || "0");
+  if (typeof formatCommaNumber === "function") return formatCommaNumber(n);
+  return String(n);
+}
+
+function digitsCommaOnly(raw) {
+  // si tu as déjà filterDigitsComma global, on l’utilise
+  if (typeof filterDigitsComma === "function") return filterDigitsComma(raw);
+  let s = String(raw || "");
+  s = s.replace(/\./g, ",");
+  let cleaned = s.replace(/[^0-9,]/g, "");
+  const firstComma = cleaned.indexOf(",");
+  if (firstComma !== -1) {
+    cleaned = cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, "");
+  }
+  return cleaned;
+}
+
+// 2) état "draft" de la modale (persisté en DB pour survivre au refresh)
+// On stocke ça dans buy.articleDraftByIso[isoDate] (n'apparaît PAS dans la liste tant que OK n'a pas créé l'article)
+buy.articleDraftByIso = buy.articleDraftByIso || {};
+const draft = buy.articleDraftByIso[isoDate] || {
+  // texte
+  name: "", code: "",
+  // valeurs simples
+  qty: "", qtyFinalized: false,
+  extra: "", extraFinalized: false,
+  pe: "", peFinalized: false,
+  pgu: "", pguFinalized: false,
+
+  // opérations (on fera après)
+  pgt: "", pgtFinalized: false,
+  prg: "", prgFinalized: false,
+  pr: "", prFinalized: false,
+};
+buy.articleDraftByIso[isoDate] = draft;
+
+// 3) render d’une ligne numérique simple (input+valider OU carte+modifier)
+function renderSimpleNumRow({ key, finalizedKey, label, inputId, validateId, modifyId }) {
+  const isFinal = !!draft[finalizedKey];
+
+  if (!isFinal) {
+    const hasText = String(draft[key] || "").trim().length > 0;
+    return `
+      <div class="label">${label}</div>
+      <div class="art-inline-actions">
+        <input id="${inputId}" class="input" inputmode="decimal" autocomplete="off"
+          value="${escapeAttr(draft[key] || "")}" />
+        <button id="${validateId}" class="art-mini-btn art-mini-validate"
+          type="button"
+          ${hasText ? "" : "disabled"}
+        >Valider</button>
+      </div>
+    `;
+  }
+
+  // ✅ finalisé: case blanche + modifier
+  return `
+    <div class="label">${label}</div>
+    <div class="art-inline-actions">
+      <div class="card card-white lift" style="flex:1; min-width: 220px;">
+        ${escapeHtml(formatWhiteNumber(draft[key] || "0"))}
+      </div>
+      <button id="${modifyId}" class="art-mini-btn art-mini-modify" type="button">Modifier</button>
+    </div>
+  `;
+}
+
+// 4) re-render du contenu modal (sans la fermer)
+function rerenderArtModalBody() {
+  const grid = document.getElementById("artModalGrid");
+  if (!grid) return;
+
+  grid.innerHTML = `
+    <div class="label">Nom</div>
+    <div>
+      <input id="artName" class="input" autocomplete="off" value="${escapeAttr(draft.name || "")}" />
+      <div id="artNameErr" class="cat-err" style="display:none;"></div>
+    </div>
+
+    <div class="label">Code</div>
+    <div>
+      <input id="artCode" class="input" autocomplete="off" value="${escapeAttr(draft.code || "")}" />
+      <div id="artCodeErr" class="cat-err" style="display:none;"></div>
+    </div>
+
+    ${renderSimpleNumRow({ key:"qty",   finalizedKey:"qtyFinalized",   label:"Quantité", inputId:"artQty",   validateId:"artQtyValidate",   modifyId:"artQtyModify" })}
+    ${renderSimpleNumRow({ key:"extra", finalizedKey:"extraFinalized", label:"Extra",    inputId:"artExtra", validateId:"artExtraValidate", modifyId:"artExtraModify" })}
+    ${renderSimpleNumRow({ key:"pe",    finalizedKey:"peFinalized",    label:"Pris d’ensemble (PE)", inputId:"artPE", validateId:"artPEValidate", modifyId:"artPEModify" })}
+    ${renderSimpleNumRow({ key:"pgu",   finalizedKey:"pguFinalized",   label:"Prix de gros unitaire (PGU)", inputId:"artPGU", validateId:"artPGUValidate", modifyId:"artPGUModify" })}
+
+    <!-- opérations PGT / PRG / PR seront ajoutées juste après, étape suivante -->
+  `;
+
+  bindArtModalHandlers(); // rebind events
+}
+
+// 5) bind handlers (input + validate + modify + effacement)
+function bindOneSimpleNum({ key, finalizedKey, inputId, validateId, modifyId }) {
+  const input = document.getElementById(inputId);
+  const vBtn = document.getElementById(validateId);
+  const mBtn = document.getElementById(modifyId);
+
+  // ---- mode input
+  if (input) {
+    // bouton Valider actif dès qu'on tape
+    input.addEventListener("input", async () => {
+      const filtered = digitsCommaOnly(input.value);
+      if (filtered !== input.value) {
+        input.value = filtered;
+        if (typeof shake === "function") shake(input);
+      }
+
+      draft[key] = filtered;
+      draft[finalizedKey] = false; // tant que pas validé
+      markBuyTouchedAndPersist();  // touche articles, on gère plus tard buyArtTouched mais on persiste l’état
+      await safePersistNow();
+
+      // couleur du texte du bouton (gris -> bleu) + enabled state
+      if (vBtn) {
+        const hasText = filtered.trim().length > 0;
+        vBtn.disabled = !hasText;
+        vBtn.classList.toggle("started", hasText);
+      }
+
+      // ✅ si effacement total => suppression définitive (DB)
+      if (filtered.trim() === "") {
+        draft[key] = "";
+        draft[finalizedKey] = false;
+        await safePersistNow();
+      }
+    });
+
+    // Enter = Valider
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (vBtn && !vBtn.disabled) vBtn.click();
+      }
+    });
+  }
+
+  // ---- Valider
+  if (vBtn) {
+    vBtn.addEventListener("click", async () => {
+      const v = String(draft[key] || "").trim();
+      if (!v) {
+        if (typeof shake === "function") shake(vBtn);
+        return;
+      }
+      draft[finalizedKey] = true;
+      await safePersistNow();
+      rerenderArtModalBody();
+    });
+  }
+
+  // ---- Modifier
+  if (mBtn) {
+    mBtn.addEventListener("click", async () => {
+      draft[finalizedKey] = false;
+      await safePersistNow();
+      rerenderArtModalBody();
+      // focus input après rerender
+      setTimeout(() => {
+        const i = document.getElementById(inputId);
+        if (i) i.focus();
+      }, 0);
+    });
+  }
+}
+
+function bindArtModalHandlers() {
+  // Nom / Code (handlers simples pour conserver le texte)
+  const nameEl = document.getElementById("artName");
+  const codeEl = document.getElementById("artCode");
+  if (nameEl) nameEl.addEventListener("input", async () => {
+    draft.name = nameEl.value;
+    await safePersistNow();
+  });
+  if (codeEl) codeEl.addEventListener("input", async () => {
+    draft.code = codeEl.value;
+    await safePersistNow();
+  });
+
+  // champs num simples
+  bindOneSimpleNum({ key:"qty",   finalizedKey:"qtyFinalized",   inputId:"artQty",   validateId:"artQtyValidate",   modifyId:"artQtyModify" });
+  bindOneSimpleNum({ key:"extra", finalizedKey:"extraFinalized", inputId:"artExtra", validateId:"artExtraValidate", modifyId:"artExtraModify" });
+  bindOneSimpleNum({ key:"pe",    finalizedKey:"peFinalized",    inputId:"artPE",    validateId:"artPEValidate",    modifyId:"artPEModify" });
+  bindOneSimpleNum({ key:"pgu",   finalizedKey:"pguFinalized",   inputId:"artPGU",   validateId:"artPGUValidate",   modifyId:"artPGUModify" });
+
+  // boutons bas modale (si présents)
+  const cancelBtn = document.getElementById("artCancelBtn");
+  if (cancelBtn) cancelBtn.addEventListener("click", () => {
+    const bd = document.getElementById("artModalBackdrop");
+    if (bd) bd.remove();
+  });
+}
+
+// 6) premier rendu body + bind
+rerenderArtModalBody();
+
 
     let showUniqErrors = false; // ✅ doublons visibles seulement après OK
 

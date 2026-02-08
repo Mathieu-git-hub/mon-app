@@ -815,6 +815,41 @@
   border-color: rgba(25,163,74,0.95) !important;
 }
 
+/* ✅ Articles — mini boutons valider/modifier (noir + contour blanc) */
+.art-inline-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+.art-mini-btn{
+  min-width:110px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:#000;
+  border:2px solid #fff;
+  font-weight:900;
+  cursor:pointer;
+}
+
+/* Valider : texte gris au début, bleu quand on a commencé à saisir */
+.art-mini-validate{
+  color:#9aa0a6;
+}
+.art-mini-validate.started{
+  color:#1e5eff;
+}
+.art-mini-validate:disabled{
+  opacity:0.45;
+  cursor:not-allowed;
+}
+
+/* Modifier : texte bleu */
+.art-mini-modify{
+  color:#1e5eff;
+}
+
+
 
     </style>
   </head>
