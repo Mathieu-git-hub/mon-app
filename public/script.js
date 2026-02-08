@@ -5078,6 +5078,219 @@ if (!Array.isArray(buy.articles)) buy.articles = [];
 
   const backBtn = document.getElementById("back");
   if (backBtn) backBtn.addEventListener("click", () => smartBack());
+
+  // =========================
+// ✅ MODAL ARTICLE — AJOUT
+// =========================
+function closeArtModal() {
+  const bd = document.getElementById("artModalBackdrop");
+  if (bd) bd.remove();
+}
+
+function isArtNameTaken(name, exceptId = null) {
+  const n = normSearch(name);
+  return (buy.articles || []).some(a =>
+    !a.deletedAtIso &&
+    a.id !== exceptId &&
+    String(a.createdAtIso || "") === String(isoDate) &&
+    normSearch(a.name) === n
+  );
+}
+
+function findArtCodeOwner(code, exceptId = null) {
+  const c0 = normSearch(code);
+  return (buy.articles || []).find(a =>
+    !a.deletedAtIso &&
+    a.id !== exceptId &&
+    String(a.createdAtIso || "") === String(isoDate) &&
+    normSearch(a.code) === c0
+  ) || null;
+}
+
+function openArtModal() {
+  if (document.getElementById("artModalBackdrop")) return;
+
+  const bd = document.createElement("div");
+  bd.id = "artModalBackdrop";
+  bd.className = "cat-modal-backdrop";
+
+  bd.innerHTML = `
+    <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Article">
+      <div class="cat-modal-title">Nouvel article</div>
+
+      <div class="cat-modal-grid">
+        <div class="label">Nom</div>
+        <div>
+          <input id="artName" class="input" autocomplete="off" />
+          <div id="artNameErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Code</div>
+        <div>
+          <input id="artCode" class="input" autocomplete="off" />
+          <div id="artCodeErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Quantité</div>
+        <div>
+          <input id="artQty" class="input" autocomplete="off" />
+          <div id="artQtyErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Extra</div>
+        <div>
+          <input id="artExtra" class="input" autocomplete="off" />
+          <div id="artExtraErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Pris d’ensemble (PE)</div>
+        <div>
+          <input id="artPE" class="input" autocomplete="off" />
+          <div id="artPEErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Prix de gros unitaire (PGU)</div>
+        <div>
+          <input id="artPGU" class="input" autocomplete="off" />
+          <div id="artPGUErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Prix de gros total (PGT)</div>
+        <div>
+          <input id="artPGT" class="input" autocomplete="off" />
+          <div style="font-size:12px; opacity:.8; font-weight:800;">(PGU x quantité)</div>
+          <div id="artPGTErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Prix de revient global (PRG)</div>
+        <div>
+          <input id="artPRG" class="input" autocomplete="off" />
+          <div style="font-size:12px; opacity:.8; font-weight:800;">(PGT + extra x (PGT / PE))</div>
+          <div id="artPRGErr" class="cat-err" style="display:none;"></div>
+        </div>
+
+        <div class="label">Prix de revient (PR)</div>
+        <div>
+          <input id="artPR" class="input" autocomplete="off" />
+          <div style="font-size:12px; opacity:.8; font-weight:800;">(PRG / quantité)</div>
+          <div id="artPRErr" class="cat-err" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="cat-modal-actions">
+        <button id="artCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
+        <button id="artOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeArtModal();
+  });
+
+  document.body.appendChild(bd);
+
+  const nameEl = document.getElementById("artName");
+  const codeEl = document.getElementById("artCode");
+  const nameErr = document.getElementById("artNameErr");
+  const codeErr = document.getElementById("artCodeErr");
+  const okBtn = document.getElementById("artOkBtn");
+  const cancelBtn = document.getElementById("artCancelBtn");
+
+  let showUniqErrors = false; // ✅ afficher doublons seulement après OK
+
+  function setErr(elInput, elMsg, msg) {
+    if (!elInput || !elMsg) return;
+    if (!msg) {
+      elInput.classList.remove("error");
+      elMsg.style.display = "none";
+      elMsg.textContent = "";
+    } else {
+      elInput.classList.add("error");
+      elMsg.style.display = "";
+      elMsg.textContent = msg;
+    }
+  }
+
+  function syncOkState() {
+    const name = (nameEl.value || "").trim();
+    const code = (codeEl.value || "").trim();
+
+    let ok = name.length > 0 && code.length > 0;
+
+    const nameTaken = name ? isArtNameTaken(name) : false;
+    const codeOwner = code ? findArtCodeOwner(code) : null;
+
+    if (showUniqErrors) {
+      setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
+      setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
+    } else {
+      setErr(nameEl, nameErr, "");
+      setErr(codeEl, codeErr, "");
+    }
+
+    if (nameTaken || codeOwner) ok = false;
+
+    okBtn.disabled = !ok;
+    okBtn.classList.toggle("enabled", ok);
+  }
+
+  nameEl.addEventListener("input", syncOkState);
+  codeEl.addEventListener("input", syncOkState);
+
+  cancelBtn.addEventListener("click", closeArtModal);
+
+  okBtn.addEventListener("click", async () => {
+    showUniqErrors = true;
+
+    const name = (nameEl.value || "").trim();
+    const code = (codeEl.value || "").trim();
+    if (!name || !code) return;
+
+    const nameTaken = isArtNameTaken(name);
+    const codeOwner = findArtCodeOwner(code);
+    if (nameTaken || codeOwner) {
+      syncOkState();
+      return;
+    }
+
+    // ✅ CREATE article (stocké en DB via safePersistNow)
+    const id = "art_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+    buy.articles.unshift({
+      id,
+      name,
+      code,
+      createdAtIso: isoDate,
+      createdAtTs: Date.now(),
+      deletedAtIso: null,
+      deletedAtTs: null,
+      // champs autres (tu les brancheras ensuite sur les validations)
+      qty: "",
+      extra: "",
+      pe: "",
+      pgu: "",
+      pgt: "",
+      prg: "",
+      pr: "",
+    });
+
+    // ✅ marquer “articles touchés” (2e cercle) : on met un flag dédié
+    const d = ensureBuyDayMark(isoDate);
+    d.buyArtTouched = true;
+
+    await safePersistNow();
+    closeArtModal();
+    renderBuyArticlesPage(isoDate);
+  });
+
+  syncOkState();
+  nameEl.focus();
+}
+
+// bouton +
+const addArtBtn = document.getElementById("addArtBtn");
+if (addArtBtn) addArtBtn.addEventListener("click", openArtModal);
+
 }
 // ===============================
 // ✅ FIN — BUY : Articles
