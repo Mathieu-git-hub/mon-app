@@ -6090,18 +6090,53 @@ async function cascadeFrom(key, newResultNumber) {
 draft[resultKey] = res;
 draft[finalizedKey] = true;
 
-// ✅ NOUVEAU : cascade même si la suivante est déjà validée
+// ============================================
+// ✅ 2 MODES : bascule simple OU cascade (modif)
+// ============================================
+
+// petit helper (valeur à basculer)
+const resStr = (typeof formatResultNumber === "function")
+  ? formatResultNumber(res)
+  : String(res).replace(".", ",");
+
 if (key === "pgt") {
-  await cascadeFrom("pgt", res);
-} else if (key === "prg") {
-  await cascadeFrom("prg", res);
-} else {
-  // key === "pr" => rien après
+  // Si PRG déjà validé (case blanche) => cascade (recalc PRG puis PR)
+  if (draft.prgFinalized) {
+    await cascadeFrom("pgt", res);
+  } else {
+    // ✅ bascule simple (PRG encore en input/vierge) : on écrase la valeur basculée
+    draft.prg = resStr;
+    draft.prgErr = "";
+    draft.prgResult = null;
+    draft.prgFinalized = false; // car PRG n'est pas "validé" tant qu'on n'a pas cliqué Valider sur PRG
+
+    // ✅ et si PR est encore en input avec une valeur basculée, on met à jour aussi
+    if (!draft.prFinalized) {
+      draft.pr = (draft.prgResult !== null && draft.prgResult !== undefined) ? resStr : resStr;
+      draft.prErr = "";
+      draft.prResult = null;
+    }
+  }
 }
 
-// (on garde ta persistance + rerender)
+else if (key === "prg") {
+  // Si PR déjà validé (case blanche) => cascade (recalc PR)
+  if (draft.prFinalized) {
+    await cascadeFrom("prg", res);
+  } else {
+    // ✅ bascule simple (PR encore en input/vierge) : on écrase la valeur basculée
+    draft.pr = resStr;
+    draft.prErr = "";
+    draft.prResult = null;
+    draft.prFinalized = false;
+  }
+}
+
+// key === "pr" => rien après
+
 await safePersistNow();
 rerenderArtModalBody();
+
 
   }
 
