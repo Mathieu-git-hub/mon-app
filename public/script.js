@@ -5360,18 +5360,13 @@ function setErr(inputEl, msgEl, msg) {
 
 function syncOkState() {
   const { nameEl, codeEl, nameErr, codeErr, okBtn } = getArtEls();
-  if (!nameEl || !codeEl || !okBtn) return;
+  if (!okBtn) return;
 
-  const name = (nameEl.value || "").trim();
-  const code = (codeEl.value || "").trim();
+  const name = String(draft.name || "").trim();
+  const code = String(draft.code || "").trim();
 
-  // ✅ conditions de base
-  let ok =
-    name.length > 0 &&
-    code.length > 0 &&
-    allFieldsValidated();
+  let ok = name.length > 0 && code.length > 0 && allFieldsValidated();
 
-  // ✅ doublons (uniquement visibles après clic sur OK)
   const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
   const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
 
@@ -5388,6 +5383,7 @@ function syncOkState() {
   okBtn.disabled = !ok;
   okBtn.classList.toggle("enabled", ok);
 }
+
 
 
 
