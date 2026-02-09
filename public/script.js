@@ -5396,9 +5396,6 @@ function digitsCommaOnly(raw) {
       cleaned.slice(firstComma + 1).replace(/,/g, "");
   }
 
-  // ✅ compacte les espaces (optionnel mais propre)
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
-
   return cleaned;
 }
 
