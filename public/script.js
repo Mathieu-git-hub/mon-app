@@ -5055,47 +5055,70 @@ function renderBuyArticlesPage(isoDate) {
   }
 
   // ----------- UI helpers (rectangle article)
-  function cardHTML(a) {
-    const id = a.id;
+  // ----------- UI helpers (rectangle article)
+function cardHTML(a) {
+  const id = a.id;
 
-    // ✅ Cases blanches sous intitulés, boutons crayon/poubelle en colonne à droite
+  function white(label, value) {
     return `
-      <div class="buy-cat-card" data-art-id="${escapeAttr(id)}">
-        <div class="buy-cat-body">
-          <div class="buy-cat-col">
-            <div class="buy-cat-label">Nom</div>
-            <div class="buy-cat-white">${escapeHtml(a.name || "")}</div>
-          </div>
-
-          <div class="buy-cat-col">
-            <div class="buy-cat-label">Code</div>
-            <div class="buy-cat-white">${escapeHtml(a.code || "")}</div>
-          </div>
-        </div>
-
-        <div class="buy-cat-actions" style="flex-direction:column; gap:10px;">
-          <button class="buy-cat-iconbtn" data-art-edit="${escapeAttr(id)}" title="Modifier" aria-label="Modifier">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9"></path>
-              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
-            </svg>
-          </button>
-
-          <button class="buy-cat-iconbtn" data-art-del="${escapeAttr(id)}" title="Supprimer" aria-label="Supprimer">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 6h18"></path>
-              <path d="M8 6V4h8v2"></path>
-              <path d="M6 6l1 16h10l1-16"></path>
-              <path d="M10 11v6"></path>
-              <path d="M14 11v6"></path>
-            </svg>
-          </button>
-        </div>
+      <div class="buy-cat-col">
+        <div class="buy-cat-label">${escapeHtml(label)}</div>
+        <div class="buy-cat-white">${escapeHtml(value ?? "")}</div>
       </div>
     `;
   }
+
+  // Pour les opérations : on affiche "op = résultat" si possible, sinon juste ce qui est stocké
+  function opWhite(label, op, res) {
+    const opStr = (op ?? "");
+    const resStr =
+      (res === null || res === undefined || res === "")
+        ? ""
+        : (typeof formatResultNumber === "function" ? formatResultNumber(res) : String(res).replace(".", ","));
+    const line = (opStr && resStr) ? `${opStr} = ${resStr}` : (opStr || resStr || "");
+    return white(label, line);
+  }
+
+  return `
+    <div class="buy-cat-card" data-art-id="${escapeAttr(id)}" style="position:relative;">
+      <!-- ✅ Actions en haut à droite, vertical -->
+      <div class="buy-cat-actions" style="position:absolute; top:10px; right:10px; display:flex; flex-direction:column; gap:10px;">
+        <button class="buy-cat-iconbtn" data-art-edit="${escapeAttr(id)}" title="Modifier" aria-label="Modifier">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path>
+          </svg>
+        </button>
+
+        <button class="buy-cat-iconbtn" data-art-del="${escapeAttr(id)}" title="Supprimer" aria-label="Supprimer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"></path>
+            <path d="M8 6V4h8v2"></path>
+            <path d="M6 6l1 16h10l1-16"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="buy-cat-body" style="padding-right:64px;">
+        ${white("Nom", a.name)}
+        ${white("Code", a.code)}
+        ${white("Quantité", a.qty)}
+        ${white("Extra", a.extra)}
+        ${white("Pris d’ensemble (PE)", a.pe)}
+        ${white("Prix de gros unitaire (PGU)", a.pgu)}
+
+        ${opWhite("Prix de gros total (PGT)", a.pgt, a.pgtResult)}
+        ${opWhite("Prix de revient global (PRG)", a.prg, a.prgResult)}
+        ${opWhite("Prix de revient (PR)", a.pr, a.prResult)}
+      </div>
+    </div>
+  `;
+}
+
 
   const listToday = visibleTodayArticles();
 
@@ -5289,28 +5312,11 @@ function renderBuyArticlesPage(isoDate) {
 
     document.body.appendChild(bd);
 
-    document.addEventListener("click", async (e) => {
-  const btn = e.target.closest("#artOkBtn");
-  if (!btn) return;
+    
 
-  showUniqErrors = true;
-  syncOkState(); // affiche les erreurs si doublon
 
-  const { nameEl, codeEl } = getArtEls();
-  if (!nameEl || !codeEl) return;
 
-  const name = (nameEl.value || "").trim();
-  const code = (codeEl.value || "").trim();
-
-  if (!name || !code) return;
-  if (!allFieldsValidated()) return;
-
-  const nameTaken = isNameTaken(name, existing?.id || null);
-  const codeOwner = findCodeOwner(code, existing?.id || null);
-  if (nameTaken || codeOwner) return;
-
-  // ... ensuite ton CREATE / EDIT comme tu l'as déjà
-}, true);
+  
 
 
     let showUniqErrors = false;
@@ -5772,6 +5778,98 @@ if (codeEl) codeEl.addEventListener("input", async () => {
       closeArtModal();
     });
   }
+
+  // bouton OK (création / modification)
+const okBtn = document.getElementById("artOkBtn");
+if (okBtn) {
+  okBtn.addEventListener("click", async () => {
+    showUniqErrors = true;
+    syncOkState(); // affiche erreurs doublons si nécessaire
+
+    const name = String(draft.name || "").trim();
+    const code = String(draft.code || "").trim();
+    if (!name || !code) return;
+    if (!allFieldsValidated()) return;
+
+    const nameTaken = isNameTaken(name, existing?.id || null);
+    const codeOwner = findCodeOwner(code, existing?.id || null);
+    if (nameTaken || codeOwner) return;
+
+    // ✅ CREATE
+    if (mode === "create") {
+      const id = "art_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+
+      buy.articles = buy.articles || [];
+      buy.articles.unshift({
+        id,
+        name,
+        code,
+
+        // valeurs simples (strings)
+        qty: draft.qty || "",
+        extra: draft.extra || "",
+        pe: draft.pe || "",
+        pgu: draft.pgu || "",
+
+        // opérations (on stocke l’op posée + le résultat)
+        pgt: draft.pgt || "",
+        pgtResult: draft.pgtResult ?? null,
+        prg: draft.prg || "",
+        prgResult: draft.prgResult ?? null,
+        pr: draft.pr || "",
+        prResult: draft.prResult ?? null,
+
+        createdAtIso: isoDate,
+        createdAtTs: Date.now(),
+        updatedAtTs: Date.now(),
+        deletedAtIso: null,
+        deletedAtTs: null,
+      });
+
+      // ✅ on supprime le draft du jour (comme Annuler)
+      if (buy.articleDraftByIso && buy.articleDraftByIso[isoDate]) {
+        delete buy.articleDraftByIso[isoDate];
+      }
+
+      markBuyTouchedAndPersist();
+      await safePersistNow();
+      closeArtModal();
+      renderBuyArticlesPage(isoDate);
+      return;
+    }
+
+    // ✅ EDIT
+    if (mode === "edit" && existing) {
+      existing.name = name;
+      existing.code = code;
+
+      existing.qty = draft.qty || "";
+      existing.extra = draft.extra || "";
+      existing.pe = draft.pe || "";
+      existing.pgu = draft.pgu || "";
+
+      existing.pgt = draft.pgt || "";
+      existing.pgtResult = draft.pgtResult ?? null;
+      existing.prg = draft.prg || "";
+      existing.prgResult = draft.prgResult ?? null;
+      existing.pr = draft.pr || "";
+      existing.prResult = draft.prResult ?? null;
+
+      existing.updatedAtTs = Date.now();
+
+      if (buy.articleDraftByIso && buy.articleDraftByIso[isoDate]) {
+        delete buy.articleDraftByIso[isoDate];
+      }
+
+      markBuyTouchedAndPersist();
+      await safePersistNow();
+      closeArtModal();
+      renderBuyArticlesPage(isoDate);
+      return;
+    }
+  });
+}
+
 
   // ✅ 1) isTouchDevice (bien fermé)
   function isTouchDevice() {
