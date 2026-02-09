@@ -5525,6 +5525,55 @@ const draft = buy.articleDraftByIso[isoDate] || {
 };
 buy.articleDraftByIso[isoDate] = draft;
 
+// =======================================
+// ✅ EDIT : pré-remplir le draft depuis l’article existant
+// =======================================
+function loadDraftFromExistingArticle(a) {
+  if (!a) return;
+
+  // texte
+  draft.name = a.name || "";
+  draft.code = a.code || "";
+
+  // simples
+  draft.qty   = a.qty   || "";
+  draft.extra = a.extra || "";
+  draft.pe    = a.pe    || "";
+  draft.pgu   = a.pgu   || "";
+
+  // opérations (op + résultat)
+  draft.pgt = a.pgt || "";
+  draft.pgtResult = (a.pgtResult ?? null);
+
+  draft.prg = a.prg || "";
+  draft.prgResult = (a.prgResult ?? null);
+
+  draft.pr = a.pr || "";
+  draft.prResult = (a.prResult ?? null);
+
+  // erreurs reset
+  draft.pgtErr = "";
+  draft.prgErr = "";
+  draft.prErr  = "";
+
+  // ✅ flags "validés" selon ce qui existe déjà
+  draft.qtyFinalized   = String(draft.qty).trim()   !== "";
+  draft.extraFinalized = String(draft.extra).trim() !== "";
+  draft.peFinalized    = String(draft.pe).trim()    !== "";
+  draft.pguFinalized   = String(draft.pgu).trim()   !== "";
+
+  // Pour opérations : considéré "validé" si résultat présent (ou si op non vide, au pire)
+  draft.pgtFinalized = (draft.pgtResult !== null && draft.pgtResult !== undefined) || String(draft.pgt).trim() !== "";
+  draft.prgFinalized = (draft.prgResult !== null && draft.prgResult !== undefined) || String(draft.prg).trim() !== "";
+  draft.prFinalized  = (draft.prResult  !== null && draft.prResult  !== undefined) || String(draft.pr).trim()  !== "";
+}
+
+// ✅ si on ouvre via crayon : on charge l’existant
+if (mode === "edit" && existing) {
+  loadDraftFromExistingArticle(existing);
+}
+
+
 // 3) render d’une ligne numérique simple (input+valider OU carte+modifier)
 function renderSimpleNumRow({ key, finalizedKey, label, inputId, validateId, modifyId }) {
   const isFinal = !!draft[finalizedKey];
