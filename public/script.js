@@ -5887,6 +5887,95 @@ if (okBtn) {
     return items;
   }
 
+  // ===================================================
+// ✅ CASCADE : remplacer 1er nombre d'une opération + recalculer
+// ===================================================
+function toOpNumString(n) {
+  // string simple (sans espaces) compatible evalOperation
+  if (!Number.isFinite(n)) return "";
+  return String(n).replace(".", ",");
+}
+
+function replaceFirstNumberInOp(opStr, newNumStr) {
+  const s = String(opStr || "");
+  const nn = String(newNumStr || "").trim();
+  if (!nn) return s;
+
+  // Si vide => on met juste le nombre
+  if (!s.trim()) return nn;
+
+  // Remplace le premier "nombre" rencontré (digits + espaces + , .)
+  // Exemple: "1 234,5 + 2" => "999 + 2"
+  const re = /[0-9][0-9\s.,]*/;
+  if (re.test(s)) return s.replace(re, nn);
+
+  // Sinon (pas de nombre trouvé), on préfixe
+  return `${nn} ${s}`;
+}
+
+async function recalcOp(key) {
+  const raw = String(draft[key] || "").trim();
+
+  // Si vide => reset
+  if (!raw) {
+    draft[key] = "";
+    draft[key + "Finalized"] = false;
+    draft[key + "Result"] = null;
+    draft[key + "Err"] = "";
+    return;
+  }
+
+  if (typeof charsAllowedForOpInput === "function" && !charsAllowedForOpInput(raw)) {
+    draft[key + "Err"] = "Caractères invalides.";
+    draft[key + "Finalized"] = false;
+    draft[key + "Result"] = null;
+    return;
+  }
+
+  const res = (typeof evalOperation === "function") ? evalOperation(raw) : null;
+  if (res === null) {
+    draft[key + "Err"] = "Opération invalide.";
+    draft[key + "Finalized"] = false;
+    draft[key + "Result"] = null;
+    return;
+  }
+
+  draft[key + "Err"] = "";
+  draft[key + "Result"] = res;
+  draft[key + "Finalized"] = true;
+}
+
+async function cascadeFrom(key, newResultNumber) {
+  // newResultNumber = résultat numérique recalculé du key
+  const nn = toOpNumString(newResultNumber);
+  if (!nn) return;
+
+  if (key === "pgt") {
+    // 1) injecte dans PRG (même si déjà validé)
+    draft.prg = replaceFirstNumberInOp(draft.prg, nn);
+    await recalcOp("prg");
+
+    // 2) injecte le nouveau résultat PRG dans PR (même si déjà validé)
+    if (Number.isFinite(draft.prgResult)) {
+      const nn2 = toOpNumString(draft.prgResult);
+      draft.pr = replaceFirstNumberInOp(draft.pr, nn2);
+      await recalcOp("pr");
+    } else {
+      // si PRG invalide => PR devient non fiable
+      draft.prFinalized = false;
+      draft.prResult = null;
+      draft.prErr = "";
+    }
+  }
+
+  if (key === "prg") {
+    // injecte dans PR
+    draft.pr = replaceFirstNumberInOp(draft.pr, nn);
+    await recalcOp("pr");
+  }
+}
+
+
   // ✅ 3) validateOpField
   async function validateOpField({ key, finalizedKey, resultKey, errKey, nextKey }) {
     const raw = String(draft[key] || "").trim();
@@ -5919,15 +6008,22 @@ if (okBtn) {
     }
 
     draft[errKey] = "";
-    draft[resultKey] = res;
-    draft[finalizedKey] = true;
+draft[resultKey] = res;
+draft[finalizedKey] = true;
 
-    if (nextKey && !draft[nextKey]) {
-      draft[nextKey] = formatResultNumber(res);
-    }
+// ✅ NOUVEAU : cascade même si la suivante est déjà validée
+if (key === "pgt") {
+  await cascadeFrom("pgt", res);
+} else if (key === "prg") {
+  await cascadeFrom("prg", res);
+} else {
+  // key === "pr" => rien après
+}
 
-    await safePersistNow();
-    rerenderArtModalBody();
+// (on garde ta persistance + rerender)
+await safePersistNow();
+rerenderArtModalBody();
+
   }
 
   // ✅ 4) openOpFor
