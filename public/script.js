@@ -5344,6 +5344,20 @@ function allFieldsValidated() {
   );
 }
 
+function setErr(inputEl, msgEl, msg) {
+  if (!inputEl || !msgEl) return;
+  if (!msg) {
+    inputEl.classList.remove("error");
+    msgEl.style.display = "none";
+    msgEl.textContent = "";
+  } else {
+    inputEl.classList.add("error");
+    msgEl.style.display = "block";
+    msgEl.textContent = msg; // ✅ en rouge via .cat-err
+  }
+}
+
+
 function syncOkState() {
   const { nameEl, codeEl, nameErr, codeErr, okBtn } = getArtEls();
   if (!nameEl || !codeEl || !okBtn) return;
@@ -5351,14 +5365,30 @@ function syncOkState() {
   const name = (nameEl.value || "").trim();
   const code = (codeEl.value || "").trim();
 
+  // ✅ conditions de base
   let ok =
     name.length > 0 &&
     code.length > 0 &&
     allFieldsValidated();
 
+  // ✅ doublons (uniquement visibles après clic sur OK)
+  const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
+  const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
+
+  if (showUniqErrors) {
+    setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
+    setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
+  } else {
+    setErr(nameEl, nameErr, "");
+    setErr(codeEl, codeErr, "");
+  }
+
+  if (nameTaken || codeOwner) ok = false;
+
   okBtn.disabled = !ok;
   okBtn.classList.toggle("enabled", ok);
 }
+
 
 
     // =========================
