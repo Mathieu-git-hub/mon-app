@@ -416,7 +416,7 @@ function renderCalendarPage(pageName) {
   const colorsEnabled = pageName === "daily"; // ✅ vert/bleu uniquement daily
 
   app.innerHTML = `
-    <div class="page">
+    <div class="page ${pageName === "buy" ? "buy-calendar" : ""}">
       <button id="back" class="back-btn">← Retour</button>
 
       <div class="calendar-header">

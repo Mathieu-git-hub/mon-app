@@ -160,6 +160,46 @@
         box-sizing: border-box;
       }
 
+      /* =========================================================
+   ✅ BUY calendar mobile : tout tenir sur 1 écran
+========================================================= */
+@media (max-width: 520px){
+  .page.buy-calendar .calendar-header{
+    height: 72px;           /* moins haut que 92px */
+    padding-top: 10px;
+  }
+  .page.buy-calendar .month-title{
+    font-size: 16px;
+  }
+
+  .page.buy-calendar .calendar-grid{
+    height: calc(100vh - 72px);
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .page.buy-calendar .dow{
+    font-size: 12px;
+    padding: 4px 0;
+  }
+
+  .page.buy-calendar .day-box,
+  .page.buy-calendar .day-empty{
+    border-radius: 9px;
+  }
+
+  .page.buy-calendar .day-box.buy-day{
+    gap: 4px;
+  }
+
+  .page.buy-calendar .buy-juste-circle{
+    width: 16px;
+    height: 16px;
+    font-size: 7px;
+  }
+}
+
+
       
 
       
