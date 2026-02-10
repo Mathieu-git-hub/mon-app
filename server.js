@@ -18,10 +18,7 @@ const PORT = process.env.PORT || 3000;
 /** ---------------------------
  *  2) Sécurité & parsing
  * -------------------------- */
-app.use(helmet({
-  contentSecurityPolicy: false,
-}));
-
+app.use(helmet());
 app.use(express.json({ limit: "1mb" }));
 
 app.use(
@@ -81,6 +78,7 @@ app.use(
  * -------------------------- */
 app.use(
   express.static(path.join(__dirname, "public"), {
+    fallthrough: false, // ✅ si un fichier n'existe pas => 404 (au lieu d'index.html)
     setHeaders(res, filePath) {
       if (filePath.endsWith("script.js") || filePath.endsWith("index.html")) {
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -90,6 +88,7 @@ app.use(
     },
   })
 );
+
 
 /** ---------------------------
  *  6) Helpers auth
