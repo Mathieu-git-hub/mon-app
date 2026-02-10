@@ -29,9 +29,28 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // ✅ 1) On ne cache JAMAIS l'API (sinon login cassé)
+  if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) {
+    return; // laisse le navigateur faire le fetch normal
+  }
+
+  // ✅ 2) On ne cache jamais les requêtes non-GET (POST login etc.)
+  if (req.method !== "GET") {
+    return;
+  }
+
+  // ✅ 3) Pour le reste : stratégie simple cache-first
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request);
+    caches.match(req).then((cached) => {
+      if (cached) return cached;
+      return fetch(req).then((resp) => {
+        // Optionnel : tu peux décider quoi mettre en cache ici
+        return resp;
+      });
     })
   );
 });
+
