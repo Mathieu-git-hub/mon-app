@@ -3094,15 +3094,26 @@ if (backBtn) backBtn.addEventListener("click", () => smartBack());
   // liquidite / capital / caisseDepart / prt
   // -------------------------
   function filterDigitsComma(raw) {
-    let s = String(raw || "");
-    s = s.replace(/\./g, ",");
-    let cleaned = s.replace(/[^0-9,]/g, "");
-    const firstComma = cleaned.indexOf(",");
-    if (firstComma !== -1) {
-      cleaned = cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, "");
-    }
-    return cleaned;
+  let s = String(raw || "");
+  s = s.replace(/\./g, ",");
+
+  // ✅ autorise chiffres, virgule, espaces
+  let cleaned = s.replace(/[^0-9,\s]/g, "");
+
+  // ✅ une seule virgule
+  const firstComma = cleaned.indexOf(",");
+  if (firstComma !== -1) {
+    cleaned =
+      cleaned.slice(0, firstComma + 1) +
+      cleaned.slice(firstComma + 1).replace(/,/g, "");
   }
+
+  // (optionnel) évite 50 espaces d’affilée
+  cleaned = cleaned.replace(/\s{2,}/g, " ");
+
+  return cleaned;
+}
+
 
   function bindNumericFinalize(inputId, key, finalizedKey, validateId, modifyId) {
     const input = inputId ? document.getElementById(inputId) : null;
