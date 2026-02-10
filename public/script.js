@@ -5185,9 +5185,8 @@ function cardHTML(a) {
     const resStr =
       (res === null || res === undefined || res === "")
         ? ""
-        : (typeof formatResultNumber === "function"
-            ? formatResultNumber(res)
-            : String(res).replace(".", ","));
+        : formatResultNumberLocal(Number(res));
+
 
     const line = (opDisplay && resStr) ? `${opDisplay} = ${resStr}` : (opDisplay || resStr || "");
     return white(label, line);
