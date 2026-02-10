@@ -5319,7 +5319,7 @@ function cardHTML(a) {
   
 
 
-    let showUniqErrors = false;
+   
 
 // récupère toujours les éléments ACTUELS (après rerender)
 function getArtEls() {
@@ -5365,24 +5365,26 @@ function syncOkState() {
   const name = String(draft.name || "").trim();
   const code = String(draft.code || "").trim();
 
-  let ok = name.length > 0 && code.length > 0 && allFieldsValidated();
+  const isRajoutLocked = !!draft.nameCodeLocked; // ✅ rajout : champs verrouillés
 
-  const nameTaken = name ? isNameTaken(name, existing?.id || null) : false;
-  const codeOwner = code ? findCodeOwner(code, existing?.id || null) : null;
+  // ✅ doublons (affichés immédiatement), sauf si rajout verrouillé
+  const nameTaken = (!isRajoutLocked && name) ? isNameTaken(name, existing?.id || null) : false;
+  const codeOwner = (!isRajoutLocked && code) ? findCodeOwner(code, existing?.id || null) : null;
 
-  if (showUniqErrors) {
-    setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
-    setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
-  } else {
-    setErr(nameEl, nameErr, "");
-    setErr(codeEl, codeErr, "");
-  }
+  setErr(nameEl, nameErr, nameTaken ? "nom déjà attribué" : "");
+  setErr(codeEl, codeErr, codeOwner ? `code déjà attribué : ${codeOwner.name || ""}` : "");
 
-  if (nameTaken || codeOwner) ok = false;
+  const ok =
+    name.length > 0 &&
+    code.length > 0 &&
+    allFieldsValidated() &&
+    !nameTaken &&
+    !codeOwner;
 
   okBtn.disabled = !ok;
   okBtn.classList.toggle("enabled", ok);
 }
+
 
 
 
@@ -5855,7 +5857,6 @@ if (codeEl) codeEl.addEventListener("input", async () => {
 const okBtn = document.getElementById("artOkBtn");
 if (okBtn) {
   okBtn.addEventListener("click", async () => {
-    showUniqErrors = true;
     syncOkState(); // affiche erreurs doublons si nécessaire
 
     const name = String(draft.name || "").trim();
