@@ -6562,6 +6562,18 @@ if (addBtn) addBtn.addEventListener("click", () => openArtAddChoiceModal());
     .sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
 }
 
+  function artAddedLabel(a) {
+  const d = fromISODate(a.createdAtIso);
+  return `Article rajouté le ${formatFullDate(d)}`;
+}
+
+function cardWithDate(a) {
+  return `
+    <div class="buy-art-date">${escapeHtml(artAddedLabel(a))}</div>
+    ${cardHTML(a)}
+  `;
+}
+  
 
   function renderSuggestions(q) {
     const nq = normSearch(q);
@@ -6602,7 +6614,7 @@ if (addBtn) addBtn.addEventListener("click", () => openArtAddChoiceModal());
     if (listEl) {
       listEl.innerHTML = `
         <div class="buy-cat-section-title">Résultats</div>
-        ${filtered.map(cardHTML).join("")}
+        ${filtered.map(cardWithDate).join("")}
       `;
 
       // rebind edit/del sur résultats
@@ -6637,7 +6649,8 @@ if (addBtn) addBtn.addEventListener("click", () => openArtAddChoiceModal());
       if (art && listEl) {
         listEl.innerHTML = `
           <div class="buy-cat-section-title">Résultat</div>
-          ${cardHTML(art)}
+          ${cardWithDate(art)}
+
         `;
         // rebind
         listEl.querySelectorAll("[data-art-edit]").forEach(btn => {
