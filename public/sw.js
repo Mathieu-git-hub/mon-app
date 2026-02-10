@@ -1,16 +1,15 @@
-const CACHE_NAME = "monapp-v2";
+const CACHE_NAME = "monapp-v3";
 
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
   "/script.js",
   "/manifest.webmanifest",
-
-  // ✅ mets ici tes vrais fichiers d'icônes
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/icons/icon-144.png"
+  "/icons/icon-home-144.png",
+  "/icons/icon-home-192.png",
+  "/icons/icon-home-512.png",
 ];
+
 
 
 
