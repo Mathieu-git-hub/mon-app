@@ -5059,6 +5059,33 @@ function renderBuyArticlesPage(isoDate) {
 function cardHTML(a) {
   const id = a.id;
 
+  // ✅ format "milliers" pour cases blanches numériques
+  function whiteNum(label, value) {
+    const v = String(value ?? "").trim();
+    // si vide => on affiche vide (comme avant)
+    if (!v) {
+      return `
+        <div class="buy-cat-col">
+          <div class="buy-cat-label">${escapeHtml(label)}</div>
+          <div class="buy-cat-white"></div>
+        </div>
+      `;
+    }
+
+    // format milliers (réutilise ton formatInputNumberDisplay si dispo)
+    const formatted =
+      (typeof formatInputNumberDisplay === "function")
+        ? formatInputNumberDisplay(v.replace(/\s+/g, "")) // ✅ tolère espaces stockés
+        : v;
+
+    return `
+      <div class="buy-cat-col">
+        <div class="buy-cat-label">${escapeHtml(label)}</div>
+        <div class="buy-cat-white">${escapeHtml(formatted)}</div>
+      </div>
+    `;
+  }
+
   function white(label, value) {
     return `
       <div class="buy-cat-col">
@@ -5068,20 +5095,26 @@ function cardHTML(a) {
     `;
   }
 
-  // Pour les opérations : on affiche "op = résultat" si possible, sinon juste ce qui est stocké
+  // ✅ opérations : espaces autour des signes + résultat formaté "milliers"
   function opWhite(label, op, res) {
-    const opStr = (op ?? "");
+    const opStr = String(op ?? "").trim();
+
+    // 👉 op affichée avec espaces + format milliers sur les nombres
+    const opDisplay = opStr ? formatOpDisplay(opStr) : "";
+
     const resStr =
       (res === null || res === undefined || res === "")
         ? ""
-        : (typeof formatResultNumber === "function" ? formatResultNumber(res) : String(res).replace(".", ","));
-    const line = (opStr && resStr) ? `${opStr} = ${resStr}` : (opStr || resStr || "");
+        : (typeof formatResultNumber === "function"
+            ? formatResultNumber(res)
+            : String(res).replace(".", ","));
+
+    const line = (opDisplay && resStr) ? `${opDisplay} = ${resStr}` : (opDisplay || resStr || "");
     return white(label, line);
   }
 
   return `
     <div class="buy-cat-card" data-art-id="${escapeAttr(id)}" style="position:relative;">
-      <!-- ✅ Actions en haut à droite, vertical -->
       <div class="buy-cat-actions" style="position:absolute; top:10px; right:10px; display:flex; flex-direction:column; gap:10px;">
         <button class="buy-cat-iconbtn" data-art-edit="${escapeAttr(id)}" title="Modifier" aria-label="Modifier">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -5106,10 +5139,11 @@ function cardHTML(a) {
       <div class="buy-cat-body" style="padding-right:64px;">
         ${white("Nom", a.name)}
         ${white("Code", a.code)}
-        ${white("Quantité", a.qty)}
-        ${white("Extra", a.extra)}
-        ${white("Pris d’ensemble (PE)", a.pe)}
-        ${white("Prix de gros unitaire (PGU)", a.pgu)}
+
+        ${whiteNum("Quantité", a.qty)}
+        ${whiteNum("Extra", a.extra)}
+        ${whiteNum("Pris d’ensemble (PE)", a.pe)}
+        ${whiteNum("Prix de gros unitaire (PGU)", a.pgu)}
 
         ${opWhite("Prix de gros total (PGT)", a.pgt, a.pgtResult)}
         ${opWhite("Prix de revient global (PRG)", a.prg, a.prgResult)}
@@ -5118,6 +5152,7 @@ function cardHTML(a) {
     </div>
   `;
 }
+
 
 
   const listToday = visibleTodayArticles();
