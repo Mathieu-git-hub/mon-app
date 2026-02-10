@@ -6556,9 +6556,12 @@ if (addBtn) addBtn.addEventListener("click", () => openArtAddChoiceModal());
   const suggest = document.getElementById("buyArtSuggest");
 
   function allVisibleForSearch() {
-    // visibles ce jour uniquement
-    return visibleTodayArticles();
-  }
+  // ✅ tous les articles actifs enregistrés jusqu’à ce jour inclus
+  return activeArticles()
+    .filter(a => String(a.createdAtIso || "") <= String(isoDate))
+    .sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
+}
+
 
   function renderSuggestions(q) {
     const nq = normSearch(q);
