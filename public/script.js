@@ -5065,24 +5065,71 @@ function renderBuyArticlesPage(isoDate) {
     safePersistNow();
   }
 
-  function safeFormatOpDisplay(raw) {
-  // si tu n'as pas d'op => ""
-  let s = String(raw || "").trim();
-  if (!s) return "";
-
-  // remplace opérateurs visuels
-  s = s.replace(/\*/g, "×").replace(/\//g, "÷");
-
-  // ajoute espaces autour des opérateurs
-  // (+ - × ÷ ^ ( ))
-  s = s.replace(/\s*([+\-×÷^()])\s*/g, " $1 ");
-  s = s.replace(/\s+/g, " ").trim();
-
-  // corrige espaces près des parenthèses
-  s = s.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
-
+  function formatResultNumberLocal(n) {
+  if (!Number.isFinite(n)) return "(...)";
+  const s = String(n).replace(".", ",");
+  if (typeof formatInputNumberDisplay === "function") return formatInputNumberDisplay(s);
+  if (typeof formatCommaNumber === "function") return formatCommaNumber(n);
   return s;
 }
+
+function formatOpDisplay(raw) {
+  let s = String(raw || "");
+
+  // normalise opérateurs affichés
+  s = s.replace(/\*/g, "×").replace(/\//g, "÷");
+
+  const tokens = [];
+  let i = 0;
+
+  function isDigit(ch){ return /[0-9]/.test(ch); }
+
+  while (i < s.length) {
+    const ch = s[i];
+
+    // nombres (digits + espaces + , .)
+    if (isDigit(ch) || ch === "," || ch === "." || ch === " ") {
+      let start = i;
+      i++;
+      while (i < s.length && (isDigit(s[i]) || s[i] === "," || s[i] === "." || s[i] === " ")) i++;
+      const part = s.slice(start, i);
+
+      const numRaw = part.replace(/\s+/g, "").replace(/\./g, ",");
+      const n = (typeof toNumberLoose === "function") ? toNumberLoose(numRaw) : Number(numRaw.replace(",", "."));
+      if (Number.isFinite(n)) tokens.push({ t:"num", v: formatResultNumberLocal(n) });
+      else tokens.push({ t:"txt", v: part.trim() });
+      continue;
+    }
+
+    if ("+-×÷^()".includes(ch)) {
+      tokens.push({ t:"op", v: ch });
+      i++;
+      continue;
+    }
+
+    tokens.push({ t:"txt", v: ch });
+    i++;
+  }
+
+  // rebuild avec espaces
+  let out = "";
+  for (const tk of tokens) {
+    if (tk.t === "op") {
+      if (tk.v === "(") { out += "("; continue; }
+      if (tk.v === ")") { out = out.replace(/\s+$/,""); out += ")"; continue; }
+      out = out.replace(/\s+$/,"");
+      out += " " + tk.v + " ";
+      continue;
+    }
+    out += tk.v;
+  }
+
+  out = out.replace(/\s+/g, " ").trim();
+  out = out.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+
+  return out;
+}
+
 
 
   // ----------- UI helpers (rectangle article)
@@ -5131,7 +5178,8 @@ function cardHTML(a) {
     const opStr = String(op ?? "").trim();
 
     // 👉 op affichée avec espaces + format milliers sur les nombres
-    const opDisplay = opStr ? safeFormatOpDisplay(opStr) : "";
+    const opDisplay = opStr ? formatOpDisplay(opStr) : "";
+
 
 
     const resStr =
