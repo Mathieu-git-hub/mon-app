@@ -1,12 +1,19 @@
-const CACHE_NAME = "monapp-v1";
+const CACHE_NAME = "monapp-v2";
 
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
   "/script.js",
   "/manifest.webmanifest",
-  "/icon.png"
+
+  // ✅ mets ici tes vrais fichiers d'icônes
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/icon-144.png"
 ];
+
+
+
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
