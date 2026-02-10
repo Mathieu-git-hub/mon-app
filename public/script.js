@@ -3,6 +3,38 @@ const app = document.getElementById("app");
 let currentUser = null;
 let dailyStore = {}; // store chargé depuis la DB
 
+// ===============================
+// ✅ INSTALLATION PWA (Android)
+// ===============================
+let deferredPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+
+  const btn = document.getElementById("installBtn");
+  if (btn) btn.style.display = "block";
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredPrompt = null;
+  const btn = document.getElementById("installBtn");
+  if (btn) btn.style.display = "none";
+});
+
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("#installBtn");
+  if (!btn) return;
+  if (!deferredPrompt) return;
+
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+
+  deferredPrompt = null;
+  btn.style.display = "none";
+});
+
+
 /* ===============================
    ✅ BUY — CATÉGORIES (stockées en DB via dailyStore)
    - Stock global: dailyStore.__buy.categories[]
