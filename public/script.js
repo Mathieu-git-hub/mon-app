@@ -5054,6 +5054,26 @@ function renderBuyArticlesPage(isoDate) {
     safePersistNow();
   }
 
+  function safeFormatOpDisplay(raw) {
+  // si tu n'as pas d'op => ""
+  let s = String(raw || "").trim();
+  if (!s) return "";
+
+  // remplace opérateurs visuels
+  s = s.replace(/\*/g, "×").replace(/\//g, "÷");
+
+  // ajoute espaces autour des opérateurs
+  // (+ - × ÷ ^ ( ))
+  s = s.replace(/\s*([+\-×÷^()])\s*/g, " $1 ");
+  s = s.replace(/\s+/g, " ").trim();
+
+  // corrige espaces près des parenthèses
+  s = s.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")");
+
+  return s;
+}
+
+
   // ----------- UI helpers (rectangle article)
   // ----------- UI helpers (rectangle article)
 function cardHTML(a) {
@@ -5100,7 +5120,8 @@ function cardHTML(a) {
     const opStr = String(op ?? "").trim();
 
     // 👉 op affichée avec espaces + format milliers sur les nombres
-    const opDisplay = opStr ? formatOpDisplay(opStr) : "";
+    const opDisplay = opStr ? safeFormatOpDisplay(opStr) : "";
+
 
     const resStr =
       (res === null || res === undefined || res === "")
