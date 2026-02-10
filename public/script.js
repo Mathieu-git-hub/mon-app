@@ -5178,7 +5178,12 @@ function cardHTML(a) {
 
         <!-- ✅ LISTE -->
         <div id="buyArtList" class="buy-cat-list">
-          ${listToday.map(cardHTML).join("")}
+          ${listToday.map(cardHTML).join(
+  `<div class="buy-art-space"></div>
+   <div class="buy-art-sep" aria-hidden="true"></div>
+   <div class="buy-art-space"></div>`
+)}
+
           ${
             !listToday.length
               ? `<div style="opacity:.75; font-weight:800; margin-top:10px;">Aucun article ce jour</div>`
@@ -6584,7 +6589,12 @@ function cardWithDate(a) {
       const listEl = document.getElementById("buyArtList");
       if (listEl) {
         listEl.innerHTML = `
-          ${listToday.map(cardHTML).join("")}
+          ${listToday.map(cardHTML).join(
+  `<div class="buy-art-space"></div>
+   <div class="buy-art-sep" aria-hidden="true"></div>
+   <div class="buy-art-space"></div>`
+)}
+
           ${!listToday.length ? `<div style="opacity:.75; font-weight:800; margin-top:10px;">Aucun article ce jour</div>` : ``}
         `;
       }

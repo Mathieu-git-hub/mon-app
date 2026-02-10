@@ -638,13 +638,36 @@
    ✅ BUY — Catégories UI
 =============================== */
 
-.buy-cat-list{ margin-top: 10px; display:flex; flex-direction:column; gap:18px; }
+.buy-cat-list{
+  margin-top: 10px;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
 
+/* ✅ espace vide entre carte et bande */
+.buy-art-space{
+  height:18px;
+}
 @media (max-width:520px){
-  .buy-cat-list{
-    gap:14px;
+  .buy-art-space{
+    height:14px;
   }
 }
+
+/* ✅ bande rouge de séparation */
+.buy-art-sep{
+  width:100%;
+  height:18px;
+  background:#e60000;
+  border-radius:12px;
+}
+@media (max-width:520px){
+  .buy-art-sep{
+    height:14px;
+  }
+}
+
 
 
 .buy-cat-card{
