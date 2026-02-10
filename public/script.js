@@ -6312,10 +6312,57 @@ syncOkState();
   }
 
   // =========================
+// ✅ MODAL "RAJOUT ?" (avant création)
+// =========================
+function closeArtAddChoiceModal() {
+  const bd = document.getElementById("artAddChoiceBackdrop");
+  if (bd) bd.remove();
+}
+
+function openArtAddChoiceModal() {
+  if (document.getElementById("artAddChoiceBackdrop")) return;
+
+  const bd = document.createElement("div");
+  bd.id = "artAddChoiceBackdrop";
+  bd.className = "cat-del-backdrop";
+
+  bd.innerHTML = `
+    <div class="cat-del-modal" role="dialog" aria-modal="true" aria-label="Rajout article">
+      <div class="cat-del-text">Rajout ?</div>
+      <div class="cat-del-actions">
+        <button id="artAddYes" class="cat-del-btn" type="button" style="color:#2e7bff;">oui</button>
+        <button id="artAddNo"  class="cat-del-btn" type="button" style="color:#2e7bff;">non</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeArtAddChoiceModal();
+  });
+
+  document.body.appendChild(bd);
+
+  const yes = document.getElementById("artAddYes");
+  const no  = document.getElementById("artAddNo");
+
+  if (yes) yes.addEventListener("click", () => {
+    closeArtAddChoiceModal();
+    openArtModal({ mode: "create", isRajout: true });
+  });
+
+  if (no) no.addEventListener("click", () => {
+    closeArtAddChoiceModal();
+    openArtModal({ mode: "create", isRajout: false });
+  });
+}
+
+
+  // =========================
   // ✅ Bouton + (création)
   // =========================
   const addBtn = document.getElementById("addArtBtn");
-  if (addBtn) addBtn.addEventListener("click", () => openArtModal({ mode: "create" }));
+if (addBtn) addBtn.addEventListener("click", () => openArtAddChoiceModal());
+
 
   // =========================
   // ✅ Clic crayon / poubelle
