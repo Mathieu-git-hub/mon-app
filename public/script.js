@@ -5215,7 +5215,7 @@ function cardHTML(a) {
     if (bd) bd.remove();
   }
 
-  function openArtModal({ mode = "create", artId = null } = {}) {
+  function openArtModal({ mode = "create", artId = null, isRajout = false } = {}) {
     if (document.getElementById("artModalBackdrop")) return;
 
     const existing = artId ? (buy.articles || []).find(a => a.id === artId) : null;
@@ -5509,6 +5509,13 @@ buy.articleDraftByIso = buy.articleDraftByIso || {};
 const draft = buy.articleDraftByIso[isoDate] || {
   // texte
   name: "", code: "",
+
+    // ✅ rajout
+  isRajout: false,
+  nameCodeLocked: false,
+  rajoutOriginCode: "",
+
+
   // valeurs simples
   qty: "", qtyFinalized: false,
   extra: "", extraFinalized: false,
@@ -5522,6 +5529,10 @@ const draft = buy.articleDraftByIso[isoDate] || {
 
 };
 buy.articleDraftByIso[isoDate] = draft;
+draft.isRajout = (mode === "create" && !!isRajout);
+draft.nameCodeLocked = false;
+draft.rajoutOriginCode = "";
+
 
 // =======================================
 // ✅ EDIT : pré-remplir le draft depuis l’article existant
@@ -5684,6 +5695,39 @@ function renderOpRow({ key, finalizedKey, resultKey, errKey, label, hint, boxId,
   `;
 }
 
+function originCodeOf(code) {
+  return String(code || "").trim().replace(/\s+[A-Z]{1,2}$/i, "").trim();
+}
+
+function nextEnrichedCode(origin) {
+  const base = String(origin || "").trim();
+  if (!base) return "";
+
+  const used = new Set();
+  for (const a of (buy.articles || [])) {
+    if (a.deletedAtIso) continue;
+    const oc = originCodeOf(a.code);
+    if (oc !== base) continue;
+
+    const m = String(a.code || "").trim().match(new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s+([A-Z]{1,2})$"));
+    if (m && m[1]) used.add(m[1].toUpperCase());
+  }
+
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  for (const L of letters) {
+    if (!used.has(L)) return `${base} ${L}`;
+  }
+
+  // fallback si A..Z tous pris : AA, AB, ...
+  for (const L1 of letters) {
+    for (const L2 of letters) {
+      const v = `${L1}${L2}`;
+      if (!used.has(v)) return `${base} ${v}`;
+    }
+  }
+  return `${base} Z`;
+}
+
 
 // 4) re-render du contenu modal (sans la fermer)
 function rerenderArtModalBody() {
@@ -5691,17 +5735,26 @@ function rerenderArtModalBody() {
   if (!grid) return;
 
   grid.innerHTML = `
-    <div class="label">Nom</div>
-    <div>
-      <input id="artName" class="input" autocomplete="off" value="${escapeAttr(draft.name || "")}" />
+        <div class="label">Nom</div>
+    <div style="position:relative;">
+      <input id="artName" class="input" autocomplete="off"
+        value="${escapeAttr(draft.name || "")}"
+        ${draft.nameCodeLocked ? "disabled" : ""}
+      />
       <div id="artNameErr" class="cat-err" style="display:none;"></div>
+      ${draft.isRajout && !draft.nameCodeLocked ? `<div id="artNameSuggest" class="op-suggest" style="display:none;"></div>` : ``}
     </div>
 
     <div class="label">Code</div>
-    <div>
-      <input id="artCode" class="input" autocomplete="off" value="${escapeAttr(draft.code || "")}" />
+    <div style="position:relative;">
+      <input id="artCode" class="input" autocomplete="off"
+        value="${escapeAttr(draft.code || "")}"
+        ${draft.nameCodeLocked ? "disabled" : ""}
+      />
       <div id="artCodeErr" class="cat-err" style="display:none;"></div>
+      ${draft.isRajout && !draft.nameCodeLocked ? `<div id="artCodeSuggest" class="op-suggest" style="display:none;"></div>` : ``}
     </div>
+
 
     ${renderSimpleNumRow({ key:"qty",   finalizedKey:"qtyFinalized",   label:"Quantité", inputId:"artQty",   validateId:"artQtyValidate",   modifyId:"artQtyModify" })}
     ${renderSimpleNumRow({ key:"extra", finalizedKey:"extraFinalized", label:"Extra",    inputId:"artExtra", validateId:"artExtraValidate", modifyId:"artExtraModify" })}
@@ -5833,6 +5886,119 @@ if (codeEl) codeEl.addEventListener("input", async () => {
   await safePersistNow();
   syncOkState();
 });
+
+function getRajoutCandidates() {
+  // ✅ suggérer tous les articles actifs déjà enregistrés (y compris les rajouts),
+  // y compris les jours précédents (et aujourd’hui aussi si tu veux)
+  return (buy.articles || [])
+    .filter(a => !a.deletedAtIso)
+    .filter(a => String(a.createdAtIso || "") <= String(isoDate))
+    .sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
+}
+
+function showSuggest(elSuggest, itemsHtml) {
+  if (!elSuggest) return;
+  if (!itemsHtml) {
+    elSuggest.style.display = "none";
+    elSuggest.innerHTML = "";
+    return;
+  }
+  elSuggest.innerHTML = itemsHtml;
+  elSuggest.style.display = "";
+}
+
+function bindRajoutSuggest() {
+  if (!draft.isRajout) return;
+  if (draft.nameCodeLocked) return;
+
+  const nameEl = document.getElementById("artName");
+  const codeEl = document.getElementById("artCode");
+  const nameSuggest = document.getElementById("artNameSuggest");
+  const codeSuggest = document.getElementById("artCodeSuggest");
+
+  const list = getRajoutCandidates();
+
+  function renderListForName(q) {
+    const nq = normSearch(q);
+    if (!nq) return "";
+    const top = list.filter(a => normSearch(a.name).includes(nq)).slice(0, 7);
+    return top.map(a => {
+      const oc = originCodeOf(a.code);
+      return `<div class="op-suggest-item" data-rj-id="${escapeAttr(a.id)}">`
+        + `${escapeHtml(a.name)} <span class="op-suggest-muted">(${escapeHtml(oc)})</span>`
+        + `</div>`;
+    }).join("");
+  }
+
+  function renderListForCode(q) {
+    const nq = normSearch(q);
+    if (!nq) return "";
+    const top = list.filter(a => normSearch(originCodeOf(a.code)).includes(nq)).slice(0, 7);
+    return top.map(a => {
+      const oc = originCodeOf(a.code);
+      return `<div class="op-suggest-item" data-rj-id="${escapeAttr(a.id)}">`
+        + `<span class="op-suggest-strong">${escapeHtml(oc)}</span>`
+        + ` <span class="op-suggest-muted">— ${escapeHtml(a.name)}</span>`
+        + `</div>`;
+    }).join("");
+  }
+
+  async function pickArticleById(id) {
+    const a = list.find(x => x.id === id);
+    if (!a) return;
+
+    const oc = originCodeOf(a.code);
+    const enriched = nextEnrichedCode(oc);
+
+    // ✅ Remplir les deux sans déclencher doublons
+    draft.name = a.name || "";
+    draft.code = enriched;
+    draft.rajoutOriginCode = oc;
+
+    // ✅ Verrouiller
+    draft.nameCodeLocked = true;
+
+    await safePersistNow();
+    rerenderArtModalBody();
+  }
+
+  if (nameEl && nameSuggest) {
+    nameEl.addEventListener("input", () => {
+      if (draft.nameCodeLocked) return;
+      showSuggest(nameSuggest, renderListForName(nameEl.value));
+    });
+    nameSuggest.addEventListener("click", (e) => {
+      const it = e.target.closest(".op-suggest-item");
+      if (!it) return;
+      pickArticleById(it.getAttribute("data-rj-id"));
+    });
+  }
+
+  if (codeEl && codeSuggest) {
+    codeEl.addEventListener("input", () => {
+      if (draft.nameCodeLocked) return;
+      showSuggest(codeSuggest, renderListForCode(codeEl.value));
+    });
+    codeSuggest.addEventListener("click", (e) => {
+      const it = e.target.closest(".op-suggest-item");
+      if (!it) return;
+      pickArticleById(it.getAttribute("data-rj-id"));
+    });
+  }
+
+  // clic dehors => fermer
+  document.addEventListener("pointerdown", (e) => {
+    if (nameSuggest && nameSuggest.contains(e.target)) return;
+    if (codeSuggest && codeSuggest.contains(e.target)) return;
+    if (nameEl && nameEl.contains(e.target)) return;
+    if (codeEl && codeEl.contains(e.target)) return;
+    showSuggest(nameSuggest, "");
+    showSuggest(codeSuggest, "");
+  }, { capture:true });
+}
+
+bindRajoutSuggest();
+
 
 
   // champs num simples
