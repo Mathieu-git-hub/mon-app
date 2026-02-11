@@ -78,21 +78,7 @@ app.use(
   })
 );
 
-/** ---------------------------
- *  5) Static files (no-cache script/index)
- * -------------------------- */
-app.use(
-  express.static(path.join(__dirname, "public"), {
-    fallthrough: false, // ✅ si un fichier n'existe pas => 404 (au lieu d'index.html)
-    setHeaders(res, filePath) {
-      if (filePath.endsWith("script.js") || filePath.endsWith("index.html")) {
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-        res.setHeader("Pragma", "no-cache");
-        res.setHeader("Expires", "0");
-      }
-    },
-  })
-);
+
 
 
 /** ---------------------------
@@ -251,6 +237,22 @@ app.post("/api/data", requireAuth, async (req, res) => {
 app.get(/^(?!\/api\/).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
+/** ---------------------------
+ *  5) Static files (no-cache script/index)
+ * -------------------------- */
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    fallthrough: false, // ✅ si un fichier n'existe pas => 404 (au lieu d'index.html)
+    setHeaders(res, filePath) {
+      if (filePath.endsWith("script.js") || filePath.endsWith("index.html")) {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+      }
+    },
+  })
+);
 
 /** ---------------------------
  *  10) Start server
