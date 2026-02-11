@@ -234,16 +234,13 @@ app.post("/api/data", requireAuth, async (req, res) => {
   }
 });
 
-app.get(/^(?!\/api\/).*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
 /** ---------------------------
- *  5) Static files (no-cache script/index)
+ *  5) Static files
  * -------------------------- */
 app.use(
   express.static(path.join(__dirname, "public"), {
-    fallthrough: false, // ✅ si un fichier n'existe pas => 404 (au lieu d'index.html)
+    // ✅ important : laisse Express continuer si le fichier n'existe pas
+    fallthrough: true,
     setHeaders(res, filePath) {
       if (filePath.endsWith("script.js") || filePath.endsWith("index.html")) {
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -253,6 +250,14 @@ app.use(
     },
   })
 );
+
+/** ---------------------------
+ *  9bis) SPA fallback (APRÈS static + APRÈS /api)
+ * -------------------------- */
+app.get(/^(?!\/api\/).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 
 /** ---------------------------
  *  10) Start server
