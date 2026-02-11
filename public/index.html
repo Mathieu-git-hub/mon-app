@@ -6,10 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mon application</title>
 
-    <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#000000">
-
-
     <style>
       html, body { height: 100%; margin: 0; }
 
@@ -938,33 +934,10 @@
   </head>
 
   <body>
-    <div id="app"></div>
-
-    <button id="installBtn"
-  style="
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 9999;
-    display: none;
-    background: #1e5eff;
-    color: #fff;
-    border: none;
-    border-radius: 12px;
-    padding: 12px 16px;
-    font-weight: 900;
-  ">
-  Installer
-</button>
 
 
     <script src="script.js"></script>
     <script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js");
-  });
-}
 
 </script>
 
