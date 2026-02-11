@@ -6965,6 +6965,16 @@ if (route.kind === "buyArticles") return renderBuyArticlesPage(route.iso);
 
 window.addEventListener("popstate", render);
 
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("🔥 Unhandled promise rejection:", event.reason);
+  alert("Unhandled promise rejection: " + (event.reason?.message || event.reason));
+});
+
+window.addEventListener("error", (event) => {
+  console.error("🔥 Window error:", event.error || event.message, event);
+});
+
+
 // --------- DÉMARRAGE ---------
 (async function startApp() {
   currentUser = await apiGetMe();
