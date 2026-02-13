@@ -5040,16 +5040,16 @@ function openDailySaleAdvanceModal() {
   const yes = document.getElementById("dailySaleAdvanceYes");
   const no  = document.getElementById("dailySaleAdvanceNo");
 
-    if (yes) yes.addEventListener("click", () => {
-    closeDailySaleAdvanceModal();
-    openDailySaleModal(); // ✅ nouvelle modale
-  });
+  if (yes) yes.addEventListener("click", () => {
+  closeDailySaleAdvanceModal();
+  // ✅ rien (ou autre logique plus tard)
+});
 
+if (no) no.addEventListener("click", () => {
+  closeDailySaleAdvanceModal();
+  openDailySaleModal(); // ✅ c’est "non" qui ouvre "Nouvelle vente"
+});
 
-  if (no) no.addEventListener("click", () => {
-    closeDailySaleAdvanceModal();
-    // ✅ placeholder : logique "non avance" à brancher plus tard
-  });
 }
 
 // ===============================
