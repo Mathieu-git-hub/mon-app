@@ -4646,6 +4646,92 @@ function renderDailySaleRecap() {
 renderDailySaleRecap();
 
 // ===============================
+// ✅ Recherche + suggestions (Vente du jour)
+// ===============================
+const saleSearch  = document.getElementById("dailySaleSearch");
+const saleSuggest = document.getElementById("dailySaleSuggest");
+
+function allVisibleForSaleSearch() {
+  return (buy.articles || [])
+    .filter(a => isVisibleOnDay(a))
+    .sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
+}
+
+function showSaleSuggest(html) {
+  if (!saleSuggest) return;
+  if (!html) {
+    saleSuggest.style.display = "none";
+    saleSuggest.innerHTML = "";
+    return;
+  }
+  saleSuggest.innerHTML = html;
+  saleSuggest.style.display = "";
+}
+
+function renderSaleSearch(q) {
+  const nq = normSearch(q);
+  if (!nq) {
+    showSaleSuggest("");
+    renderDailySaleRecap(); // ✅ retour affichage groupé
+    return;
+  }
+
+  const list = allVisibleForSaleSearch();
+  const filtered = list.filter(a => {
+    const n = normSearch(a.name);
+    const c = normSearch(a.code);
+    return n.includes(nq) || c.includes(nq);
+  });
+
+  const top = filtered.slice(0, 7);
+  if (!top.length) {
+    showSaleSuggest("");
+  } else {
+    showSaleSuggest(top.map(a => {
+      const label = `${a.code} — ${a.name}`;
+      return `<div class="op-suggest-item" data-sale-sel="${escapeAttr(a.id)}">${escapeHtml(label)}</div>`;
+    }).join(""));
+  }
+
+  // ✅ Affichage résultat = rectangle du jour (sans tenir compte des jours d’après)
+  const listEl = document.getElementById("dailySaleList");
+  if (listEl) {
+    listEl.innerHTML = `
+      <div class="buy-cat-section-title">Résultats</div>
+      ${filtered.map(a => `<div style="margin-top:14px;">${saleCardHTML(a)}</div>`).join("")}
+    `;
+  }
+}
+
+if (saleSearch && saleSuggest) {
+  saleSearch.addEventListener("input", () => renderSaleSearch(saleSearch.value));
+
+  saleSuggest.addEventListener("click", (e) => {
+    const it = e.target.closest(".op-suggest-item");
+    if (!it) return;
+
+    const id = it.getAttribute("data-sale-sel");
+    const art = allVisibleForSaleSearch().find(a => a.id === id);
+    showSaleSuggest("");
+
+    const listEl = document.getElementById("dailySaleList");
+    if (art && listEl) {
+      listEl.innerHTML = `
+        <div class="buy-cat-section-title">Résultat</div>
+        <div style="margin-top:14px;">${saleCardHTML(art)}</div>
+      `;
+    }
+  });
+
+  document.addEventListener("pointerdown", (e) => {
+    if (saleSuggest.contains(e.target)) return;
+    if (saleSearch.contains(e.target)) return;
+    showSaleSuggest("");
+  }, { capture: true });
+}
+
+
+// ===============================
 // ✅ MODAL "Avance ?" (Vente du jour)
 // ===============================
 function closeDailySaleAdvanceModal() {
