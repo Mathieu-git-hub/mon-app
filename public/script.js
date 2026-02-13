@@ -4499,16 +4499,30 @@ function totalPvAllDaysForCode(code) {
 // compression PV du jour : conserve l’ordre d’apparition des valeurs uniques
 function pvtExpressionForToday(code) {
   const list = salesTodayForCode(code);
+
+  // ✅ cumul AVANT aujourd’hui (ne doit jamais modifier les jours passés)
+  const prevCum = totalPvBeforeDayForCode(code, isoDate);
+
+  // ✅ pas de vente aujourd’hui => ligne PVT = cumul précédent
+  if (!list.length) {
+    return {
+      hasAny: false,
+      dayTotal: 0,
+      prevCum,
+      cumToDay: prevCum,
+      displayNoSale: (Number.isFinite(prevCum) && prevCum > 0) ? fmtResult(prevCum) : ""
+    };
+  }
+
+  // ✅ vente aujourd’hui => expression compressée
   const order = [];
-  const counts = new Map(); // key string -> count
-  const values = new Map(); // key string -> numeric value
+  const counts = new Map();
+  const values = new Map();
 
   for (const s of list) {
     const n = parseLooseNumber(s.pv);
     if (!Number.isFinite(n)) continue;
-
-    // clé stable (on arrondit pas : on stocke la valeur brute en string normalisée)
-    const key = String(n).replace(".", ","); // ok pour regroupement simple
+    const key = String(n).replace(".", ",");
     if (!counts.has(key)) {
       counts.set(key, 1);
       values.set(key, n);
@@ -4525,22 +4539,25 @@ function pvtExpressionForToday(code) {
     if (!Number.isFinite(n) || c <= 0) continue;
 
     const vDisp = fmtResult(n);
-    if (c === 1) parts.push(`${vDisp}`);
-    else parts.push(`${vDisp} × ${c}`);
+    parts.push(c === 1 ? `${vDisp}` : `${vDisp} × ${c}`);
   }
 
-  const totalDay = sumPvSales(list);
+  const dayTotal = sumPvSales(list);
   const expr = parts.length ? parts.join(" + ") : "";
-  const exprWithTotal = expr ? `${expr} = ${fmtResult(totalDay)}` : `${fmtResult(totalDay)}`;
+  const exprWithTotal = expr ? `${expr} = ${fmtResult(dayTotal)}` : `${fmtResult(dayTotal)}`;
 
-  // total historique entre parenthèses (par article)
-  const totalAll = totalPvAllDaysForCode(code);
-  const withParen = Number.isFinite(totalAll) && totalAll !== totalDay
-    ? `${exprWithTotal} (${fmtResult(totalAll)})`
-    : exprWithTotal;
+  // ✅ cumul à date = cumul avant + total du jour
+  const cumToDay = prevCum + dayTotal;
 
-  return { hasAny: list.length > 0, dayTotal: totalDay, display: withParen };
+  return {
+    hasAny: true,
+    dayTotal,
+    prevCum,
+    cumToDay,
+    displaySaleDay: `${exprWithTotal} (${fmtResult(cumToDay)})`
+  };
 }
+
 
 // PRT du jour : PR × qtyVendueJour = résultat
 function prtExpressionForToday(article) {
@@ -4645,6 +4662,30 @@ function fmtResult(n) {
   return s;
 }
 
+function totalPvBeforeDayForCode(code, iso) {
+  const c = normSearch(String(code || ""));
+  let total = 0;
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    // ✅ uniquement les jours strictement AVANT iso
+    if (isoToDayTs(dayIso) >= isoToDayTs(iso)) continue;
+
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    for (const s of arr) {
+      if (normSearch(s.code) !== c) continue;
+      const p = parseLooseNumber(s.pv);
+      if (Number.isFinite(p)) total += p;
+    }
+  }
+  return total;
+}
+
+function totalPvUpToDayForCode(code, iso) {
+  // cumul jusqu’au jour affiché (inclu) = avant + du jour
+  return totalPvBeforeDayForCode(code, iso) + sumPvSales(salesTodayForCode(code));
+}
+
+
 // ---- visibilité : créé avant ou le même jour, et pas supprimé avant/au jour
 function isVisibleOnDay(a) {
   const cur = isoToDayTs(isoDate);
@@ -4733,18 +4774,19 @@ function saleCardHTML(a) {
     const prt = prtExpressionForToday(a);     // {hasAny, display}
   const pvt = pvtExpressionForToday(a.code); // {hasAny, display}
 
-  // ✅ Cas "pas de vente aujourd’hui" : on affiche seulement PVT (somme historique)
-  let showPRT = prt.hasAny;
-  let pvtLineDisplay = "";
+  // ✅ Cas "pas de vente aujourd’hui" : PVT = cumul des jours précédents (jusqu’à hier)
+// ✅ Cas "vente aujourd’hui" : PVT = expression du jour + (cumul jusqu’à aujourd’hui)
+let showPRT = prt.hasAny;
+let pvtLineDisplay = "";
 
-  if (pvt.hasAny) {
-    // vente aujourd'hui => expression + total ( + parenthèses article)
-    pvtLineDisplay = pvt.display;
-  } else {
-    // pas de vente aujourd’hui => PVT = cumul historique (si tu veux 0, dis-moi)
-    const totalAll = totalPvAllDaysForCode(a.code);
-    pvtLineDisplay = (Number.isFinite(totalAll) && totalAll > 0) ? fmtResult(totalAll) : "";
-  }
+if (pvt.hasAny) {
+  // vente aujourd'hui => expression + total + (cumul à date)
+  pvtLineDisplay = pvt.displaySaleDay;
+} else {
+  // pas de vente aujourd’hui => récap cumul avant aujourd’hui (ne doit pas inclure le futur)
+  pvtLineDisplay = pvt.displayNoSale;
+}
+
 
 
   return `
