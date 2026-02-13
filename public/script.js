@@ -4641,7 +4641,55 @@ function renderDailySaleRecap() {
   listEl.innerHTML = html;
 }
 
+
+
 renderDailySaleRecap();
+
+// ===============================
+// ✅ MODAL "Avance ?" (Vente du jour)
+// ===============================
+function closeDailySaleAdvanceModal() {
+  const bd = document.getElementById("dailySaleAdvanceBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleAdvanceModal() {
+  if (document.getElementById("dailySaleAdvanceBackdrop")) return;
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleAdvanceBackdrop";
+  bd.className = "cat-del-backdrop";
+
+  bd.innerHTML = `
+    <div class="cat-del-modal" role="dialog" aria-modal="true" aria-label="Avance vente du jour">
+      <div class="cat-del-text">Avance ?</div>
+      <div class="cat-del-actions">
+        <button id="dailySaleAdvanceYes" class="cat-del-btn" type="button" style="color:#2e7bff;">oui</button>
+        <button id="dailySaleAdvanceNo"  class="cat-del-btn" type="button" style="color:#2e7bff;">non</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeDailySaleAdvanceModal();
+  });
+
+  document.body.appendChild(bd);
+
+  const yes = document.getElementById("dailySaleAdvanceYes");
+  const no  = document.getElementById("dailySaleAdvanceNo");
+
+  if (yes) yes.addEventListener("click", () => {
+    closeDailySaleAdvanceModal();
+    // ✅ placeholder : logique "avance" à brancher plus tard
+  });
+
+  if (no) no.addEventListener("click", () => {
+    closeDailySaleAdvanceModal();
+    // ✅ placeholder : logique "non avance" à brancher plus tard
+  });
+}
+
 
 
 
@@ -4662,6 +4710,10 @@ renderDailySaleRecap();
 
   const cb = document.getElementById("calBtn");
   if (cb) cb.addEventListener("click", () => navigateTo("#daily"));
+
+  const addSaleBtn = document.getElementById("addDailySaleBtn");
+if (addSaleBtn) addSaleBtn.addEventListener("click", () => openDailySaleAdvanceModal());
+
 
 
 }
