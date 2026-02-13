@@ -4496,33 +4496,30 @@ function cmpArticleSuffix(aCode, bCode) {
 function kv(label, value) {
   return `
     <div style="min-width:0; display:flex; align-items:center; gap:8px;">
-      <div style="font-weight:900; opacity:.95; white-space:nowrap;">${escapeHtml(label)} :</div>
-      <div class="buy-cat-white" style="flex:1; min-width:0;">${escapeHtml(value || "")}</div>
+      <div style="font-weight:900; opacity:.95; white-space:nowrap; flex:0 0 auto;">
+        ${escapeHtml(label)} :
+      </div>
+      <div class="buy-cat-white" style="flex:1 1 auto; min-width:0;">
+        ${escapeHtml(value || "")}
+      </div>
     </div>
   `;
 }
 
 
+
 function saleCardHTML(a) {
   const title = `${a.name || ""} (${a.code || ""})`;
 
-  // PR / PRG : résultats d’opération si dispo
   const pr  = fmtResult(Number(a.prResult));
   const prg = fmtResult(Number(a.prgResult));
-
-  // PV : simple (string), format milliers
   const pv  = fmtWhite(a.pv || "");
 
-  // Ajout (date FR)
   const ajout = isoToFr(a.createdAtIso);
-
-  // Qté ini = qty
   const qteIni = fmtWhite(a.qty || "");
 
-  // Vendu (placeholder pour l’instant)
   const vendu = "";
 
-  // Qté res = Qté ini - vendu (tant que vendu vide => qty)
   const qtyN  = (typeof toNumberLoose === "function")
     ? toNumberLoose(String(a.qty || "").replace(/\s+/g, ""))
     : Number(String(a.qty || "").replace(/\s+/g, "").replace(",", "."));
@@ -4535,29 +4532,47 @@ function saleCardHTML(a) {
   const qteRes = (Number.isFinite(qtyN) ? fmtResult(resN) : "");
 
   return `
-    <div class="buy-cat-card" style="padding:14px;">
-      <!-- ✅ Titre centré -->
-      <div style="text-align:center; font-weight:1000; margin-bottom:12px;">
+    <div class="buy-cat-card" style="padding:14px; display:block;">
+      
+      <!-- ✅ (1) Titre : sa propre ligne -->
+      <div style="
+        display:block;
+        text-align:center;
+        font-weight:1000;
+        margin:0 0 12px 0;
+      ">
         ${escapeHtml(title)}
       </div>
 
-      <!-- ✅ Ligne 1 : PR / PRG / PV (non centrés) — 3 colonnes identiques -->
-      <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:10px;">
+      <!-- ✅ (2) Ligne PR/PRG/PV : 3 colonnes égales -->
+      <div style="
+        display:grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap:12px;
+        margin:0 0 10px 0;
+      ">
         ${kv("PR", pr)}
         ${kv("PRG", prg)}
         ${kv("PV", pv)}
       </div>
 
-      <!-- ✅ Ligne 2 : Ajout / Qté ini / Vendu / Qté res — 4 colonnes identiques -->
-      <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px;">
+      <!-- ✅ (3) Ligne Ajout/Qté ini/Vendu/Qté res : 4 colonnes égales -->
+      <div style="
+        display:grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap:12px;
+        margin:0;
+      ">
         ${kv("Ajout", ajout)}
         ${kv("Qté ini", qteIni)}
         ${kv("Vendu", vendu)}
         ${kv("Qté res", qteRes)}
       </div>
+
     </div>
   `;
 }
+
 
 
 // ---- regroupe par catégorie (code avant le point)
