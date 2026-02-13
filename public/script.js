@@ -5242,6 +5242,7 @@ function cardHTML(a) {
         ${opWhite("Prix de gros total (PGT)", a.pgt, a.pgtResult)}
         ${opWhite("Prix de revient global (PRG)", a.prg, a.prgResult)}
         ${opWhite("Prix de revient (PR)", a.pr, a.prResult)}
+        ${whiteNum("Prix de vente (PV)", a.pv)}
       </div>
     </div>
   `;
@@ -5472,11 +5473,13 @@ function allFieldsValidated() {
     !!draft.extraFinalized &&
     !!draft.peFinalized &&
     !!draft.pguFinalized &&
+    !!draft.pvFinalized &&        // ✅ AJOUT
     !!draft.pgtFinalized &&
     !!draft.prgFinalized &&
     !!draft.prFinalized
   );
 }
+
 
 function setErr(inputEl, msgEl, msg) {
   if (!inputEl || !msgEl) return;
@@ -5655,6 +5658,8 @@ const draft = buy.articleDraftByIso[isoDate] || {
   extra: "", extraFinalized: false,
   pe: "", peFinalized: false,
   pgu: "", pguFinalized: false,
+  pv: "", pvFinalized: false,
+
 
     // opérations
   pgt: "", pgtFinalized: false, pgtResult: null, pgtErr: "",
@@ -5683,6 +5688,9 @@ function loadDraftFromExistingArticle(a) {
   draft.extra = a.extra || "";
   draft.pe    = a.pe    || "";
   draft.pgu   = a.pgu   || "";
+  draft.pv = a.pv || "";
+
+
 
   // opérations (op + résultat)
   draft.pgt = a.pgt || "";
@@ -5704,6 +5712,7 @@ function loadDraftFromExistingArticle(a) {
   draft.extraFinalized = String(draft.extra).trim() !== "";
   draft.peFinalized    = String(draft.pe).trim()    !== "";
   draft.pguFinalized   = String(draft.pgu).trim()   !== "";
+  draft.pvFinalized = String(draft.pv).trim() !== "";
 
   // Pour opérations : considéré "validé" si résultat présent (ou si op non vide, au pire)
   draft.pgtFinalized = (draft.pgtResult !== null && draft.pgtResult !== undefined) || String(draft.pgt).trim() !== "";
@@ -5918,6 +5927,13 @@ ${renderOpRow({
   boxId:"artPRBox",
   modId:"artPRModifyOp"
 })}
+
+${renderSimpleNumRow({
+  key:"pv", finalizedKey:"pvFinalized",
+  label:"Prix de vente (PV)",
+  inputId:"artPV", validateId:"artPVValidate", modifyId:"artPVModify"
+})}
+
 
   `;
 
@@ -6140,6 +6156,11 @@ bindRajoutSuggest();
   bindOneSimpleNum({ key:"extra", finalizedKey:"extraFinalized", inputId:"artExtra", validateId:"artExtraValidate", modifyId:"artExtraModify" });
   bindOneSimpleNum({ key:"pe",    finalizedKey:"peFinalized",    inputId:"artPE",    validateId:"artPEValidate",    modifyId:"artPEModify" });
   bindOneSimpleNum({ key:"pgu",   finalizedKey:"pguFinalized",   inputId:"artPGU",   validateId:"artPGUValidate",   modifyId:"artPGUModify" });
+  bindOneSimpleNum({
+  key:"pv", finalizedKey:"pvFinalized",
+  inputId:"artPV", validateId:"artPVValidate", modifyId:"artPVModify"
+});
+
 
   // bouton Annuler
   const cancelBtn = document.getElementById("artCancelBtn");
@@ -6183,6 +6204,8 @@ if (okBtn) {
         extra: draft.extra || "",
         pe: draft.pe || "",
         pgu: draft.pgu || "",
+        pv: draft.pv || "",
+
 
         // opérations (on stocke l’op posée + le résultat)
         pgt: draft.pgt || "",
@@ -6220,6 +6243,8 @@ if (okBtn) {
       existing.extra = draft.extra || "";
       existing.pe = draft.pe || "";
       existing.pgu = draft.pgu || "";
+      existing.pv = draft.pv || "";
+
 
       existing.pgt = draft.pgt || "";
       existing.pgtResult = draft.pgtResult ?? null;
@@ -6260,6 +6285,7 @@ if (okBtn) {
     if (draft.extraFinalized) items.push({ key:"extra", label:"Extra", valueText: formatWhiteNumber(draft.extra || "0") });
     if (draft.peFinalized) items.push({ key:"pe", label:"PE", valueText: formatWhiteNumber(draft.pe || "0") });
     if (draft.pguFinalized) items.push({ key:"pgu", label:"PGU", valueText: formatWhiteNumber(draft.pgu || "0") });
+    if (draft.pvFinalized) items.push({ key:"pv", label:"PV", valueText: formatWhiteNumber(draft.pv || "0") });
     return items;
   }
 
