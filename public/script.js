@@ -4443,14 +4443,28 @@ function renderBuyCategoriesPage(isoDate) {
   }
 
   function isNameTaken(name, exceptId = null) {
-    const n = normSearch(name);
-    return activeCategories().some(c => c.id !== exceptId && normSearch(c.name) === n);
-  }
+  const n = normSearch(name);
 
-  function findCodeOwner(code, exceptId = null) {
-    const c0 = normSearch(code);
-    return activeCategories().find(c => c.id !== exceptId && normSearch(c.code) === c0) || null;
-  }
+  // ✅ interdit doublon si l'article EXISTE déjà avant (ou le même jour)
+  // ✅ donc valable aussi quand on ajoute plus tard (jours suivants)
+  return activeArticles().some(a =>
+    a.id !== exceptId &&
+    String(a.createdAtIso || "") <= String(isoDate) &&
+    normSearch(a.name) === n
+  );
+}
+
+function findCodeOwner(code, exceptId = null) {
+  const c0 = normSearch(code);
+
+  // ✅ idem : on cherche un propriétaire du code déjà existant (avant ou même jour)
+  return activeArticles().find(a =>
+    a.id !== exceptId &&
+    String(a.createdAtIso || "") <= String(isoDate) &&
+    normSearch(a.code) === c0
+  ) || null;
+}
+
 
   function markBuyTouchedAndPersist() {
     const d = ensureBuyDayMark(isoDate);
