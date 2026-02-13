@@ -4472,28 +4472,46 @@ function renderBuyCategoriesPage(isoDate) {
       .sort((a,b) => (b.deletedAtTs || 0) - (a.deletedAtTs || 0));
   }
 
-  function isNameTaken(name, exceptId = null) {
-    const n = normSearch(name);
+  function isoToDayTs(iso) {
+  const s = String(iso || "").trim();
+  // attend YYYY-MM-DD
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return NaN;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  // timestamp UTC du "jour"
+  return Date.UTC(y, mo - 1, d);
+}
 
-    // ✅ interdit doublon si l'article EXISTE déjà avant (ou le même jour)
-    // ✅ donc valable aussi quand on ajoute plus tard (jours suivants)
-    return activeArticles().some(a =>
-      a.id !== exceptId &&
-      String(a.createdAtIso || "") <= String(isoDate) &&
-      normSearch(a.name) === n
-    );
-  }
+function isNameTaken(name, exceptId = null) {
+  const n = normSearch(name);
+  const curTs = isoToDayTs(isoDate);
+
+  return activeArticles().some(a => {
+    if (a.id === exceptId) return false;
+    const aTs = isoToDayTs(a.createdAtIso);
+    if (!Number.isFinite(aTs) || !Number.isFinite(curTs)) return false;
+
+    // ✅ interdit doublon si article créé AVANT ou le MÊME jour
+    return aTs <= curTs && normSearch(a.name) === n;
+  });
+}
 
 function findCodeOwner(code, exceptId = null) {
   const c0 = normSearch(code);
+  const curTs = isoToDayTs(isoDate);
 
-  // ✅ idem : on cherche un propriétaire du code déjà existant (avant ou même jour)
-  return activeArticles().find(a =>
-    a.id !== exceptId &&
-    String(a.createdAtIso || "") <= String(isoDate) &&
-    normSearch(a.code) === c0
-  ) || null;
+  return activeArticles().find(a => {
+    if (a.id === exceptId) return false;
+    const aTs = isoToDayTs(a.createdAtIso);
+    if (!Number.isFinite(aTs) || !Number.isFinite(curTs)) return false;
+
+    // ✅ propriétaire déjà existant AVANT ou le MÊME jour
+    return aTs <= curTs && normSearch(a.code) === c0;
+  }) || null;
 }
+
 
 
   function markBuyTouchedAndPersist() {
