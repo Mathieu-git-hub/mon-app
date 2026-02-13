@@ -4375,10 +4375,9 @@ function renderDailySalePage(isoDate) {
     <div class="day-page">
   ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
 
-  <!-- ✅ Vente du jour : enrichissement UI (on ne retire rien) -->
   <div class="buy-categories-wrap">
 
-    <!-- ✅ Barre de recherche + suggestions dynamiques -->
+    <!-- ✅ Barre de recherche + suggestions -->
     <div class="op-search-wrap" style="margin-top:0;">
       <span class="op-search-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4390,7 +4389,7 @@ function renderDailySalePage(isoDate) {
       <input id="dailySaleSearch" class="input op-search"
         inputmode="text"
         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-        placeholder="Rechercher..." />
+        placeholder="Rechercher un article (nom ou code)..." />
 
       <div id="dailySaleSuggest" class="op-suggest" style="display:none;"></div>
     </div>
@@ -4400,6 +4399,9 @@ function renderDailySalePage(isoDate) {
       <span>+</span>
     </button>
 
+    <!-- ✅ LISTE : récapitulatifs (groupés par catégorie) -->
+    <div id="dailySaleList" class="buy-cat-list" style="margin-top:14px;"></div>
+
     <!-- ✅ Contenu existant CONSERVÉ -->
     <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
       Vente du jour (à construire)
@@ -4408,8 +4410,232 @@ function renderDailySalePage(isoDate) {
   </div>
 </div>
 
+
   </div>
 `;
+
+// ===============================
+// ✅ Vente du jour — Récap articles BUY (par catégories)
+// ===============================
+const buy = getBuyStore();
+
+// ---- helpers date robustes
+function isoToDayTs(iso) {
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return NaN;
+  return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+}
+
+function isoToFr(iso) {
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return "";
+  const dd = String(m[3]).padStart(2, "0");
+  const mm = String(m[2]).padStart(2, "0");
+  const yy = String(m[1]);
+  return `${dd}/${mm}/${yy}`;
+}
+
+// ---- format milliers (réutilise tes fonctions existantes)
+function fmtWhite(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return "";
+  if (typeof formatInputNumberDisplay === "function") return formatInputNumberDisplay(s.replace(/\s+/g, ""));
+  return s;
+}
+function fmtResult(n) {
+  if (!Number.isFinite(n)) return "(...)";
+  const s = String(n).replace(".", ",");
+  if (typeof formatInputNumberDisplay === "function") return formatInputNumberDisplay(s);
+  if (typeof formatCommaNumber === "function") return formatCommaNumber(n);
+  return s;
+}
+
+// ---- visibilité : créé avant ou le même jour, et pas supprimé avant/au jour
+function isVisibleOnDay(a) {
+  const cur = isoToDayTs(isoDate);
+  const cts = isoToDayTs(a.createdAtIso);
+  const dts = a.deletedAtIso ? isoToDayTs(a.deletedAtIso) : NaN;
+
+  if (!Number.isFinite(cur) || !Number.isFinite(cts)) return false;
+  if (cts > cur) return false;
+
+  // supprimé le même jour ou avant => ne plus afficher
+  if (Number.isFinite(dts) && dts <= cur) return false;
+
+  return true;
+}
+
+// ---- extraction code : catégorie = avant le point ; article = après le point
+function splitArticleCode(code) {
+  const raw = String(code || "").trim();
+  const m = raw.match(/^(\d+)\.(.+)$/);   // ex: "12.07" ou "3.A"
+  if (!m) return { cat: "", art: raw };
+  return { cat: m[1], art: m[2] };
+}
+
+function cmpAsc(a, b) {
+  // si tu as déjà codeCompare global, on l'utilise
+  if (typeof codeCompare === "function") return codeCompare(a, b);
+  return String(a).localeCompare(String(b), "fr", { numeric: true, sensitivity: "base" });
+}
+
+function cmpArticleSuffix(aCode, bCode) {
+  const a = splitArticleCode(aCode).art;
+  const b = splitArticleCode(bCode).art;
+
+  // numeric-first
+  const na = Number(String(a).replace(",", "."));
+  const nb = Number(String(b).replace(",", "."));
+  const fa = Number.isFinite(na);
+  const fb = Number.isFinite(nb);
+  if (fa && fb) return na - nb;
+
+  return cmpAsc(a, b);
+}
+
+// ---- composants UI
+function kv(label, value) {
+  return `
+    <div style="flex:1; display:flex; align-items:center; gap:8px; min-width:0;">
+      <div style="font-weight:900; opacity:.95; white-space:nowrap;">${escapeHtml(label)} :</div>
+      <div class="buy-cat-white" style="flex:1; min-width:0;">${escapeHtml(value || "")}</div>
+    </div>
+  `;
+}
+
+function saleCardHTML(a) {
+  const title = `${a.name || ""} (${a.code || ""})`;
+
+  // PR / PRG : résultats d’opération si dispo
+  const pr  = fmtResult(Number(a.prResult));
+  const prg = fmtResult(Number(a.prgResult));
+
+  // PV : simple (string), format milliers
+  const pv  = fmtWhite(a.pv || "");
+
+  // Ajout (date FR)
+  const ajout = isoToFr(a.createdAtIso);
+
+  // Qté ini = qty
+  const qteIni = fmtWhite(a.qty || "");
+
+  // Vendu (pour l’instant vide — tu feras l’édition plus tard)
+  const vendu = ""; // placeholder
+
+  // Qté res = Qté ini - vendu (si vendu vide => qty)
+  // (on prépare un calcul robuste, mais il restera qty tant que vendu est vide)
+  const qtyN = (typeof toNumberLoose === "function") ? toNumberLoose(String(a.qty || "").replace(/\s+/g, "")) : Number(String(a.qty || "").replace(/\s+/g, "").replace(",", "."));
+  const vendN = (typeof toNumberLoose === "function") ? toNumberLoose(String(vendu || "").replace(/\s+/g, "")) : Number(String(vendu || "").replace(/\s+/g, "").replace(",", "."));
+  const resN = (Number.isFinite(qtyN) ? qtyN : 0) - (Number.isFinite(vendN) ? vendN : 0);
+  const qteRes = (Number.isFinite(qtyN) ? fmtResult(resN) : "");
+
+  return `
+    <div class="buy-cat-card" style="padding:14px;">
+      <div style="text-align:center; font-weight:1000; margin-bottom:12px;">
+        ${escapeHtml(title)}
+      </div>
+
+      <div style="display:flex; gap:12px; margin-bottom:10px;">
+        ${kv("PR", pr)}
+        ${kv("PRG", prg)}
+        ${kv("PV", pv)}
+      </div>
+
+      <div style="display:flex; gap:12px;">
+        ${kv("Ajout", ajout)}
+        ${kv("Qté ini", qteIni)}
+        ${kv("Vendu", vendu)}
+        ${kv("Qté res", qteRes)}
+      </div>
+    </div>
+  `;
+}
+
+// ---- regroupe par catégorie (code avant le point)
+function buildGroupedArticles() {
+  const arts = (buy.articles || [])
+    .filter(a => isVisibleOnDay(a));
+
+  // group by catCode
+  const groups = new Map(); // catCode -> [articles]
+  for (const a of arts) {
+    const { cat } = splitArticleCode(a.code);
+    const key = cat || ""; // "" = non classé
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(a);
+  }
+
+  // sort articles inside each group by suffix after dot (asc)
+  for (const [k, list] of groups.entries()) {
+    list.sort((x, y) => cmpArticleSuffix(x.code, y.code));
+  }
+
+  // sort group keys by cat code asc ("" last)
+  const keys = Array.from(groups.keys()).sort((a, b) => {
+    if (a === "" && b !== "") return 1;
+    if (b === "" && a !== "") return -1;
+    return cmpAsc(a, b);
+  });
+
+  return { groups, keys };
+}
+
+// ---- get category name from buy.categories by code
+function categoryNameByCode(code) {
+  const c = String(code || "").trim();
+  const cats = (buy.categories || []).filter(x => !x.deletedAtIso);
+  const found = cats.find(x => String(x.code || "").trim() === c);
+  return found?.name || (c ? `Catégorie ${c}` : "Non classé");
+}
+
+function renderDailySaleRecap() {
+  const listEl = document.getElementById("dailySaleList");
+  if (!listEl) return;
+
+  const { groups, keys } = buildGroupedArticles();
+
+  if (!keys.length) {
+    listEl.innerHTML = `<div style="opacity:.75; font-weight:800; margin-top:10px;">Aucun article disponible</div>`;
+    return;
+  }
+
+  let html = "";
+
+  keys.forEach((catCode, idx) => {
+    const title = categoryNameByCode(catCode);
+
+    // titre catégorie : gras + espace 18px après (fait par margin)
+    html += `
+      <div style="font-weight:1000; margin: 0 0 18px 0;">
+        ${escapeHtml(title)}
+      </div>
+    `;
+
+    const items = groups.get(catCode) || [];
+    html += items.map((a, i) => {
+      // espace 14px entre rectangles
+      return `<div style="${i ? "margin-top:14px;" : ""}">${saleCardHTML(a)}</div>`;
+    }).join("");
+
+    // démarcation entre catégories
+    if (idx < keys.length - 1) {
+      html += `
+        <div style="height:18px;"></div>
+        <div style="height:1px; background: rgba(255,255,255,0.9);"></div>
+        <div style="height:18px;"></div>
+      `;
+    } else {
+      html += `<div style="height:18px;"></div>`;
+    }
+  });
+
+  listEl.innerHTML = html;
+}
+
+renderDailySaleRecap();
+
 
 
   bindPrevNextDayButtons(isoDate, { baseHashPrefix: "#daily/" });
