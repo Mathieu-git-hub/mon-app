@@ -4402,10 +4402,7 @@ function renderDailySalePage(isoDate) {
     <!-- ✅ LISTE : récapitulatifs (groupés par catégorie) -->
     <div id="dailySaleList" class="buy-cat-list" style="margin-top:14px;"></div>
 
-    <!-- ✅ Contenu existant CONSERVÉ -->
-    <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
-      Vente du jour (à construire)
-    </div>
+    
 
   </div>
 </div>
@@ -4498,12 +4495,13 @@ function cmpArticleSuffix(aCode, bCode) {
 // ---- composants UI
 function kv(label, value) {
   return `
-    <div style="flex:1; display:flex; align-items:center; gap:8px; min-width:0;">
+    <div style="min-width:0; display:flex; align-items:center; gap:8px;">
       <div style="font-weight:900; opacity:.95; white-space:nowrap;">${escapeHtml(label)} :</div>
       <div class="buy-cat-white" style="flex:1; min-width:0;">${escapeHtml(value || "")}</div>
     </div>
   `;
 }
+
 
 function saleCardHTML(a) {
   const title = `${a.name || ""} (${a.code || ""})`;
@@ -4521,29 +4519,37 @@ function saleCardHTML(a) {
   // Qté ini = qty
   const qteIni = fmtWhite(a.qty || "");
 
-  // Vendu (pour l’instant vide — tu feras l’édition plus tard)
-  const vendu = ""; // placeholder
+  // Vendu (placeholder pour l’instant)
+  const vendu = "";
 
-  // Qté res = Qté ini - vendu (si vendu vide => qty)
-  // (on prépare un calcul robuste, mais il restera qty tant que vendu est vide)
-  const qtyN = (typeof toNumberLoose === "function") ? toNumberLoose(String(a.qty || "").replace(/\s+/g, "")) : Number(String(a.qty || "").replace(/\s+/g, "").replace(",", "."));
-  const vendN = (typeof toNumberLoose === "function") ? toNumberLoose(String(vendu || "").replace(/\s+/g, "")) : Number(String(vendu || "").replace(/\s+/g, "").replace(",", "."));
+  // Qté res = Qté ini - vendu (tant que vendu vide => qty)
+  const qtyN  = (typeof toNumberLoose === "function")
+    ? toNumberLoose(String(a.qty || "").replace(/\s+/g, ""))
+    : Number(String(a.qty || "").replace(/\s+/g, "").replace(",", "."));
+
+  const vendN = (typeof toNumberLoose === "function")
+    ? toNumberLoose(String(vendu || "").replace(/\s+/g, ""))
+    : Number(String(vendu || "").replace(/\s+/g, "").replace(",", "."));
+
   const resN = (Number.isFinite(qtyN) ? qtyN : 0) - (Number.isFinite(vendN) ? vendN : 0);
   const qteRes = (Number.isFinite(qtyN) ? fmtResult(resN) : "");
 
   return `
     <div class="buy-cat-card" style="padding:14px;">
+      <!-- ✅ Titre centré -->
       <div style="text-align:center; font-weight:1000; margin-bottom:12px;">
         ${escapeHtml(title)}
       </div>
 
-      <div style="display:flex; gap:12px; margin-bottom:10px;">
+      <!-- ✅ Ligne 1 : PR / PRG / PV (non centrés) — 3 colonnes identiques -->
+      <div style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:10px;">
         ${kv("PR", pr)}
         ${kv("PRG", prg)}
         ${kv("PV", pv)}
       </div>
 
-      <div style="display:flex; gap:12px;">
+      <!-- ✅ Ligne 2 : Ajout / Qté ini / Vendu / Qté res — 4 colonnes identiques -->
+      <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:12px;">
         ${kv("Ajout", ajout)}
         ${kv("Qté ini", qteIni)}
         ${kv("Vendu", vendu)}
@@ -4552,6 +4558,7 @@ function saleCardHTML(a) {
     </div>
   `;
 }
+
 
 // ---- regroupe par catégorie (code avant le point)
 function buildGroupedArticles() {
