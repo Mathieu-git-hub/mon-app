@@ -4473,16 +4473,16 @@ function renderBuyCategoriesPage(isoDate) {
   }
 
   function isNameTaken(name, exceptId = null) {
-  const n = normSearch(name);
+    const n = normSearch(name);
 
-  // ✅ interdit doublon si l'article EXISTE déjà avant (ou le même jour)
-  // ✅ donc valable aussi quand on ajoute plus tard (jours suivants)
-  return activeArticles().some(a =>
-    a.id !== exceptId &&
-    String(a.createdAtIso || "") <= String(isoDate) &&
-    normSearch(a.name) === n
-  );
-}
+    // ✅ interdit doublon si l'article EXISTE déjà avant (ou le même jour)
+    // ✅ donc valable aussi quand on ajoute plus tard (jours suivants)
+    return activeArticles().some(a =>
+      a.id !== exceptId &&
+      String(a.createdAtIso || "") <= String(isoDate) &&
+      normSearch(a.name) === n
+    );
+  }
 
 function findCodeOwner(code, exceptId = null) {
   const c0 = normSearch(code);
