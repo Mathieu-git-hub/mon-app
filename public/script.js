@@ -4669,7 +4669,9 @@ function showSaleSuggest(html) {
 }
 
 function renderSaleSearch(q) {
-  const nq = normSearch(q);
+  const raw = String(q || "");
+  const nq = normSearch(raw);
+
   if (!nq) {
     showSaleSuggest("");
     renderDailySaleRecap(); // ✅ retour affichage groupé
@@ -4677,12 +4679,32 @@ function renderSaleSearch(q) {
   }
 
   const list = allVisibleForSaleSearch();
-  const filtered = list.filter(a => {
-    const n = normSearch(a.name);
-    const c = normSearch(a.code);
-    return n.includes(nq) || c.includes(nq);
-  });
 
+  // ✅ Détecte si l'utilisateur est en train de taper un "préfixe de code" numérique
+  // On accepte chiffres + éventuellement un point (ex: "12."), et espaces ignorés.
+  const qNoSpace = raw.replace(/\s+/g, "");
+  const isNumericPrefixQuery = /^[0-9]+(\.)?$/.test(qNoSpace);
+
+  // ---------- FILTRAGE
+  let filtered;
+
+  if (isNumericPrefixQuery) {
+    // ✅ mode "préfixe" sur le code (commence par)
+    const prefix = qNoSpace; // ex: "1" ou "12" ou "12."
+    filtered = list.filter(a => {
+      const codeRaw = String(a.code || "").replace(/\s+/g, "");
+      return codeRaw.startsWith(prefix);
+    });
+  } else {
+    // ✅ mode générique : nom contient OU code contient (comme avant)
+    filtered = list.filter(a => {
+      const n = normSearch(a.name);
+      const c = normSearch(a.code);
+      return n.includes(nq) || c.includes(nq);
+    });
+  }
+
+  // ---------- SUGGESTIONS (top 7)
   const top = filtered.slice(0, 7);
   if (!top.length) {
     showSaleSuggest("");
@@ -4693,7 +4715,7 @@ function renderSaleSearch(q) {
     }).join(""));
   }
 
-  // ✅ Affichage résultat = rectangle du jour (sans tenir compte des jours d’après)
+  // ---------- AFFICHAGE LISTE "Résultats"
   const listEl = document.getElementById("dailySaleList");
   if (listEl) {
     listEl.innerHTML = `
@@ -4702,6 +4724,7 @@ function renderSaleSearch(q) {
     `;
   }
 }
+
 
 if (saleSearch && saleSuggest) {
   saleSearch.addEventListener("input", () => renderSaleSearch(saleSearch.value));
