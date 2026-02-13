@@ -4399,6 +4399,21 @@ function renderDailySalePage(isoDate) {
       <span>+</span>
     </button>
 
+        <!-- ✅ Totaux globaux du jour (apparaît dès qu’il y a ≥ 1 vente) -->
+    <div id="dailySaleGlobals" style="display:none; margin-top:12px;">
+      <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px;">
+        <div>
+          <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PRT global :</div>
+          <div id="dailySalePRTGlobal" class="buy-cat-white"></div>
+        </div>
+        <div>
+          <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PVT global :</div>
+          <div id="dailySalePVTGlobal" class="buy-cat-white"></div>
+        </div>
+      </div>
+    </div>
+
+
     <!-- ✅ LISTE : récapitulatifs (groupés par catégorie) -->
     <div id="dailySaleList" class="buy-cat-list" style="margin-top:14px;"></div>
 
@@ -4415,6 +4430,187 @@ function renderDailySalePage(isoDate) {
 // ✅ Vente du jour — Récap articles BUY (par catégories)
 // ===============================
 const buy = getBuyStore();
+
+// ===============================
+// ✅ Vente du jour — Sales store + helpers
+// ===============================
+buy.dailySalesByIso = buy.dailySalesByIso || {};        // { [iso]: [sale...] }
+buy.dailySaleDraftByIso = buy.dailySaleDraftByIso || {}; // optionnel (draft modale)
+
+// tolérant : espaces + virgule
+function parseLooseNumber(s) {
+  const raw = String(s ?? "").trim();
+  if (!raw) return NaN;
+  if (typeof toNumberLoose === "function") return toNumberLoose(raw.replace(/\s+/g, ""));
+  return Number(raw.replace(/\s+/g, "").replace(",", "."));
+}
+
+// autorise chiffres, virgule, espaces (comme Articles)
+function digitsCommaOnly(raw) {
+  let s = String(raw || "");
+  s = s.replace(/\./g, ",");
+  let cleaned = s.replace(/[^0-9,\s]/g, "");
+  const firstComma = cleaned.indexOf(",");
+  if (firstComma !== -1) {
+    cleaned = cleaned.slice(0, firstComma + 1) + cleaned.slice(firstComma + 1).replace(/,/g, "");
+  }
+  return cleaned;
+}
+
+function getSalesOfDay(iso) {
+  buy.dailySalesByIso[iso] = buy.dailySalesByIso[iso] || [];
+  return buy.dailySalesByIso[iso];
+}
+
+function salesTodayForCode(code) {
+  const c = normSearch(String(code || ""));
+  return getSalesOfDay(isoDate).filter(s => normSearch(s.code) === c);
+}
+
+function sumQtySales(list) {
+  return list.reduce((acc, s) => {
+    const q = parseLooseNumber(s.qty);
+    return acc + (Number.isFinite(q) ? q : 0);
+  }, 0);
+}
+
+function sumPvSales(list) {
+  return list.reduce((acc, s) => {
+    const p = parseLooseNumber(s.pv);
+    return acc + (Number.isFinite(p) ? p : 0);
+  }, 0);
+}
+
+// total PV historique (toutes dates) pour un code
+function totalPvAllDaysForCode(code) {
+  const c = normSearch(String(code || ""));
+  let total = 0;
+  for (const iso in (buy.dailySalesByIso || {})) {
+    const arr = buy.dailySalesByIso[iso] || [];
+    for (const s of arr) {
+      if (normSearch(s.code) !== c) continue;
+      const p = parseLooseNumber(s.pv);
+      if (Number.isFinite(p)) total += p;
+    }
+  }
+  return total;
+}
+
+// compression PV du jour : conserve l’ordre d’apparition des valeurs uniques
+function pvtExpressionForToday(code) {
+  const list = salesTodayForCode(code);
+  const order = [];
+  const counts = new Map(); // key string -> count
+  const values = new Map(); // key string -> numeric value
+
+  for (const s of list) {
+    const n = parseLooseNumber(s.pv);
+    if (!Number.isFinite(n)) continue;
+
+    // clé stable (on arrondit pas : on stocke la valeur brute en string normalisée)
+    const key = String(n).replace(".", ","); // ok pour regroupement simple
+    if (!counts.has(key)) {
+      counts.set(key, 1);
+      values.set(key, n);
+      order.push(key);
+    } else {
+      counts.set(key, counts.get(key) + 1);
+    }
+  }
+
+  const parts = [];
+  for (const key of order) {
+    const n = values.get(key);
+    const c = counts.get(key) || 0;
+    if (!Number.isFinite(n) || c <= 0) continue;
+
+    const vDisp = fmtResult(n);
+    if (c === 1) parts.push(`${vDisp}`);
+    else parts.push(`${vDisp} × ${c}`);
+  }
+
+  const totalDay = sumPvSales(list);
+  const expr = parts.length ? parts.join(" + ") : "";
+  const exprWithTotal = expr ? `${expr} = ${fmtResult(totalDay)}` : `${fmtResult(totalDay)}`;
+
+  // total historique entre parenthèses (par article)
+  const totalAll = totalPvAllDaysForCode(code);
+  const withParen = Number.isFinite(totalAll) && totalAll !== totalDay
+    ? `${exprWithTotal} (${fmtResult(totalAll)})`
+    : exprWithTotal;
+
+  return { hasAny: list.length > 0, dayTotal: totalDay, display: withParen };
+}
+
+// PRT du jour : PR × qtyVendueJour = résultat
+function prtExpressionForToday(article) {
+  const list = salesTodayForCode(article.code);
+  const qtySum = sumQtySales(list);
+  const pr = Number(article.prResult);
+
+  if (!list.length || !Number.isFinite(pr)) {
+    return { hasAny:false, qtySum: qtySum, display: "" };
+  }
+
+  const res = pr * qtySum;
+  const display = `${fmtResult(pr)} × ${fmtResult(qtySum)} = ${fmtResult(res)}`;
+  return { hasAny:true, qtySum, display };
+}
+
+// ===============================
+// ✅ Globals (évolutifs) : PRT global / PVT global
+// ===============================
+function computeGlobalsForDay(iso) {
+  const sales = getSalesOfDay(iso);
+  if (!sales.length) return { has:false, prtGlobal:0, pvtGlobal:0 };
+
+  // regroupe par code
+  const byCode = new Map();
+  for (const s of sales) {
+    const code = String(s.code || "").trim();
+    if (!code) continue;
+    if (!byCode.has(code)) byCode.set(code, []);
+    byCode.get(code).push(s);
+  }
+
+  let prtGlobal = 0;
+  let pvtGlobal = 0;
+
+  for (const [code, list] of byCode.entries()) {
+    // article correspondant
+    const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code));
+    if (!art) continue;
+
+    const pr = Number(art.prResult);
+    const qtySum = sumQtySales(list);
+    const pvSum = sumPvSales(list);
+
+    if (Number.isFinite(pr)) prtGlobal += pr * qtySum;
+    pvtGlobal += pvSum;
+  }
+
+  return { has:true, prtGlobal, pvtGlobal };
+}
+
+function renderDailySaleGlobals() {
+  const wrap = document.getElementById("dailySaleGlobals");
+  const elPRT = document.getElementById("dailySalePRTGlobal");
+  const elPVT = document.getElementById("dailySalePVTGlobal");
+  if (!wrap || !elPRT || !elPVT) return;
+
+  const g = computeGlobalsForDay(isoDate);
+  if (!g.has) {
+    wrap.style.display = "none";
+    elPRT.textContent = "";
+    elPVT.textContent = "";
+    return;
+  }
+
+  wrap.style.display = "";
+  elPRT.textContent = fmtResult(g.prtGlobal);
+  elPVT.textContent = fmtResult(g.pvtGlobal);
+}
+
 
 // ---- helpers date robustes
 function isoToDayTs(iso) {
@@ -4518,18 +4714,38 @@ function saleCardHTML(a) {
   const ajout = isoToFr(a.createdAtIso);
   const qteIni = fmtWhite(a.qty || "");
 
-  const vendu = "";
+    // ✅ Vendu = somme des ventes du jour pour cet article
+  const salesToday = salesTodayForCode(a.code);
+  const venduN = sumQtySales(salesToday);
+  const vendu = salesToday.length ? fmtResult(venduN) : "";
+
 
   const qtyN  = (typeof toNumberLoose === "function")
     ? toNumberLoose(String(a.qty || "").replace(/\s+/g, ""))
     : Number(String(a.qty || "").replace(/\s+/g, "").replace(",", "."));
 
-  const vendN = (typeof toNumberLoose === "function")
-    ? toNumberLoose(String(vendu || "").replace(/\s+/g, ""))
-    : Number(String(vendu || "").replace(/\s+/g, "").replace(",", "."));
+  const vendN = venduN; // ✅ déjà numérique
+
 
   const resN = (Number.isFinite(qtyN) ? qtyN : 0) - (Number.isFinite(vendN) ? vendN : 0);
   const qteRes = (Number.isFinite(qtyN) ? fmtResult(resN) : "");
+
+    const prt = prtExpressionForToday(a);     // {hasAny, display}
+  const pvt = pvtExpressionForToday(a.code); // {hasAny, display}
+
+  // ✅ Cas "pas de vente aujourd’hui" : on affiche seulement PVT (somme historique)
+  let showPRT = prt.hasAny;
+  let pvtLineDisplay = "";
+
+  if (pvt.hasAny) {
+    // vente aujourd'hui => expression + total ( + parenthèses article)
+    pvtLineDisplay = pvt.display;
+  } else {
+    // pas de vente aujourd’hui => PVT = cumul historique (si tu veux 0, dis-moi)
+    const totalAll = totalPvAllDaysForCode(a.code);
+    pvtLineDisplay = (Number.isFinite(totalAll) && totalAll > 0) ? fmtResult(totalAll) : "";
+  }
+
 
   return `
     <div class="buy-cat-card" style="padding:14px; display:block;">
@@ -4568,6 +4784,25 @@ function saleCardHTML(a) {
         ${kv("Vendu", vendu)}
         ${kv("Qté res", qteRes)}
       </div>
+
+            <!-- ✅ (4) Ligne PRT (seulement si vente aujourd’hui) -->
+      ${
+        showPRT
+          ? `
+            <div style="height:10px;"></div>
+            <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+              ${kv("PRT", prt.display)}
+            </div>
+          `
+          : ``
+      }
+
+      <!-- ✅ (5) Ligne PVT (toujours : jour=expression, sinon=cumul) -->
+      <div style="height:10px;"></div>
+      <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+        ${kv("PVT", pvtLineDisplay)}
+      </div>
+
 
     </div>
   `;
@@ -4659,6 +4894,8 @@ function renderDailySaleRecap() {
 
 
 renderDailySaleRecap();
+renderDailySaleGlobals();
+
 
 // ===============================
 // ✅ Recherche + suggestions (Vente du jour)
@@ -4803,16 +5040,272 @@ function openDailySaleAdvanceModal() {
   const yes = document.getElementById("dailySaleAdvanceYes");
   const no  = document.getElementById("dailySaleAdvanceNo");
 
-  if (yes) yes.addEventListener("click", () => {
+    if (yes) yes.addEventListener("click", () => {
     closeDailySaleAdvanceModal();
-    // ✅ placeholder : logique "avance" à brancher plus tard
+    openDailySaleModal(); // ✅ nouvelle modale
   });
+
 
   if (no) no.addEventListener("click", () => {
     closeDailySaleAdvanceModal();
     // ✅ placeholder : logique "non avance" à brancher plus tard
   });
 }
+
+// ===============================
+// ✅ MODAL "Nouvelle vente" (Vente du jour)
+// ===============================
+function closeDailySaleModal() {
+  const bd = document.getElementById("dailySaleModalBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleModal() {
+  if (document.getElementById("dailySaleModalBackdrop")) return;
+
+  // draft persistant du jour (optionnel)
+  const draft = buy.dailySaleDraftByIso[isoDate] || {
+    code: "",
+    qty: "", qtyFinalized: false,
+    pv:  "", pvFinalized: false,
+  };
+  buy.dailySaleDraftByIso[isoDate] = draft;
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleModalBackdrop";
+  bd.className = "cat-modal-backdrop";
+
+  bd.innerHTML = `
+    <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Nouvelle vente"
+         style="display:flex; flex-direction:column; max-height: min(78vh, 560px);">
+      <div class="cat-modal-title" style="flex:0 0 auto;">Nouvelle vente</div>
+
+      <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+        <div id="dailySaleModalGrid" class="cat-modal-grid"></div>
+      </div>
+
+      <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
+        <button id="dailySaleCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
+        <button id="dailySaleOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => { if (e.target === bd) closeDailySaleModal(); });
+  document.body.appendChild(bd);
+
+  function renderSimpleRow({ label, key, finalizedKey, inputId, validateId, modifyId }) {
+    const isFinal = !!draft[finalizedKey];
+
+    if (!isFinal) {
+      const hasText = String(draft[key] || "").trim().length > 0;
+      return `
+        <div class="label">${label}</div>
+        <div class="art-inline-actions">
+          <input id="${inputId}" class="input" inputmode="decimal" autocomplete="off"
+            value="${escapeAttr(draft[key] || "")}" />
+          <button id="${validateId}" class="art-mini-btn art-mini-validate" type="button"
+            ${hasText ? "" : "disabled"}
+          >Valider</button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="label">${label}</div>
+      <div class="art-inline-actions">
+        <div class="card card-white lift" style="flex:1; min-width: 220px;">
+          ${escapeHtml(fmtWhite(draft[key] || ""))}
+        </div>
+        <button id="${modifyId}" class="art-mini-btn art-mini-modify" type="button">Modifier</button>
+      </div>
+    `;
+  }
+
+  function rerenderBody() {
+    const grid = document.getElementById("dailySaleModalGrid");
+    if (!grid) return;
+
+    grid.innerHTML = `
+      <div class="label">Code</div>
+      <div>
+        <input id="dailySaleCode" class="input" autocomplete="off" value="${escapeAttr(draft.code || "")}" />
+        <div id="dailySaleCodeErr" class="cat-err" style="display:none;"></div>
+      </div>
+
+      ${renderSimpleRow({ label:"Quantité", key:"qty", finalizedKey:"qtyFinalized", inputId:"dailySaleQty", validateId:"dailySaleQtyValidate", modifyId:"dailySaleQtyModify" })}
+      ${renderSimpleRow({ label:"PV",       key:"pv",  finalizedKey:"pvFinalized",  inputId:"dailySalePV",  validateId:"dailySalePVValidate",  modifyId:"dailySalePVModify" })}
+    `;
+
+    bindHandlers();
+    syncOk();
+  }
+
+  function setErr(inputEl, msgEl, msg) {
+    if (!inputEl || !msgEl) return;
+    if (!msg) {
+      inputEl.classList.remove("error");
+      msgEl.style.display = "none";
+      msgEl.textContent = "";
+    } else {
+      inputEl.classList.add("error");
+      msgEl.style.display = "block";
+      msgEl.textContent = msg;
+    }
+  }
+
+  function syncOk() {
+    const okBtn = document.getElementById("dailySaleOkBtn");
+    const codeEl = document.getElementById("dailySaleCode");
+    const errEl  = document.getElementById("dailySaleCodeErr");
+    if (!okBtn) return;
+
+    const code = String(draft.code || "").trim();
+    const hasCode = code.length > 0;
+
+    // article doit exister
+    const art = hasCode ? (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code)) : null;
+    setErr(codeEl, errEl, (hasCode && !art) ? "code introuvable" : "");
+
+    const ok =
+      !!art &&
+      !!draft.qtyFinalized &&
+      !!draft.pvFinalized;
+
+    okBtn.disabled = !ok;
+    okBtn.classList.toggle("enabled", ok);
+  }
+
+  function bindOneSimple({ key, finalizedKey, inputId, validateId, modifyId }) {
+    const input = document.getElementById(inputId);
+    const vBtn = document.getElementById(validateId);
+    const mBtn = document.getElementById(modifyId);
+
+    if (input) {
+      input.addEventListener("input", async () => {
+        const filtered = digitsCommaOnly(input.value);
+        if (filtered !== input.value) {
+          input.value = filtered;
+          if (typeof shake === "function") shake(input);
+        }
+
+        // réactivité immédiate
+        if (vBtn) {
+          const hasTextNow = filtered.trim().length > 0;
+          vBtn.disabled = !hasTextNow;
+          vBtn.classList.toggle("started", hasTextNow);
+        }
+
+        draft[key] = filtered;
+        draft[finalizedKey] = false;
+
+        // effacement total => suppression
+        if (filtered.trim() === "") {
+          draft[key] = "";
+          draft[finalizedKey] = false;
+        }
+
+        await safePersistNow();
+        syncOk();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (vBtn && !vBtn.disabled) vBtn.click();
+        }
+      });
+    }
+
+    if (vBtn) {
+      vBtn.addEventListener("click", async () => {
+        const v = String(draft[key] || "").trim();
+        if (!v) {
+          if (typeof shake === "function") shake(vBtn);
+          return;
+        }
+        draft[finalizedKey] = true;
+        await safePersistNow();
+        rerenderBody();
+      });
+    }
+
+    if (mBtn) {
+      mBtn.addEventListener("click", async () => {
+        draft[finalizedKey] = false;
+        await safePersistNow();
+        rerenderBody();
+        setTimeout(() => {
+          const i = document.getElementById(inputId);
+          if (i) i.focus();
+        }, 0);
+      });
+    }
+  }
+
+  function bindHandlers() {
+    const codeEl = document.getElementById("dailySaleCode");
+    if (codeEl) {
+      codeEl.addEventListener("input", async () => {
+        draft.code = codeEl.value;
+        await safePersistNow();
+        syncOk();
+      });
+    }
+
+    bindOneSimple({ key:"qty", finalizedKey:"qtyFinalized", inputId:"dailySaleQty", validateId:"dailySaleQtyValidate", modifyId:"dailySaleQtyModify" });
+    bindOneSimple({ key:"pv",  finalizedKey:"pvFinalized",  inputId:"dailySalePV",  validateId:"dailySalePVValidate",  modifyId:"dailySalePVModify" });
+
+    const cancelBtn = document.getElementById("dailySaleCancelBtn");
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", async () => {
+        delete buy.dailySaleDraftByIso[isoDate];
+        await safePersistNow();
+        closeDailySaleModal();
+      });
+    }
+
+    const okBtn = document.getElementById("dailySaleOkBtn");
+    if (okBtn) {
+      okBtn.addEventListener("click", async () => {
+        syncOk();
+        if (okBtn.disabled) return;
+
+        const code = String(draft.code || "").trim();
+        const qty  = String(draft.qty || "").trim();
+        const pv   = String(draft.pv  || "").trim();
+
+        // push sale
+        const sale = {
+          id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+          code,
+          qty,
+          pv,
+          ts: Date.now(),
+        };
+        getSalesOfDay(isoDate).push(sale);
+
+        // reset draft
+        delete buy.dailySaleDraftByIso[isoDate];
+
+        await safePersistNow();
+        closeDailySaleModal();
+
+        // ✅ MAJ évolutive immédiate
+        renderDailySaleRecap();
+        renderDailySaleGlobals();
+      });
+    }
+  }
+
+  rerenderBody();
+
+  const first = document.getElementById("dailySaleCode");
+  if (first) first.focus();
+}
+
+
+
 
 
 
