@@ -4373,11 +4373,41 @@ function renderDailySalePage(isoDate) {
     </div>
 
     <div class="day-page">
-      ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
-      <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
-        Vente du jour (à construire)
-      </div>
+  ${dayHeaderHTML(formatFullDate(date), { withPrevNext: true })}
+
+  <!-- ✅ Vente du jour : enrichissement UI (on ne retire rien) -->
+  <div class="buy-categories-wrap">
+
+    <!-- ✅ Barre de recherche + suggestions dynamiques -->
+    <div class="op-search-wrap" style="margin-top:0;">
+      <span class="op-search-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="7"></circle>
+          <path d="M20 20l-3.5-3.5"></path>
+        </svg>
+      </span>
+
+      <input id="dailySaleSearch" class="input op-search"
+        inputmode="text"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        placeholder="Rechercher..." />
+
+      <div id="dailySaleSuggest" class="op-suggest" style="display:none;"></div>
     </div>
+
+    <!-- ✅ Bouton carré + -->
+    <button id="addDailySaleBtn" class="add-cat-btn" type="button" aria-label="Ajouter" title="Ajouter">
+      <span>+</span>
+    </button>
+
+    <!-- ✅ Contenu existant CONSERVÉ -->
+    <div style="text-align:center; opacity:0.9; font-weight:800; margin-top:18px;">
+      Vente du jour (à construire)
+    </div>
+
+  </div>
+</div>
+
   </div>
 `;
 
