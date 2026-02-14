@@ -4662,6 +4662,32 @@ function fmtResult(n) {
   return s;
 }
 
+function sumSoldQtyBeforeDayForCode(code, iso) {
+  const c = normSearch(String(code || ""));
+  let total = 0;
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    if (isoToDayTs(dayIso) >= isoToDayTs(iso)) continue; // ✅ strictement avant
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    for (const s of arr) {
+      if (normSearch(s.code) !== c) continue;
+      const q = parseLooseNumber(s.qty);
+      if (Number.isFinite(q)) total += q;
+    }
+  }
+  return total;
+}
+
+function computeStartQtyForDay(article, iso) {
+  // qty initiale de l’article (celle que tu stockes dans a.qty)
+  const ini = parseLooseNumber(article.qty);
+  if (!Number.isFinite(ini)) return NaN;
+
+  const soldBefore = sumSoldQtyBeforeDayForCode(article.code, iso);
+  return ini - soldBefore;
+}
+
+
 function totalPvBeforeDayForCode(code, iso) {
   const c = normSearch(String(code || ""));
   let total = 0;
@@ -4753,7 +4779,10 @@ function saleCardHTML(a) {
   const pv  = fmtWhite(a.pv || "");
 
   const ajout = isoToFr(a.createdAtIso);
-  const qteIni = fmtWhite(a.qty || "");
+  // ✅ Qté ini = stock au début du jour (reste de la veille)
+const startQtyN = computeStartQtyForDay(a, isoDate);
+const qteIni = Number.isFinite(startQtyN) ? fmtResult(startQtyN) : "";
+
 
     // ✅ Vendu = somme des ventes du jour pour cet article
   const salesToday = salesTodayForCode(a.code);
@@ -4768,8 +4797,10 @@ function saleCardHTML(a) {
   const vendN = venduN; // ✅ déjà numérique
 
 
-  const resN = (Number.isFinite(qtyN) ? qtyN : 0) - (Number.isFinite(vendN) ? vendN : 0);
-  const qteRes = (Number.isFinite(qtyN) ? fmtResult(resN) : "");
+  // ✅ Qté res = stock début du jour - vendu du jour
+const resN = (Number.isFinite(startQtyN) ? startQtyN : 0) - (Number.isFinite(venduN) ? venduN : 0);
+const qteRes = Number.isFinite(startQtyN) ? fmtResult(resN) : "";
+
 
     const prt = prtExpressionForToday(a);     // {hasAny, display}
   const pvt = pvtExpressionForToday(a.code); // {hasAny, display}
