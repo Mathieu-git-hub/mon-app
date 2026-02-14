@@ -4477,9 +4477,13 @@ function sumQtySales(list) {
 function sumPvSales(list) {
   return list.reduce((acc, s) => {
     const p = parseLooseNumber(s.pv);
-    return acc + (Number.isFinite(p) ? p : 0);
+    const q = parseLooseNumber(s.qty);
+    const pv = Number.isFinite(p) ? p : 0;
+    const qty = Number.isFinite(q) ? q : 0;
+    return acc + (pv * qty);
   }, 0);
 }
+
 
 // total PV historique (toutes dates) pour un code
 function totalPvAllDaysForCode(code) {
@@ -4515,32 +4519,39 @@ function pvtExpressionForToday(code) {
   }
 
   // ✅ vente aujourd’hui => expression compressée
-  const order = [];
-  const counts = new Map();
-  const values = new Map();
+  // ✅ vente aujourd’hui => expression compressée (PV × Quantité)
+const order = [];
+const qtyByPv = new Map();   // pvKey -> somme des quantités
+const pvValByKey = new Map(); // pvKey -> valeur numérique pv
 
-  for (const s of list) {
-    const n = parseLooseNumber(s.pv);
-    if (!Number.isFinite(n)) continue;
-    const key = String(n).replace(".", ",");
-    if (!counts.has(key)) {
-      counts.set(key, 1);
-      values.set(key, n);
-      order.push(key);
-    } else {
-      counts.set(key, counts.get(key) + 1);
-    }
+for (const s of list) {
+  const pvN = parseLooseNumber(s.pv);
+  const qtyN = parseLooseNumber(s.qty);
+  if (!Number.isFinite(pvN) || !Number.isFinite(qtyN) || qtyN <= 0) continue;
+
+  const key = String(pvN).replace(".", ","); // clé stable
+  if (!qtyByPv.has(key)) {
+    qtyByPv.set(key, qtyN);
+    pvValByKey.set(key, pvN);
+    order.push(key);
+  } else {
+    qtyByPv.set(key, qtyByPv.get(key) + qtyN);
   }
+}
 
-  const parts = [];
-  for (const key of order) {
-    const n = values.get(key);
-    const c = counts.get(key) || 0;
-    if (!Number.isFinite(n) || c <= 0) continue;
+const parts = [];
+for (const key of order) {
+  const pvN = pvValByKey.get(key);
+  const qSum = qtyByPv.get(key) || 0;
+  if (!Number.isFinite(pvN) || !Number.isFinite(qSum) || qSum <= 0) continue;
 
-    const vDisp = fmtResult(n);
-    parts.push(c === 1 ? `${vDisp}` : `${vDisp} × ${c}`);
-  }
+  const pvDisp = fmtResult(pvN);
+
+  // si quantité totale = 1 → on peut afficher juste PV, sinon PV × quantité
+  if (qSum === 1) parts.push(`${pvDisp}`);
+  else parts.push(`${pvDisp} × ${fmtResult(qSum)}`);
+}
+
 
   const dayTotal = sumPvSales(list);
   const expr = parts.length ? parts.join(" + ") : "";
@@ -4601,6 +4612,8 @@ function computeGlobalsForDay(iso) {
     const pr = Number(art.prResult);
     const qtySum = sumQtySales(list);
     const pvSum = sumPvSales(list);
+pvtGlobal += pvSum;
+
 
     if (Number.isFinite(pr)) prtGlobal += pr * qtySum;
     pvtGlobal += pvSum;
@@ -4700,7 +4713,9 @@ function totalPvBeforeDayForCode(code, iso) {
     for (const s of arr) {
       if (normSearch(s.code) !== c) continue;
       const p = parseLooseNumber(s.pv);
-      if (Number.isFinite(p)) total += p;
+const q = parseLooseNumber(s.qty);
+if (Number.isFinite(p) && Number.isFinite(q)) total += (p * q);
+
     }
   }
   return total;
