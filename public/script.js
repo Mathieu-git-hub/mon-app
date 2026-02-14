@@ -5356,45 +5356,43 @@ function openDailySaleModal() {
     bindOneSimple({ key:"pv",  finalizedKey:"pvFinalized",  inputId:"dailySalePV",  validateId:"dailySalePVValidate",  modifyId:"dailySalePVModify" });
 
     const cancelBtn = document.getElementById("dailySaleCancelBtn");
-    if (cancelBtn) {
-      cancelBtn.addEventListener("click", async () => {
-        delete buy.dailySaleDraftByIso[isoDate];
-        await safePersistNow();
-        closeDailySaleModal();
-      });
-    }
+if (cancelBtn) {
+  cancelBtn.onclick = async () => {
+    delete buy.dailySaleDraftByIso[isoDate];
+    await safePersistNow();
+    closeDailySaleModal();
+  };
+}
 
-    const okBtn = document.getElementById("dailySaleOkBtn");
-    if (okBtn) {
-      okBtn.addEventListener("click", async () => {
-        syncOk();
-        if (okBtn.disabled) return;
+const okBtn = document.getElementById("dailySaleOkBtn");
+if (okBtn) {
+  okBtn.onclick = async () => {
+    syncOk();
+    if (okBtn.disabled) return;
 
-        const code = String(draft.code || "").trim();
-        const qty  = String(draft.qty || "").trim();
-        const pv   = String(draft.pv  || "").trim();
+    const code = String(draft.code || "").trim();
+    const qty  = String(draft.qty || "").trim();
+    const pv   = String(draft.pv  || "").trim();
 
-        // push sale
-        const sale = {
-          id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
-          code,
-          qty,
-          pv,
-          ts: Date.now(),
-        };
-        getSalesOfDay(isoDate).push(sale);
+    const sale = {
+      id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+      code,
+      qty,
+      pv,
+      ts: Date.now(),
+    };
+    getSalesOfDay(isoDate).push(sale);
 
-        // reset draft
-        delete buy.dailySaleDraftByIso[isoDate];
+    delete buy.dailySaleDraftByIso[isoDate];
 
-        await safePersistNow();
-        closeDailySaleModal();
+    await safePersistNow();
+    closeDailySaleModal();
 
-        // ✅ MAJ évolutive immédiate
-        renderDailySaleRecap();
-        renderDailySaleGlobals();
-      });
-    }
+    renderDailySaleRecap();
+    renderDailySaleGlobals();
+  };
+}
+
   }
 
   rerenderBody();
