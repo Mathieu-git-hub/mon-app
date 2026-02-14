@@ -5298,25 +5298,22 @@ function openDailySaleModal() {
     : null;
 
   if (art && !draft.pvFinalized) {
-    const cur = String(draft.pv || "").trim();
-    const artPv = String(art.pv || "").trim();
+  const artPv = String(art.pv || "").trim();
 
-    // on remplit seulement si PV est encore vide (donc l'utilisateur n'a pas commencé)
-    if (!cur && artPv) {
-      draft.pv = artPv;
+  // ✅ tant que PV pas validé, on force le PV de l’article lié au code
+  draft.pv = artPv || "";
 
-      // met à jour l'input si présent (sans rerender complet)
-      const pvInput = document.getElementById("dailySalePV");
-      if (pvInput) pvInput.value = draft.pv;
+  const pvInput = document.getElementById("dailySalePV");
+  if (pvInput) pvInput.value = draft.pv;
 
-      // active le bouton valider PV si présent
-      const pvVal = document.getElementById("dailySalePVValidate");
-      if (pvVal) {
-        pvVal.disabled = draft.pv.trim().length === 0;
-        pvVal.classList.toggle("started", draft.pv.trim().length > 0);
-      }
-    }
+  const pvVal = document.getElementById("dailySalePVValidate");
+  if (pvVal) {
+    const has = String(draft.pv || "").trim().length > 0;
+    pvVal.disabled = !has;
+    pvVal.classList.toggle("started", has);
   }
+}
+
 
   await safePersistNow();
   syncOk();
