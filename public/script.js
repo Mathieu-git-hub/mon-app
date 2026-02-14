@@ -4780,8 +4780,12 @@ function saleCardHTML(a) {
 
   const ajout = isoToFr(a.createdAtIso);
   // ✅ Qté ini = stock au début du jour (reste de la veille)
+// ✅ base évolutive pour Qté res (NE PAS TOUCHER)
 const startQtyN = computeStartQtyForDay(a, isoDate);
-const qteIni = Number.isFinite(startQtyN) ? fmtResult(startQtyN) : "";
+
+// ✅ Qté ini = quantité initiale constante de l’article
+const qteIni = fmtWhite(a.qty || "");
+
 
 
     // ✅ Vendu = somme des ventes du jour pour cet article
