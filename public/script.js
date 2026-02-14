@@ -5289,10 +5289,39 @@ function openDailySaleModal() {
     const codeEl = document.getElementById("dailySaleCode");
     if (codeEl) {
       codeEl.addEventListener("input", async () => {
-        draft.code = codeEl.value;
-        await safePersistNow();
-        syncOk();
-      });
+  draft.code = codeEl.value;
+
+  // ✅ si code correspond à un article et que PV n'a pas encore été touché, on pré-remplit
+  const code = String(draft.code || "").trim();
+  const art = code
+    ? (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code))
+    : null;
+
+  if (art && !draft.pvFinalized) {
+    const cur = String(draft.pv || "").trim();
+    const artPv = String(art.pv || "").trim();
+
+    // on remplit seulement si PV est encore vide (donc l'utilisateur n'a pas commencé)
+    if (!cur && artPv) {
+      draft.pv = artPv;
+
+      // met à jour l'input si présent (sans rerender complet)
+      const pvInput = document.getElementById("dailySalePV");
+      if (pvInput) pvInput.value = draft.pv;
+
+      // active le bouton valider PV si présent
+      const pvVal = document.getElementById("dailySalePVValidate");
+      if (pvVal) {
+        pvVal.disabled = draft.pv.trim().length === 0;
+        pvVal.classList.toggle("started", draft.pv.trim().length > 0);
+      }
+    }
+  }
+
+  await safePersistNow();
+  syncOk();
+});
+
     }
 
     bindOneSimple({ key:"qty", finalizedKey:"qtyFinalized", inputId:"dailySaleQty", validateId:"dailySaleQtyValidate", modifyId:"dailySaleQtyModify" });
