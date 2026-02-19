@@ -5574,6 +5574,23 @@ function renderValidatedTextCard(value) {
   return `<div class="card card-white lift" style="flex:1; min-width:220px;">${escapeHtml(String(value || ""))}</div>`;
 }
 
+// ✅ carte affichage "num" (avec format milliers si possible)
+function renderValidatedCard(value) {
+  const s = String(value ?? "").trim();
+  if (!s) {
+    return `<div class="card card-white lift" style="flex:1; min-width:220px;"></div>`;
+  }
+
+  // on tente de formater en milliers si c'est un nombre
+  const n = parseLooseNumber(s);
+  const formatted = Number.isFinite(n)
+    ? fmtResult(n) // ✅ ton fmtResult applique déjà milliers (via formatInputNumberDisplay si dispo)
+    : escapeHtml(s);
+
+  return `<div class="card card-white lift" style="flex:1; min-width:220px;">${formatted}</div>`;
+}
+
+
 
   function renderRowWithValidate({ label, key, finalizedKey, inputId, validateId, modifyId, inputmode = "text", filterFn = null }) {
     const isFinal = !!draft[finalizedKey];
