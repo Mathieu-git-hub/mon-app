@@ -4437,6 +4437,61 @@ const buy = getBuyStore();
 buy.dailySalesByIso = buy.dailySalesByIso || {};        // { [iso]: [sale...] }
 buy.dailySaleDraftByIso = buy.dailySaleDraftByIso || {}; // optionnel (draft modale)
 
+// ===============================
+// ✅ Provisoires (RAP figé par jour)
+// ===============================
+buy.provByCode = buy.provByCode || {}; 
+// { [provCode]: { provCode, originCode, articleNameSnap, pvSnap, createdAtIso, closedAtIso|null, rapByIso: { [iso]: number } } }
+
+function normProvCode(s) {
+  return String(s || "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+function findProvRecord(provCode) {
+  const k = normProvCode(provCode);
+  return buy.provByCode[k] || null;
+}
+
+// ✅ actif un jour donné (actif jusqu’au jour de clôture inclus ; inactif à partir du lendemain)
+function isProvActiveOnDay(provCode, iso) {
+  const rec = findProvRecord(provCode);
+  if (!rec) return false;
+  if (!rec.closedAtIso) return true;
+  return isoToDayTs(iso) <= isoToDayTs(rec.closedAtIso);
+}
+
+// ✅ RAP “tel qu’il était” ce jour-là (ou dernier RAP connu avant ce jour)
+function rapForProvOnDay(provCode, iso) {
+  const rec = findProvRecord(provCode);
+  if (!rec) return null;
+
+  // si RAP stocké pour ce jour => direct
+  if (rec.rapByIso && rec.rapByIso[iso] !== undefined) return rec.rapByIso[iso];
+
+  // sinon, on remonte au dernier jour <= iso
+  let bestIso = null;
+  for (const dIso in (rec.rapByIso || {})) {
+    if (isoToDayTs(dIso) <= isoToDayTs(iso)) {
+      if (!bestIso || isoToDayTs(dIso) > isoToDayTs(bestIso)) bestIso = dIso;
+    }
+  }
+  if (!bestIso) return null;
+  return rec.rapByIso[bestIso];
+}
+
+function setRapForProvOnDay(provCode, iso, rapN) {
+  const rec = findProvRecord(provCode);
+  if (!rec) return;
+  rec.rapByIso = rec.rapByIso || {};
+  rec.rapByIso[iso] = rapN;
+
+  // ✅ si atteint 0 => fermeture à ce jour (inexistant à partir de demain)
+  if (Number.isFinite(rapN) && rapN === 0) {
+    rec.closedAtIso = iso;
+  }
+}
+
+
 // tolérant : espaces + virgule
 function parseLooseNumber(s) {
   const raw = String(s ?? "").trim();
@@ -5527,10 +5582,19 @@ function openDailySaleAdvanceEntryModal() {
   if (document.getElementById("dailyAdvanceModalBackdrop")) return;
 
   const draft = buy.dailyAdvanceDraftByIso[isoDate] || {
-    code: "", codeFinalized: false,
-    pv: "",   pvFinalized: false,
-    avance: "", avanceFinalized: false,
-  };
+  code: "", codeFinalized: false,
+
+  // ✅ nouveau : mode provisoire
+  isProv: false,
+  provCode: "",
+  originCode: "",
+  rapCurrent: null,     // RAP affiché (du jour)
+  rapNew: null,         // Nouv RAP = RAP - avance (preview)
+
+  pv: "",   pvFinalized: false,
+  avance: "", avanceFinalized: false,
+};
+
   buy.dailyAdvanceDraftByIso[isoDate] = draft;
 
   const bd = document.createElement("div");
@@ -5637,26 +5701,35 @@ function renderValidatedCard(value) {
   }
 
   function syncOk() {
-    const okBtn = document.getElementById("dailyAdvanceOkBtn");
-    const codeEl = document.getElementById("dailyAdvanceCode");
-    const errEl  = document.getElementById("dailyAdvanceCodeErr");
-    if (!okBtn) return;
+  const okBtn = document.getElementById("dailyAdvanceOkBtn");
+  const codeEl = document.getElementById("dailyAdvanceCode");
+  const errEl  = document.getElementById("dailyAdvanceCodeErr");
+  if (!okBtn) return;
 
-    const code = String(draft.code || "").trim();
-    const hasCode = code.length > 0;
+  const typed = String(draft.code || "").trim();
+  const hasTyped = typed.length > 0;
 
-    const art = hasCode ? (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code)) : null;
-    setErr(codeEl, errEl, (hasCode && !art) ? "code introuvable" : "");
+  const art = hasTyped
+    ? (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(typed))
+    : null;
 
-    const ok =
-      !!art &&
-      !!draft.codeFinalized &&
-      !!draft.pvFinalized &&
-      !!draft.avanceFinalized;
+  const provKey = normProvCode(typed);
+  const rec = findProvRecord(provKey);
+  const provOk = !!(rec && isProvActiveOnDay(provKey, isoDate));
 
-    okBtn.disabled = !ok;
-    okBtn.classList.toggle("enabled", ok);
-  }
+  // erreur si ni provisoire ni article
+  setErr(codeEl, errEl, (hasTyped && !art && !provOk) ? "code introuvable" : "");
+
+  const ok =
+    !!draft.codeFinalized &&
+    !!draft.avanceFinalized &&
+    (draft.isProv ? provOk : !!art) &&
+    (draft.isProv ? true : !!draft.pvFinalized);
+
+  okBtn.disabled = !ok;
+  okBtn.classList.toggle("enabled", ok);
+}
+
 
   function rerenderBody() {
     const grid = document.getElementById("dailyAdvanceModalGrid");
@@ -5669,6 +5742,19 @@ function renderValidatedCard(value) {
     // RAP (si pv+avance validés)
     const rap = computeRapIfAny();
     const showRap = !!rap;
+
+    // ✅ preview Nouv RAP (uniquement mode provisoire)
+draft.rapNew = null;
+if (draft.isProv && draft.avanceFinalized && Number.isFinite(draft.rapCurrent)) {
+  const aN = parseLooseNumber(draft.avance);
+  if (Number.isFinite(aN)) {
+    let nn = draft.rapCurrent - aN;
+    if (nn < 0) nn = 0;
+    if (Object.is(nn, -0)) nn = 0;
+    draft.rapNew = nn;
+  }
+}
+
 
     grid.innerHTML = `
       ${renderRowWithValidate({
@@ -5693,6 +5779,16 @@ function renderValidatedCard(value) {
           : ``
       }
 
+      ${
+  draft.isProv
+    ? `
+      <div class="label">RAP</div>
+      <div class="art-inline-actions" style="display:flex; gap:10px; align-items:stretch;">
+        ${renderValidatedCard(draft.pv || "")}
+        ${renderValidatedCard(Number.isFinite(draft.rapCurrent) ? draft.rapCurrent : "")}
+      </div>
+    `
+    : `
       ${renderRowWithValidate({
         label:"PV",
         key:"pv",
@@ -5702,6 +5798,9 @@ function renderValidatedCard(value) {
         modifyId:"dailyAdvancePVModify",
         inputmode:"decimal"
       })}
+    `
+}
+
 
       ${renderRowWithValidate({
         label:"Avance",
@@ -5712,6 +5811,18 @@ function renderValidatedCard(value) {
         modifyId:"dailyAdvanceAvanceModify",
         inputmode:"decimal"
       })}
+
+      ${
+  (draft.isProv && draft.avanceFinalized && draft.rapNew !== null)
+    ? `
+      <div class="label">Nouv RAP</div>
+      <div class="art-inline-actions">
+        ${renderValidatedCard(draft.rapNew)}
+      </div>
+    `
+    : ``
+}
+
 
       ${
         showRap
@@ -5805,6 +5916,35 @@ function renderValidatedCard(value) {
         // ✅ on laisse les espaces (pas de filtre destructeur)
         draft.code = input.value;
 
+        // ✅ détecter si le code tapé est un code provisoire ACTIF ce jour
+const typed = String(draft.code || "").trim();
+const provKey = normProvCode(typed);
+const rec = findProvRecord(provKey);
+const provOk = !!(rec && isProvActiveOnDay(provKey, isoDate));
+
+if (provOk) {
+  draft.isProv = true;
+  draft.provCode = rec.provCode || typed;
+  draft.originCode = rec.originCode || "";
+
+  // PV snapshot (non modifiable en mode provisoire)
+  draft.pv = String(rec.pvSnap ?? "").trim();
+  draft.pvFinalized = true;
+
+  // RAP figé pour ce jour
+  const rap = rapForProvOnDay(provKey, isoDate);
+  draft.rapCurrent = Number.isFinite(rap) ? rap : null;
+
+} else {
+  // mode normal
+  draft.isProv = false;
+  draft.provCode = "";
+  draft.originCode = "";
+  draft.rapCurrent = null;
+  draft.rapNew = null;
+}
+
+
         // ✅ si l'utilisateur vide => fait disparaître "code provisoire"
         if (String(draft.code || "").trim() === "") {
           draft.code = "";
@@ -5854,26 +5994,31 @@ function renderValidatedCard(value) {
     }
 
     if (vBtn) {
-      vBtn.addEventListener("click", async () => {
-        const code = String(draft.code || "").trim();
-        if (!code) {
-          if (typeof shake === "function") shake(vBtn);
-          return;
-        }
-
-        // doit exister
-        const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code));
-        if (!art) {
-          if (typeof shake === "function") shake(vBtn);
-          syncOk();
-          return;
-        }
-
-        draft.codeFinalized = true;
-        await safePersistNow();
-        rerenderBody();
-      });
+  vBtn.addEventListener("click", async () => {
+    const code = String(draft.code || "").trim();
+    if (!code) {
+      if (typeof shake === "function") shake(vBtn);
+      return;
     }
+
+    const provKey = normProvCode(code);
+    const rec = findProvRecord(provKey);
+    const provOk = !!(rec && isProvActiveOnDay(provKey, isoDate));
+
+    const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code));
+
+    if (!provOk && !art) {
+      if (typeof shake === "function") shake(vBtn);
+      syncOk();
+      return;
+    }
+
+    draft.codeFinalized = true;
+    await safePersistNow();
+    rerenderBody();
+  });
+}
+
 
     if (mBtn) {
       mBtn.addEventListener("click", async () => {
@@ -5908,27 +6053,85 @@ function renderValidatedCard(value) {
         syncOk();
         if (okBtn.disabled) return;
 
-        const code   = String(draft.code || "").trim();
-        const pv     = String(draft.pv || "").trim();
-        const avance = String(draft.avance || "").trim();
+        const typed = String(draft.code || "").trim();
+const avance = String(draft.avance || "").trim();
 
-        const letter = nextProvLetterForCode(code);
-        const provCode = `${letter} ${code}`;
+const aN = parseLooseNumber(avance);
+if (!Number.isFinite(aN)) return;
 
-        // ✅ Enregistrer dans le même store que les ventes (solution la plus simple)
-        const sale = {
-          id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
-          type: "advance",
-          code,
-          qty: "1",         // ✅ vendu +1
-          pv,               // ✅ pour RAP / affichage
-          avance,           // ✅ c'est ça qui alimente PVT
-          provLetter: letter,
-          provCode,
-          ts: Date.now(),
-        };
+if (draft.isProv) {
+  // ✅ paiement sur provisoire : PVT = avance, PRT inchangé (qty=0)
+  const provKey = normProvCode(typed);
+  const rec = findProvRecord(provKey);
+  if (!rec || !isProvActiveOnDay(provKey, isoDate)) return;
 
-        getSalesOfDay(isoDate).push(sale);
+  const rapCur = rapForProvOnDay(provKey, isoDate);
+  if (!Number.isFinite(rapCur)) return;
+
+  let rapNew = rapCur - aN;
+  if (rapNew < 0) rapNew = 0;
+  if (Object.is(rapNew, -0)) rapNew = 0;
+
+  // stocker RAP figé du jour + fermer si 0
+  setRapForProvOnDay(provKey, isoDate, rapNew);
+
+  const sale = {
+    id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+    type: "advance",
+    subType: "rapPay",
+    code: rec.originCode,        // article réel
+    qty: "0",                    // ✅ NE TOUCHE PAS PRT/VENDU
+    pv: String(rec.pvSnap ?? ""),
+    avance,
+    provCode: rec.provCode,
+    ts: Date.now(),
+  };
+
+  getSalesOfDay(isoDate).push(sale);
+
+} else {
+  // ✅ 1ère avance : création d’un provisoire
+  const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(typed));
+  if (!art) return;
+
+  const pv = String(draft.pv || "").trim();
+  const pvN = parseLooseNumber(pv);
+  if (!Number.isFinite(pvN)) return;
+
+  let rap0 = pvN - aN;
+  if (rap0 < 0) rap0 = 0;
+  if (Object.is(rap0, -0)) rap0 = 0;
+
+  const letter = nextProvLetterForCode(typed);
+  const provCode = `${letter} ${typed}`;
+
+  // ✅ créer dossier provisoire (snapshot + rapByIso)
+  buy.provByCode[normProvCode(provCode)] = {
+    provCode,
+    originCode: typed,
+    articleNameSnap: art.name || "",
+    pvSnap: pvN,
+    createdAtIso: isoDate,
+    closedAtIso: null,
+    rapByIso: { [isoDate]: rap0 }
+  };
+
+  const sale = {
+    id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+    type: "advance",
+    subType: "createProv",
+    code: typed,
+    qty: "1",     // ✅ première avance = vendu +1 (PRT pris en compte)
+    pv,
+    avance,
+    provLetter: letter,
+    provCode,
+    ts: Date.now(),
+  };
+
+  getSalesOfDay(isoDate).push(sale);
+}
+
 
         delete buy.dailyAdvanceDraftByIso[isoDate];
 
