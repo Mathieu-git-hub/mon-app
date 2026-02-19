@@ -4681,7 +4681,7 @@ function computeGlobalsForDay(iso) {
     const pr = Number(art.prResult);
     const qtySum = sumQtySales(list);
     const pvSum = sumPvtEntries(list);
-pvtGlobal += pvSum;
+
 
 
     if (Number.isFinite(pr)) prtGlobal += pr * qtySum;
