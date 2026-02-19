@@ -4491,6 +4491,29 @@ function setRapForProvOnDay(provCode, iso, rapN) {
   }
 }
 
+// ✅ cumulé "Payé" pour un code provisoire jusqu'à un jour donné (inclus)
+function paidForProvUpToDay(provCode, iso) {
+  const k = normProvCode(provCode);
+  let total = 0;
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    if (isoToDayTs(dayIso) > isoToDayTs(iso)) continue; // ✅ après le jour => ignore
+    const arr = buy.dailySalesByIso[dayIso] || [];
+
+    for (const s of arr) {
+      if (s?.type !== "advance") continue;
+      if (!s.provCode) continue;
+      if (normProvCode(s.provCode) !== k) continue;
+
+      const aN = parseLooseNumber(s.avance);
+      if (Number.isFinite(aN)) total += aN;
+    }
+  }
+
+  return total;
+}
+
+
 
 // tolérant : espaces + virgule
 function parseLooseNumber(s) {
@@ -5693,12 +5716,17 @@ function renderValidatedCard(value) {
   }
 
   function computeRapIfAny() {
-    if (!draft.pvFinalized || !draft.avanceFinalized) return "";
-    const pvN = parseLooseNumber(draft.pv);
-    const avN = parseLooseNumber(draft.avance);
-    if (!Number.isFinite(pvN) || !Number.isFinite(avN)) return "";
-    return fmtResult(pvN - avN);
-  }
+  // ✅ IMPORTANT : en mode provisoire, on n'affiche JAMAIS "RAP = PV - Avance"
+  // (seul "Nouv RAP = RAP - Avance" est autorisé)
+  if (draft.isProv) return "";
+
+  if (!draft.pvFinalized || !draft.avanceFinalized) return "";
+  const pvN = parseLooseNumber(draft.pv);
+  const avN = parseLooseNumber(draft.avance);
+  if (!Number.isFinite(pvN) || !Number.isFinite(avN)) return "";
+  return fmtResult(pvN - avN);
+}
+
 
   function syncOk() {
   const okBtn = document.getElementById("dailyAdvanceOkBtn");
@@ -5781,13 +5809,29 @@ if (draft.isProv && draft.avanceFinalized && Number.isFinite(draft.rapCurrent)) 
 
       ${
   draft.isProv
-    ? `
-      <div class="label">RAP</div>
-      <div class="art-inline-actions" style="display:flex; gap:10px; align-items:stretch;">
-        ${renderValidatedCard(draft.pv || "")}
-        ${renderValidatedCard(Number.isFinite(draft.rapCurrent) ? draft.rapCurrent : "")}
-      </div>
-    `
+    ? (() => {
+        const paidN = paidForProvUpToDay(draft.provCode || draft.code, isoDate);
+        const paidDisp = Number.isFinite(paidN) ? fmtResult(paidN) : "";
+
+        const rapDisp = Number.isFinite(draft.rapCurrent) ? fmtResult(draft.rapCurrent) : "";
+
+        return `
+          <div class="label">PV</div>
+          <div class="art-inline-actions">
+            ${renderValidatedCard(draft.pv || "")}
+          </div>
+
+          <div class="label">Payé</div>
+          <div class="art-inline-actions">
+            ${renderValidatedCard(paidDisp)}
+          </div>
+
+          <div class="label">RAP</div>
+          <div class="art-inline-actions">
+            ${renderValidatedCard(rapDisp)}
+          </div>
+        `;
+      })()
     : `
       ${renderRowWithValidate({
         label:"PV",
@@ -5800,6 +5844,7 @@ if (draft.isProv && draft.avanceFinalized && Number.isFinite(draft.rapCurrent)) 
       })}
     `
 }
+
 
 
       ${renderRowWithValidate({
