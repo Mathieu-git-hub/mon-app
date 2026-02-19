@@ -4585,12 +4585,23 @@ for (const key of order) {
   const qSum = qtyByPv.get(key) || 0;
   if (!Number.isFinite(pvN) || !Number.isFinite(qSum) || qSum <= 0) continue;
 
-  const pvDisp = fmtResult(pvN);
+  const isAdvance = key.startsWith("A|"); // ✅ détecte avance
 
-  // si quantité totale = 1 → on peut afficher juste PV, sinon PV × quantité
-  if (qSum === 1) parts.push(`${pvDisp}`);
-  else parts.push(`${pvDisp} × ${fmtResult(qSum)}`);
+  let pvDisp = fmtResult(pvN);
+
+  // ✅ si avance → ajouter (A)
+  if (isAdvance) {
+    pvDisp = `${pvDisp} (A)`;
+  }
+
+  // si quantité totale = 1 → afficher valeur seule
+  if (qSum === 1) {
+    parts.push(`${pvDisp}`);
+  } else {
+    parts.push(`${pvDisp} × ${fmtResult(qSum)}`);
+  }
 }
+
 
 
   const dayTotal = sumPvSales(list);
