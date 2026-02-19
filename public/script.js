@@ -5551,9 +5551,11 @@ function openDailySaleAdvanceEntryModal() {
     }
   }
 
-  function renderValidatedCard(value) {
-    return `<div class="card card-white lift" style="flex:1; min-width:220px;">${escapeHtml(fmtWhite(value || ""))}</div>`;
-  }
+  // ✅ [AJOUT] carte affichage TEXTE (ne PAS appliquer fmtWhite)
+function renderValidatedTextCard(value) {
+  return `<div class="card card-white lift" style="flex:1; min-width:220px;">${escapeHtml(String(value || ""))}</div>`;
+}
+
 
   function renderRowWithValidate({ label, key, finalizedKey, inputId, validateId, modifyId, inputmode = "text", filterFn = null }) {
     const isFinal = !!draft[finalizedKey];
@@ -5650,7 +5652,7 @@ function openDailySaleAdvanceEntryModal() {
           ? `
             <div class="label">Code provisoire</div>
             <div class="art-inline-actions">
-              ${renderValidatedCard(prov)}
+              ${renderValidatedTextCard(prov)}
             </div>
           `
           : ``
