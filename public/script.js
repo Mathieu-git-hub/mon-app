@@ -4484,6 +4484,46 @@ function sumPvSales(list) {
   }, 0);
 }
 
+// ✅ [AJOUT] montant qui alimente le PVT pour UNE ligne (vente OU avance)
+function pvtAmountOfEntry(s) {
+  if (!s) return 0;
+
+  // Avance : c’est "avance" qui alimente le PVT
+  if (s.type === "advance") {
+    const a = parseLooseNumber(s.avance);
+    return Number.isFinite(a) ? a : 0;
+  }
+
+  // Vente normale : PV × quantité
+  const p = parseLooseNumber(s.pv);
+  const q = parseLooseNumber(s.qty);
+  const pv = Number.isFinite(p) ? p : 0;
+  const qty = Number.isFinite(q) ? q : 0;
+  return pv * qty;
+}
+
+// ✅ [AJOUT] somme PVT d'une liste (compatible ventes + avances)
+function sumPvtEntries(list) {
+  return (list || []).reduce((acc, s) => acc + pvtAmountOfEntry(s), 0);
+}
+
+// ✅ [AJOUT] cumul PVT STRICTEMENT avant un jour (compatible ventes + avances)
+function totalPvtBeforeDayForCode(code, iso) {
+  const c = normSearch(String(code || ""));
+  let total = 0;
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    if (isoToDayTs(dayIso) >= isoToDayTs(iso)) continue; // strictement avant
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    for (const s of arr) {
+      if (normSearch(s.code) !== c) continue;
+      total += pvtAmountOfEntry(s);
+    }
+  }
+  return total;
+}
+
+
 
 // total PV historique (toutes dates) pour un code
 function totalPvAllDaysForCode(code) {
@@ -4505,7 +4545,7 @@ function pvtExpressionForToday(code) {
   const list = salesTodayForCode(code);
 
   // ✅ cumul AVANT aujourd’hui (ne doit jamais modifier les jours passés)
-  const prevCum = totalPvBeforeDayForCode(code, isoDate);
+  const prevCum = totalPvtBeforeDayForCode(code, isoDate);
 
   // ✅ pas de vente aujourd’hui => ligne PVT = cumul précédent
   if (!list.length) {
@@ -4611,7 +4651,7 @@ function computeGlobalsForDay(iso) {
 
     const pr = Number(art.prResult);
     const qtySum = sumQtySales(list);
-    const pvSum = sumPvSales(list);
+    const pvSum = sumPvtEntries(list);
 pvtGlobal += pvSum;
 
 
@@ -5134,8 +5174,9 @@ function openDailySaleAdvanceModal() {
 
   if (yes) yes.addEventListener("click", () => {
   closeDailySaleAdvanceModal();
-  // ✅ rien (ou autre logique plus tard)
+  openDailySaleAdvanceEntryModal(); // ✅ OUI => modale Avance
 });
+
 
 if (no) no.addEventListener("click", () => {
   closeDailySaleAdvanceModal();
@@ -5419,6 +5460,445 @@ if (okBtn) {
   const first = document.getElementById("dailySaleCode");
   if (first) first.focus();
 }
+
+// ===============================
+// ✅ MODAL "Avance" (Vente du jour)
+// ===============================
+
+// draft persistant "Avance" du jour
+buy.dailyAdvanceDraftByIso = buy.dailyAdvanceDraftByIso || {};
+
+function closeDailySaleAdvanceEntryModal() {
+  const bd = document.getElementById("dailyAdvanceModalBackdrop");
+  if (bd) bd.remove();
+}
+
+// ✅ lettre suivante (A,B,C,...) pour un code, en scannant l'historique
+function nextProvLetterForCode(code) {
+  const c = normSearch(String(code || ""));
+  let max = -1;
+
+  for (const iso in (buy.dailySalesByIso || {})) {
+    const arr = buy.dailySalesByIso[iso] || [];
+    for (const s of arr) {
+      if (normSearch(s.code) !== c) continue;
+      if (!s.provLetter) continue;
+      const ch = String(s.provLetter || "").trim().toUpperCase();
+      if (!/^[A-Z]$/.test(ch)) continue;
+      const idx = ch.charCodeAt(0) - 65;
+      if (idx > max) max = idx;
+    }
+  }
+
+  const next = Math.min(max + 1, 25); // ✅ cap à Z
+  return String.fromCharCode(65 + next);
+}
+
+function openDailySaleAdvanceEntryModal() {
+  if (document.getElementById("dailyAdvanceModalBackdrop")) return;
+
+  const draft = buy.dailyAdvanceDraftByIso[isoDate] || {
+    code: "", codeFinalized: false,
+    pv: "",   pvFinalized: false,
+    avance: "", avanceFinalized: false,
+  };
+  buy.dailyAdvanceDraftByIso[isoDate] = draft;
+
+  const bd = document.createElement("div");
+  bd.id = "dailyAdvanceModalBackdrop";
+  bd.className = "cat-modal-backdrop";
+
+  bd.innerHTML = `
+    <div class="cat-modal" role="dialog" aria-modal="true" aria-label="Avance"
+         style="display:flex; flex-direction:column; max-height: min(78vh, 560px);">
+      <div class="cat-modal-title" style="flex:0 0 auto; text-align:center;">Avance</div>
+
+      <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+        <div id="dailyAdvanceModalGrid" class="cat-modal-grid"></div>
+      </div>
+
+      <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
+        <button id="dailyAdvanceCancelBtn" class="modal-btn cancel" type="button">Annuler</button>
+        <button id="dailyAdvanceOkBtn" class="modal-btn ok" type="button" disabled>OK</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => { if (e.target === bd) closeDailySaleAdvanceEntryModal(); });
+  document.body.appendChild(bd);
+
+  function setErr(inputEl, msgEl, msg) {
+    if (!inputEl || !msgEl) return;
+    if (!msg) {
+      inputEl.classList.remove("error");
+      msgEl.style.display = "none";
+      msgEl.textContent = "";
+    } else {
+      inputEl.classList.add("error");
+      msgEl.style.display = "block";
+      msgEl.textContent = msg;
+    }
+  }
+
+  function renderValidatedCard(value) {
+    return `<div class="card card-white lift" style="flex:1; min-width:220px;">${escapeHtml(fmtWhite(value || ""))}</div>`;
+  }
+
+  function renderRowWithValidate({ label, key, finalizedKey, inputId, validateId, modifyId, inputmode = "text", filterFn = null }) {
+    const isFinal = !!draft[finalizedKey];
+
+    if (!isFinal) {
+      const hasText = String(draft[key] || "").trim().length > 0;
+      return `
+        <div class="label">${label}</div>
+        <div class="art-inline-actions">
+          <input id="${inputId}" class="input" inputmode="${inputmode}" autocomplete="off"
+            value="${escapeAttr(draft[key] || "")}" />
+          <button id="${validateId}" class="art-mini-btn art-mini-validate" type="button" ${hasText ? "" : "disabled"}>Valider</button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="label">${label}</div>
+      <div class="art-inline-actions">
+        ${renderValidatedCard(draft[key] || "")}
+        <button id="${modifyId}" class="art-mini-btn art-mini-modify" type="button">Modifier</button>
+      </div>
+    `;
+  }
+
+  function computeProvCodeIfAny() {
+    const code = String(draft.code || "").trim();
+    const art = code ? (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code)) : null;
+
+    if (!draft.codeFinalized) return "";
+    if (!art) return "";
+    if (!code) return "";
+
+    const letter = nextProvLetterForCode(code);
+    return `${letter} ${code}`;
+  }
+
+  function computeRapIfAny() {
+    if (!draft.pvFinalized || !draft.avanceFinalized) return "";
+    const pvN = parseLooseNumber(draft.pv);
+    const avN = parseLooseNumber(draft.avance);
+    if (!Number.isFinite(pvN) || !Number.isFinite(avN)) return "";
+    return fmtResult(pvN - avN);
+  }
+
+  function syncOk() {
+    const okBtn = document.getElementById("dailyAdvanceOkBtn");
+    const codeEl = document.getElementById("dailyAdvanceCode");
+    const errEl  = document.getElementById("dailyAdvanceCodeErr");
+    if (!okBtn) return;
+
+    const code = String(draft.code || "").trim();
+    const hasCode = code.length > 0;
+
+    const art = hasCode ? (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code)) : null;
+    setErr(codeEl, errEl, (hasCode && !art) ? "code introuvable" : "");
+
+    const ok =
+      !!art &&
+      !!draft.codeFinalized &&
+      !!draft.pvFinalized &&
+      !!draft.avanceFinalized;
+
+    okBtn.disabled = !ok;
+    okBtn.classList.toggle("enabled", ok);
+  }
+
+  function rerenderBody() {
+    const grid = document.getElementById("dailyAdvanceModalGrid");
+    if (!grid) return;
+
+    // code provisoire (si code validé + existant)
+    const prov = computeProvCodeIfAny();
+    const showProv = !!prov;
+
+    // RAP (si pv+avance validés)
+    const rap = computeRapIfAny();
+    const showRap = !!rap;
+
+    grid.innerHTML = `
+      ${renderRowWithValidate({
+        label:"Code",
+        key:"code",
+        finalizedKey:"codeFinalized",
+        inputId:"dailyAdvanceCode",
+        validateId:"dailyAdvanceCodeValidate",
+        modifyId:"dailyAdvanceCodeModify",
+        inputmode:"text"
+      })}
+      <div id="dailyAdvanceCodeErr" class="cat-err" style="display:none;"></div>
+
+      ${
+        showProv
+          ? `
+            <div class="label">Code provisoire</div>
+            <div class="art-inline-actions">
+              ${renderValidatedCard(prov)}
+            </div>
+          `
+          : ``
+      }
+
+      ${renderRowWithValidate({
+        label:"PV",
+        key:"pv",
+        finalizedKey:"pvFinalized",
+        inputId:"dailyAdvancePV",
+        validateId:"dailyAdvancePVValidate",
+        modifyId:"dailyAdvancePVModify",
+        inputmode:"decimal"
+      })}
+
+      ${renderRowWithValidate({
+        label:"Avance",
+        key:"avance",
+        finalizedKey:"avanceFinalized",
+        inputId:"dailyAdvanceAvance",
+        validateId:"dailyAdvanceAvanceValidate",
+        modifyId:"dailyAdvanceAvanceModify",
+        inputmode:"decimal"
+      })}
+
+      ${
+        showRap
+          ? `
+            <div class="label">RAP</div>
+            <div class="art-inline-actions">
+              ${renderValidatedCard(rap)}
+            </div>
+          `
+          : ``
+      }
+    `;
+
+    bindHandlers();
+    syncOk();
+  }
+
+  function bindSimpleNumber({ key, finalizedKey, inputId, validateId, modifyId }) {
+    const input = document.getElementById(inputId);
+    const vBtn  = document.getElementById(validateId);
+    const mBtn  = document.getElementById(modifyId);
+
+    if (input) {
+      input.addEventListener("input", async () => {
+        const filtered = digitsCommaOnly(input.value); // ✅ autorise espaces
+        if (filtered !== input.value) {
+          input.value = filtered;
+          if (typeof shake === "function") shake(input);
+        }
+
+        if (vBtn) {
+          const has = filtered.trim().length > 0;
+          vBtn.disabled = !has;
+          vBtn.classList.toggle("started", has);
+        }
+
+        draft[key] = filtered;
+        draft[finalizedKey] = false;
+
+        // effacement total => suppression
+        if (filtered.trim() === "") {
+          draft[key] = "";
+          draft[finalizedKey] = false;
+        }
+
+        await safePersistNow();
+        syncOk();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (vBtn && !vBtn.disabled) vBtn.click();
+        }
+      });
+    }
+
+    if (vBtn) {
+      vBtn.addEventListener("click", async () => {
+        const v = String(draft[key] || "").trim();
+        if (!v) {
+          if (typeof shake === "function") shake(vBtn);
+          return;
+        }
+        draft[finalizedKey] = true;
+        await safePersistNow();
+        rerenderBody();
+      });
+    }
+
+    if (mBtn) {
+      mBtn.addEventListener("click", async () => {
+        draft[finalizedKey] = false;
+        await safePersistNow();
+        rerenderBody();
+        setTimeout(() => {
+          const i = document.getElementById(inputId);
+          if (i) i.focus();
+        }, 0);
+      });
+    }
+  }
+
+  function bindCodeRow() {
+    const input = document.getElementById("dailyAdvanceCode");
+    const vBtn  = document.getElementById("dailyAdvanceCodeValidate");
+    const mBtn  = document.getElementById("dailyAdvanceCodeModify");
+
+    if (input) {
+      input.addEventListener("input", async () => {
+        // ✅ on laisse les espaces (pas de filtre destructeur)
+        draft.code = input.value;
+
+        // ✅ si l'utilisateur vide => fait disparaître "code provisoire"
+        if (String(draft.code || "").trim() === "") {
+          draft.code = "";
+          draft.codeFinalized = false;
+        } else {
+          draft.codeFinalized = false;
+        }
+
+        // ✅ pré-remplissage PV si code correspond à un article et PV pas encore validé
+        const code = String(draft.code || "").trim();
+        const art = code
+          ? (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code))
+          : null;
+
+        if (art && !draft.pvFinalized) {
+          const artPv = String(art.pv || "").trim();
+          draft.pv = artPv || "";
+
+          const pvInput = document.getElementById("dailyAdvancePV");
+          if (pvInput) pvInput.value = draft.pv;
+
+          const pvVal = document.getElementById("dailyAdvancePVValidate");
+          if (pvVal) {
+            const has = String(draft.pv || "").trim().length > 0;
+            pvVal.disabled = !has;
+            pvVal.classList.toggle("started", has);
+          }
+        }
+
+        // bouton valider code : actif si texte non vide
+        if (vBtn) {
+          const has = String(draft.code || "").trim().length > 0;
+          vBtn.disabled = !has;
+          vBtn.classList.toggle("started", has);
+        }
+
+        await safePersistNow();
+        syncOk();
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (vBtn && !vBtn.disabled) vBtn.click();
+        }
+      });
+    }
+
+    if (vBtn) {
+      vBtn.addEventListener("click", async () => {
+        const code = String(draft.code || "").trim();
+        if (!code) {
+          if (typeof shake === "function") shake(vBtn);
+          return;
+        }
+
+        // doit exister
+        const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code));
+        if (!art) {
+          if (typeof shake === "function") shake(vBtn);
+          syncOk();
+          return;
+        }
+
+        draft.codeFinalized = true;
+        await safePersistNow();
+        rerenderBody();
+      });
+    }
+
+    if (mBtn) {
+      mBtn.addEventListener("click", async () => {
+        draft.codeFinalized = false;
+        await safePersistNow();
+        rerenderBody();
+        setTimeout(() => {
+          const i = document.getElementById("dailyAdvanceCode");
+          if (i) i.focus();
+        }, 0);
+      });
+    }
+  }
+
+  function bindHandlers() {
+    bindCodeRow();
+    bindSimpleNumber({ key:"pv",     finalizedKey:"pvFinalized",     inputId:"dailyAdvancePV",     validateId:"dailyAdvancePVValidate",     modifyId:"dailyAdvancePVModify" });
+    bindSimpleNumber({ key:"avance", finalizedKey:"avanceFinalized", inputId:"dailyAdvanceAvance", validateId:"dailyAdvanceAvanceValidate", modifyId:"dailyAdvanceAvanceModify" });
+
+    const cancelBtn = document.getElementById("dailyAdvanceCancelBtn");
+    if (cancelBtn) {
+      cancelBtn.onclick = async () => {
+        delete buy.dailyAdvanceDraftByIso[isoDate];
+        await safePersistNow();
+        closeDailySaleAdvanceEntryModal();
+      };
+    }
+
+    const okBtn = document.getElementById("dailyAdvanceOkBtn");
+    if (okBtn) {
+      okBtn.onclick = async () => {
+        syncOk();
+        if (okBtn.disabled) return;
+
+        const code   = String(draft.code || "").trim();
+        const pv     = String(draft.pv || "").trim();
+        const avance = String(draft.avance || "").trim();
+
+        const letter = nextProvLetterForCode(code);
+        const provCode = `${letter} ${code}`;
+
+        // ✅ Enregistrer dans le même store que les ventes (solution la plus simple)
+        const sale = {
+          id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+          type: "advance",
+          code,
+          qty: "1",         // ✅ vendu +1
+          pv,               // ✅ pour RAP / affichage
+          avance,           // ✅ c'est ça qui alimente PVT
+          provLetter: letter,
+          provCode,
+          ts: Date.now(),
+        };
+
+        getSalesOfDay(isoDate).push(sale);
+
+        delete buy.dailyAdvanceDraftByIso[isoDate];
+
+        await safePersistNow();
+        closeDailySaleAdvanceEntryModal();
+
+        renderDailySaleRecap();
+        renderDailySaleGlobals();
+      };
+    }
+  }
+
+  rerenderBody();
+
+  const first = document.getElementById("dailyAdvanceCode");
+  if (first) first.focus();
+}
+
 
 
 
