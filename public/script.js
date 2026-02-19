@@ -4560,51 +4560,69 @@ function pvtExpressionForToday(code) {
 
   // ✅ vente aujourd’hui => expression compressée
   // ✅ vente aujourd’hui => expression compressée (PV × Quantité)
-const order = [];
-const qtyByPv = new Map();   // pvKey -> somme des quantités
-const pvValByKey = new Map(); // pvKey -> valeur numérique pv
+// ✅ vente aujourd’hui => expression compressée (ventes + avances)
+const order = [];               // clés ordonnées (S|... ou A|...)
+const qtyByKey = new Map();     // somme qty (vente) ou compteur (avance)
+const valByKey = new Map();     // valeur numérique (pv ou avance)
+const kindByKey = new Map();    // "sale" | "advance"
 
 for (const s of list) {
+
+  // ✅ Avance : on compresse par valeur "avance" (et on affiche (A))
+  if (s.type === "advance") {
+    const aN = parseLooseNumber(s.avance);
+    if (!Number.isFinite(aN) || aN <= 0) continue;
+
+    const k = "A|" + String(aN).replace(".", ","); // clé stable (affichage)
+    if (!qtyByKey.has(k)) {
+      qtyByKey.set(k, 1);
+      valByKey.set(k, aN);
+      kindByKey.set(k, "advance");
+      order.push(k);
+    } else {
+      qtyByKey.set(k, qtyByKey.get(k) + 1);
+    }
+    continue;
+  }
+
+  // ✅ Vente normale : PV × quantité (ta logique inchangée)
   const pvN = parseLooseNumber(s.pv);
   const qtyN = parseLooseNumber(s.qty);
   if (!Number.isFinite(pvN) || !Number.isFinite(qtyN) || qtyN <= 0) continue;
 
-  const key = String(pvN).replace(".", ","); // clé stable
-  if (!qtyByPv.has(key)) {
-    qtyByPv.set(key, qtyN);
-    pvValByKey.set(key, pvN);
-    order.push(key);
+  const k = "S|" + String(pvN).replace(".", ","); // clé stable
+  if (!qtyByKey.has(k)) {
+    qtyByKey.set(k, qtyN);
+    valByKey.set(k, pvN);
+    kindByKey.set(k, "sale");
+    order.push(k);
   } else {
-    qtyByPv.set(key, qtyByPv.get(key) + qtyN);
+    qtyByKey.set(k, qtyByKey.get(k) + qtyN);
   }
 }
 
 const parts = [];
-for (const key of order) {
-  const pvN = pvValByKey.get(key);
-  const qSum = qtyByPv.get(key) || 0;
-  if (!Number.isFinite(pvN) || !Number.isFinite(qSum) || qSum <= 0) continue;
+for (const k of order) {
+  const n = valByKey.get(k);
+  const qSum = qtyByKey.get(k) || 0;
+  const kind = kindByKey.get(k);
 
-  const isAdvance = key.startsWith("A|"); // ✅ détecte avance
+  if (!Number.isFinite(n) || !Number.isFinite(qSum) || qSum <= 0) continue;
 
-  let pvDisp = fmtResult(pvN);
+  let disp = fmtResult(n);
 
-  // ✅ si avance → ajouter (A)
-  if (isAdvance) {
-    pvDisp = `${pvDisp} (A)`;
-  }
+  // ✅ Avance : ajouter (A) après la valeur
+  if (kind === "advance") disp = `${disp} (A)`;
 
-  // si quantité totale = 1 → afficher valeur seule
-  if (qSum === 1) {
-    parts.push(`${pvDisp}`);
-  } else {
-    parts.push(`${pvDisp} × ${fmtResult(qSum)}`);
-  }
+  // ✅ même règle de multiplication : répétition => "×"
+  if (qSum === 1) parts.push(`${disp}`);
+  else parts.push(`${disp} × ${fmtResult(qSum)}`);
 }
 
 
 
-  const dayTotal = sumPvSales(list);
+
+  const dayTotal = sumPvtEntries(list);
   const expr = parts.length ? parts.join(" + ") : "";
   const exprWithTotal = expr ? `${expr} = ${fmtResult(dayTotal)}` : `${fmtResult(dayTotal)}`;
 
