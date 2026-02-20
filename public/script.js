@@ -5614,26 +5614,35 @@ function closeDailySaleAdvanceEntryModal() {
   if (bd) bd.remove();
 }
 
-// ✅ lettre suivante (A,B,C,...) pour un code, en scannant l'historique
-function nextProvLetterForCode(code) {
-  const c = normSearch(String(code || ""));
-  let max = -1;
+// ✅ lettre suivante (A,B,C,...) en tenant compte des provisoires "inexistants" (fermés avant aujourd’hui)
+function nextProvLetterForCode(originCode) {
+  const oc = normSearch(String(originCode || ""));
+  let maxIdx = -1;
 
-  for (const iso in (buy.dailySalesByIso || {})) {
-    const arr = buy.dailySalesByIso[iso] || [];
-    for (const s of arr) {
-      if (normSearch(s.code) !== c) continue;
-      if (!s.provLetter) continue;
-      const ch = String(s.provLetter || "").trim().toUpperCase();
-      if (!/^[A-Z]$/.test(ch)) continue;
-      const idx = ch.charCodeAt(0) - 65;
-      if (idx > max) max = idx;
-    }
+  for (const k in (buy.provByCode || {})) {
+    const rec = buy.provByCode[k];
+    if (!rec) continue;
+    if (normSearch(rec.originCode) !== oc) continue;
+
+    // ✅ actif AUJOURD’HUI = non fermé, ou fermé aujourd’hui (encore valable aujourd’hui)
+    const closed = rec.closedAtIso ? isoToDayTs(rec.closedAtIso) : NaN;
+    const today = isoToDayTs(isoDate);
+
+    const isActiveToday = !Number.isFinite(closed) || closed >= today;
+    if (!isActiveToday) continue; // ✅ fermé avant aujourd’hui => lettre réutilisable
+
+    const provCode = String(rec.provCode || "").trim();
+    const m = provCode.match(/^([A-Z])\s+/i);
+    if (!m) continue;
+
+    const idx = m[1].toUpperCase().charCodeAt(0) - 65;
+    if (idx > maxIdx) maxIdx = idx;
   }
 
-  const next = Math.min(max + 1, 25); // ✅ cap à Z
+  const next = Math.min(maxIdx + 1, 25);
   return String.fromCharCode(65 + next);
 }
+
 
 function openDailySaleAdvanceEntryModal() {
   if (document.getElementById("dailyAdvanceModalBackdrop")) return;
