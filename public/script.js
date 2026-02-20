@@ -4513,6 +4513,40 @@ function paidForProvUpToDay(provCode, iso) {
   return total;
 }
 
+// ✅ liste détaillée des paiements d’un provisoire (plus récent en haut)
+function listPaymentsForProvUpToDay(provCode, iso) {
+  const k = normProvCode(provCode);
+  const out = [];
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    if (isoToDayTs(dayIso) > isoToDayTs(iso)) continue; // ✅ jusqu’au jour inclus
+    const arr = buy.dailySalesByIso[dayIso] || [];
+
+    for (const s of arr) {
+      if (!s || s.type !== "advance") continue;
+      if (!s.provCode) continue;
+      if (normProvCode(s.provCode) !== k) continue;
+
+      const aN = parseLooseNumber(s.avance);
+      if (!Number.isFinite(aN) || aN <= 0) continue;
+
+      out.push({
+        amount: aN,
+        dayIso,
+        ts: Number(s.ts) || isoToDayTs(dayIso) || 0
+      });
+    }
+  }
+
+  out.sort((a,b) => (b.ts || 0) - (a.ts || 0)); // ✅ plus récent au-dessus
+  return out;
+}
+
+function paymentsTotal(payments) {
+  return (payments || []).reduce((acc, p) => acc + (Number.isFinite(p.amount) ? p.amount : 0), 0);
+}
+
+
 
 
 // tolérant : espaces + virgule
@@ -5810,8 +5844,21 @@ if (draft.isProv && draft.avanceFinalized && Number.isFinite(draft.rapCurrent)) 
       ${
   draft.isProv
     ? (() => {
-        const paidN = paidForProvUpToDay(draft.provCode || draft.code, isoDate);
-        const paidDisp = Number.isFinite(paidN) ? fmtResult(paidN) : "";
+        const provKey = (draft.provCode || draft.code);
+const payList = listPaymentsForProvUpToDay(provKey, isoDate);
+const payTotal = paymentsTotal(payList);
+
+const payStackHtml = payList.length
+  ? payList.map(p => `
+      <div style="display:flex; align-items:center; gap:10px;">
+        ${renderValidatedCard(fmtResult(p.amount))}
+        <div style="opacity:.9; font-weight:900; white-space:nowrap;">(${escapeHtml(isoToFr(p.dayIso))})</div>
+      </div>
+    `).join(`<div style="height:8px;"></div>`)
+  : `<div style="opacity:.75; font-weight:800;">Aucun paiement</div>`;
+
+const payTotalHtml = renderValidatedCard(`Total : ${fmtResult(payTotal)}`);
+
 
         const rapDisp = Number.isFinite(draft.rapCurrent) ? fmtResult(draft.rapCurrent) : "";
 
@@ -5822,9 +5869,14 @@ if (draft.isProv && draft.avanceFinalized && Number.isFinite(draft.rapCurrent)) 
           </div>
 
           <div class="label">Payé</div>
-          <div class="art-inline-actions">
-            ${renderValidatedCard(paidDisp)}
-          </div>
+<div class="art-inline-actions" style="display:block;">
+  <div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+    ${payStackHtml}
+    <div style="height:8px;"></div>
+    ${payTotalHtml}
+  </div>
+</div>
+
 
           <div class="label">RAP</div>
           <div class="art-inline-actions">
