@@ -4491,6 +4491,36 @@ function setRapForProvOnDay(provCode, iso, rapN) {
   }
 }
 
+function activeProvRecordsForOriginOnDay(originCode, iso) {
+  const oc = normSearch(String(originCode || ""));
+  const arr = [];
+
+  for (const k in (buy.provByCode || {})) {
+    const rec = buy.provByCode[k];
+    if (!rec) continue;
+    if (normSearch(rec.originCode) !== oc) continue;
+
+    // ✅ actif ce jour
+    if (!isProvActiveOnDay(rec.provCode, iso)) continue;
+
+    // ✅ RAP du jour (ou dernier connu avant) > 0
+    const rap = rapForProvOnDay(rec.provCode, iso);
+    if (!Number.isFinite(rap) || rap <= 0) continue;
+
+    arr.push({
+      provCode: rec.provCode,
+      rap,
+      createdAtIso: rec.createdAtIso || "",
+      createdAtTs: Number(rec.createdAtTs) || 0
+    });
+  }
+
+  // ✅ plus récent en haut
+  arr.sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0) || (isoToDayTs(b.createdAtIso) - isoToDayTs(a.createdAtIso)));
+  return arr;
+}
+
+
 // ✅ cumulé "Payé" pour un code provisoire jusqu'à un jour donné (inclus)
 function paidForProvUpToDay(provCode, iso) {
   const k = normProvCode(provCode);
@@ -4970,6 +5000,39 @@ function kv(label, value) {
 function saleCardHTML(a) {
   const title = `${a.name || ""} (${a.code || ""})`;
 
+  // ✅ si stock début du jour = 0, on cache l’article SAUF s’il reste des provisoires actifs (RAP > 0)
+// dans ce cas, on affiche une carte minimaliste avec pile des codes provisoires.
+const startQtyN_top = computeStartQtyForDay(a, isoDate);
+const provList = activeProvRecordsForOriginOnDay(a.code, isoDate);
+
+const shouldHideBecauseZeroStock = Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length === 0;
+if (shouldHideBecauseZeroStock) return "";
+
+const shouldShowProvOnly = Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length > 0;
+if (shouldShowProvOnly) {
+  const stack = provList.map(p => `
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="font-weight:1000; white-space:nowrap;">${escapeHtml(p.provCode)} :</div>
+      <div class="buy-cat-white" style="flex:1; min-width:0;">
+        ${escapeHtml(`Reste à payer : ${fmtResult(p.rap)}`)}
+      </div>
+    </div>
+  `).join(`<div style="height:10px;"></div>`);
+
+  return `
+    <div class="buy-cat-card" style="padding:14px; display:block;">
+      <div style="display:block; text-align:center; font-weight:1000; margin:0 0 12px 0;">
+        ${escapeHtml(title)}
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        ${stack}
+      </div>
+    </div>
+  `;
+}
+
+
   const pr  = fmtResult(Number(a.prResult));
   const prg = fmtResult(Number(a.prgResult));
   const pv  = fmtWhite(a.pv || "");
@@ -4977,7 +5040,8 @@ function saleCardHTML(a) {
   const ajout = isoToFr(a.createdAtIso);
   // ✅ Qté ini = stock au début du jour (reste de la veille)
 // ✅ base évolutive pour Qté res (NE PAS TOUCHER)
-const startQtyN = computeStartQtyForDay(a, isoDate);
+const startQtyN = startQtyN_top;
+
 
 // ✅ Qté ini = quantité initiale constante de l’article
 const qteIni = fmtWhite(a.qty || "");
@@ -5085,8 +5149,15 @@ if (pvt.hasAny) {
 
 // ---- regroupe par catégorie (code avant le point)
 function buildGroupedArticles() {
-  const arts = (buy.articles || [])
-    .filter(a => isVisibleOnDay(a));
+    const arts = (buy.articles || [])
+    .filter(a => {
+      if (isVisibleOnDay(a)) return true;
+
+      // ✅ même si "invisible" (cas stock=0 le lendemain), on garde si provisoires actifs RAP>0
+      const provs = activeProvRecordsForOriginOnDay(a.code, isoDate);
+      return provs.length > 0;
+    });
+
 
   // group by catCode
   const groups = new Map(); // catCode -> [articles]
@@ -6218,6 +6289,7 @@ if (draft.isProv) {
     articleNameSnap: art.name || "",
     pvSnap: pvN,
     createdAtIso: isoDate,
+    createdAtTs: Date.now(),
     closedAtIso: null,
     rapByIso: { [isoDate]: rap0 }
   };
