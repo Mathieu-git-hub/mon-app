@@ -5248,11 +5248,101 @@ renderDailySaleGlobals();
 const saleSearch  = document.getElementById("dailySaleSearch");
 const saleSuggest = document.getElementById("dailySaleSuggest");
 
-function allVisibleForSaleSearch() {
-  return (buy.articles || [])
-    .filter(a => isVisibleOnDay(a))
-    .sort((a,b) => (b.createdAtTs || 0) - (a.createdAtTs || 0));
+// ===============================
+// ✅ Recherche : inclure codes provisoires
+// ===============================
+function provRecordsActiveTodayForSearch() {
+  const out = [];
+  for (const k in (buy.provByCode || {})) {
+    const rec = buy.provByCode[k];
+    if (!rec) continue;
+
+    // ✅ “existe” ce jour-là (inclut le jour de fermeture RAP=0)
+    if (!isProvActiveOnDay(rec.provCode, isoDate)) continue;
+
+    out.push(rec);
+  }
+
+  // plus récent en haut (si createdAtTs existe)
+  out.sort((a,b) => (Number(b.createdAtTs)||0) - (Number(a.createdAtTs)||0));
+  return out;
 }
+
+function provCardHTML(rec) {
+  const provCode = String(rec.provCode || "").trim();
+  const title = `${rec.articleNameSnap || ""} (${rec.originCode || ""})`;
+
+  const pvDisp = Number.isFinite(Number(rec.pvSnap)) ? fmtResult(Number(rec.pvSnap)) : fmtWhite(rec.pvSnap || "");
+  const rapN = rapForProvOnDay(provCode, isoDate);
+  const rapDisp = Number.isFinite(rapN) ? fmtResult(rapN) : "";
+
+  const payList = listPaymentsForProvUpToDay(provCode, isoDate);
+  const payTotal = paymentsTotal(payList);
+
+  const payStackHtml = payList.length
+    ? payList.map(p => `
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${renderValidatedCard(fmtResult(p.amount))}
+          <div style="opacity:.9; font-weight:900; white-space:nowrap;">(${escapeHtml(isoToFr(p.dayIso))})</div>
+        </div>
+      `).join(`<div style="height:8px;"></div>`)
+    : `<div style="opacity:.75; font-weight:800;">Aucun paiement</div>`;
+
+  const payTotalHtml = renderValidatedCard(`Total : ${fmtResult(payTotal)}`);
+
+  return `
+    <div class="buy-cat-card" style="padding:14px; display:block;">
+      <div style="display:block; text-align:center; font-weight:1000; margin:0 0 12px 0;">
+        ${escapeHtml(title)}
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px; margin:0 0 10px 0;">
+        ${kv("Code provisoire", provCode)}
+        ${kv("PV", pvDisp)}
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0 0 10px 0;">
+        ${kv("RAP", rapDisp)}
+      </div>
+
+      <div style="height:8px;"></div>
+
+      <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">Payé :</div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        ${payStackHtml}
+        <div style="height:8px;"></div>
+        ${payTotalHtml}
+      </div>
+    </div>
+  `;
+}
+
+
+function allVisibleForSaleSearch() {
+  const arts = (buy.articles || [])
+    .filter(a => {
+      // on garde ta règle
+      if (isVisibleOnDay(a)) return true;
+
+      // ✅ même si l’article “disparaît”, on le garde si provisoires actifs (utile pour les résultats)
+      const provs = activeProvRecordsForOriginOnDay(a.code, isoDate);
+      return provs.length > 0;
+    })
+    .map(a => ({ kind:"article", id:a.id, code:String(a.code||""), name:String(a.name||""), a }));
+
+  const provs = provRecordsActiveTodayForSearch()
+    .map(rec => ({
+      kind:"prov",
+      id:normProvCode(rec.provCode),
+      code:String(rec.provCode||""),
+      name:String(rec.articleNameSnap||""),
+      rec
+    }));
+
+  // mix
+  return [...provs, ...arts];
+}
+
 
 function showSaleSuggest(html) {
   if (!saleSuggest) return;
@@ -5280,36 +5370,43 @@ function renderSaleSearch(q) {
   // ✅ Détecte si l'utilisateur est en train de taper un "préfixe de code" numérique
   // On accepte chiffres + éventuellement un point (ex: "12."), et espaces ignorés.
   const qNoSpace = raw.replace(/\s+/g, "");
-  const isNumericPrefixQuery = /^[0-9]+(\.)?$/.test(qNoSpace);
+// ✅ mode préfixe si l’utilisateur tape un début de code (lettres/chiffres/point)
+// ex: "A", "A1", "A1.", "12", "12.", "B 3"
+const isCodePrefixQuery = /^[A-Za-z0-9]+(\.)?$/.test(qNoSpace);
+
 
   // ---------- FILTRAGE
   let filtered;
 
-  if (isNumericPrefixQuery) {
-    // ✅ mode "préfixe" sur le code (commence par)
-    const prefix = qNoSpace; // ex: "1" ou "12" ou "12."
-    filtered = list.filter(a => {
-      const codeRaw = String(a.code || "").replace(/\s+/g, "");
-      return codeRaw.startsWith(prefix);
-    });
-  } else {
-    // ✅ mode générique : nom contient OU code contient (comme avant)
-    filtered = list.filter(a => {
-      const n = normSearch(a.name);
-      const c = normSearch(a.code);
-      return n.includes(nq) || c.includes(nq);
-    });
-  }
+  if (isCodePrefixQuery) {
+  const prefix = qNoSpace.toUpperCase();
+
+  filtered = list.filter(it => {
+    const codeRaw = String(it.code || "").replace(/\s+/g, "").toUpperCase();
+    return codeRaw.startsWith(prefix);
+  });
+
+} else {
+  // mode générique : nom contient OU code contient
+  filtered = list.filter(it => {
+    const n = normSearch(it.name);
+    const c = normSearch(it.code);
+    return n.includes(nq) || c.includes(nq);
+  });
+}
+
 
   // ---------- SUGGESTIONS (top 7)
   const top = filtered.slice(0, 7);
   if (!top.length) {
     showSaleSuggest("");
   } else {
-    showSaleSuggest(top.map(a => {
-      const label = `${a.code} — ${a.name}`;
-      return `<div class="op-suggest-item" data-sale-sel="${escapeAttr(a.id)}">${escapeHtml(label)}</div>`;
-    }).join(""));
+    showSaleSuggest(top.map(it => {
+  const label = `${it.code} — ${it.name || ""}`;
+  const sel = `${it.kind}|${it.id}`;
+  return `<div class="op-suggest-item" data-sale-sel="${escapeAttr(sel)}">${escapeHtml(label)}</div>`;
+}).join(""));
+
   }
 
   // ---------- AFFICHAGE LISTE "Résultats"
@@ -5317,7 +5414,11 @@ function renderSaleSearch(q) {
   if (listEl) {
     listEl.innerHTML = `
       <div class="buy-cat-section-title">Résultats</div>
-      ${filtered.map(a => `<div style="margin-top:14px;">${saleCardHTML(a)}</div>`).join("")}
+      ${filtered.map(it => {
+  const html = (it.kind === "prov") ? provCardHTML(it.rec) : saleCardHTML(it.a);
+  return `<div style="margin-top:14px;">${html}</div>`;
+}).join("")}
+
     `;
   }
 }
@@ -5330,17 +5431,31 @@ if (saleSearch && saleSuggest) {
     const it = e.target.closest(".op-suggest-item");
     if (!it) return;
 
-    const id = it.getAttribute("data-sale-sel");
-    const art = allVisibleForSaleSearch().find(a => a.id === id);
-    showSaleSuggest("");
+    const sel = it.getAttribute("data-sale-sel") || "";
+const [kind, id] = sel.split("|");
 
-    const listEl = document.getElementById("dailySaleList");
-    if (art && listEl) {
-      listEl.innerHTML = `
-        <div class="buy-cat-section-title">Résultat</div>
-        <div style="margin-top:14px;">${saleCardHTML(art)}</div>
-      `;
-    }
+showSaleSuggest("");
+
+const listEl = document.getElementById("dailySaleList");
+if (!listEl) return;
+
+const all = allVisibleForSaleSearch();
+const found = all.find(x => String(x.kind) === String(kind) && String(x.id) === String(id));
+
+if (!found) return;
+
+if (found.kind === "prov") {
+  listEl.innerHTML = `
+    <div class="buy-cat-section-title">Résultat</div>
+    <div style="margin-top:14px;">${provCardHTML(found.rec)}</div>
+  `;
+} else {
+  listEl.innerHTML = `
+    <div class="buy-cat-section-title">Résultat</div>
+    <div style="margin-top:14px;">${saleCardHTML(found.a)}</div>
+  `;
+}
+
   });
 
   document.addEventListener("pointerdown", (e) => {
