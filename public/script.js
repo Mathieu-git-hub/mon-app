@@ -4505,7 +4505,8 @@ function activeProvRecordsForOriginOnDay(originCode, iso) {
 
     // ✅ RAP du jour (ou dernier connu avant) > 0
     const rap = rapForProvOnDay(rec.provCode, iso);
-    if (!Number.isFinite(rap) || rap <= 0) continue;
+    if (!Number.isFinite(rap) || rap < 0) continue; // ✅ accepte RAP=0 (disparaît seulement le lendemain via isProvActiveOnDay)
+
 
     arr.push({
       provCode: rec.provCode,
