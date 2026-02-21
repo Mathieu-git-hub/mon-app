@@ -4887,6 +4887,21 @@ function fmtResult(n) {
   return s;
 }
 
+// ✅ cartes blanches réutilisables (hors modales)
+function whiteCardHtml(text) {
+  return `<div class="card card-white lift" style="flex:1; min-width:220px;">${escapeHtml(String(text || ""))}</div>`;
+}
+
+function whiteCardNumHtml(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return `<div class="card card-white lift" style="flex:1; min-width:220px;"></div>`;
+
+  const n = parseLooseNumber(s);
+  const formatted = Number.isFinite(n) ? fmtResult(n) : escapeHtml(s);
+  return `<div class="card card-white lift" style="flex:1; min-width:220px;">${formatted}</div>`;
+}
+
+
 function sumSoldQtyBeforeDayForCode(code, iso) {
   const c = normSearch(String(code || ""));
   let total = 0;
@@ -5269,10 +5284,12 @@ function provRecordsActiveTodayForSearch() {
 }
 
 function provCardHTML(rec) {
-  const provCode = String(rec.provCode || "").trim();
-  const title = `${rec.articleNameSnap || ""} (${rec.originCode || ""})`;
+  const provCode = String(rec?.provCode || "").trim();
+  const title = `${rec?.articleNameSnap || ""} (${rec?.originCode || ""})`;
 
-  const pvDisp = Number.isFinite(Number(rec.pvSnap)) ? fmtResult(Number(rec.pvSnap)) : fmtWhite(rec.pvSnap || "");
+  const pvN = Number(rec?.pvSnap);
+  const pvDisp = Number.isFinite(pvN) ? fmtResult(pvN) : fmtWhite(rec?.pvSnap || "");
+
   const rapN = rapForProvOnDay(provCode, isoDate);
   const rapDisp = Number.isFinite(rapN) ? fmtResult(rapN) : "";
 
@@ -5282,13 +5299,13 @@ function provCardHTML(rec) {
   const payStackHtml = payList.length
     ? payList.map(p => `
         <div style="display:flex; align-items:center; gap:10px;">
-          ${renderValidatedCard(fmtResult(p.amount))}
+          ${whiteCardNumHtml(p.amount)}
           <div style="opacity:.9; font-weight:900; white-space:nowrap;">(${escapeHtml(isoToFr(p.dayIso))})</div>
         </div>
       `).join(`<div style="height:8px;"></div>`)
     : `<div style="opacity:.75; font-weight:800;">Aucun paiement</div>`;
 
-  const payTotalHtml = renderValidatedCard(`Total : ${fmtResult(payTotal)}`);
+  const payTotalHtml = whiteCardHtml(`Total : ${fmtResult(payTotal)}`);
 
   return `
     <div class="buy-cat-card" style="padding:14px; display:block;">
@@ -5316,6 +5333,7 @@ function provCardHTML(rec) {
     </div>
   `;
 }
+
 
 
 function allVisibleForSaleSearch() {
