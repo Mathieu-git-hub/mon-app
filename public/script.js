@@ -2118,6 +2118,38 @@ function renderDailyDayPage(isoDate) {
   const date = fromISODate(isoDate);
   const data = getDailyData(isoDate);
 
+    // ===============================
+  // ✅ Pré-remplissage PRT depuis Vente du jour (PRT global)
+  // - seulement si PRT pas validé
+  // - évolutif : se met à jour tant que l'utilisateur n'a pas "touché" manuellement
+  // ===============================
+  const saleG = computeSaleGlobalsForDay(isoDate);
+
+  function fmtThousandsNumber(n) {
+    if (!Number.isFinite(n)) return "";
+    const rounded = Math.round(n * 100) / 100;
+    // formatCommaNumber est déjà utilisé chez toi, sinon fallback
+    if (typeof formatCommaNumber === "function") return formatCommaNumber(rounded);
+    const s = (Math.abs(rounded - Math.round(rounded)) < 1e-9)
+      ? String(Math.trunc(rounded))
+      : rounded.toFixed(2);
+    return s.replace(".", ",");
+  }
+
+  if (!data.prtFinalized && saleG.has) {
+    const auto = fmtThousandsNumber(saleG.prtGlobal);
+
+    // ✅ règle anti-désordre :
+    // - si vide => on remplit
+    // - si déjà auto-rempli => on met à jour (évolutif)
+    // - si l'utilisateur a tapé lui-même (flag false) => on n'écrase pas
+    if ((String(data.prt || "").trim() === "") || (data.prtAutoFromSale === true)) {
+      data.prt = auto;                 // value affichée dans l'input
+      data.prtAutoFromSale = true;     // marqueur
+    }
+  }
+
+
   const pApport = data.apport;
   const pCap = data.prelevement;
   const pCaisse = data.prelevementCaisse;
@@ -6549,6 +6581,76 @@ if (addSaleBtn) addSaleBtn.addEventListener("click", () => openDailySaleAdvanceM
 // ===============================
 // ✅ FIN — renderDailySalePage(isoDate)
 // ===============================
+
+// ===============================
+// ✅ GLOBAL — Totaux Vente du jour (PRT global / PVT global)
+// Accessible depuis Compte du jour
+// ===============================
+function computeSaleGlobalsForDay(iso) {
+  const buy = getBuyStore();
+  buy.dailySalesByIso = buy.dailySalesByIso || {};
+
+  const sales = buy.dailySalesByIso[iso] || [];
+  if (!sales.length) return { has: false, prtGlobal: 0, pvtGlobal: 0 };
+
+  // --- parse nombre tolérant (virgule + espaces)
+  function parseLooseNumberLocal(s) {
+    const raw = String(s ?? "").trim();
+    if (!raw) return NaN;
+    if (typeof toNumberLoose === "function") return toNumberLoose(raw.replace(/\s+/g, ""));
+    return Number(raw.replace(/\s+/g, "").replace(",", "."));
+  }
+
+  // --- contribution PVT : vente => PV×qty ; avance => avance
+  function pvtAmountOfEntryLocal(s) {
+    if (!s) return 0;
+
+    if (s.type === "advance") {
+      const a = parseLooseNumberLocal(s.avance);
+      return Number.isFinite(a) ? a : 0;
+    }
+
+    const p = parseLooseNumberLocal(s.pv);
+    const q = parseLooseNumberLocal(s.qty);
+    const pv = Number.isFinite(p) ? p : 0;
+    const qty = Number.isFinite(q) ? q : 0;
+    return pv * qty;
+  }
+
+  function sumQtySalesLocal(list) {
+    return (list || []).reduce((acc, s) => {
+      const q = parseLooseNumberLocal(s.qty);
+      return acc + (Number.isFinite(q) ? q : 0);
+    }, 0);
+  }
+
+  // regroupe par code
+  const byCode = new Map();
+  for (const s of sales) {
+    const code = String(s.code || "").trim();
+    if (!code) continue;
+    if (!byCode.has(code)) byCode.set(code, []);
+    byCode.get(code).push(s);
+  }
+
+  let prtGlobal = 0;
+  let pvtGlobal = 0;
+
+  for (const [code, list] of byCode.entries()) {
+    const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code));
+    if (!art) continue;
+
+    const pr = Number(art.prResult);
+    const qtySum = sumQtySalesLocal(list);
+    const pvtSum = (list || []).reduce((acc, s) => acc + pvtAmountOfEntryLocal(s), 0);
+
+    if (Number.isFinite(pr)) prtGlobal += pr * qtySum;
+    pvtGlobal += pvtSum;
+  }
+
+  return { has: true, prtGlobal, pvtGlobal };
+}
+
 
 // ===============================
 // ✅ DÉBUT — BUY : Catégories (COMPLET)
