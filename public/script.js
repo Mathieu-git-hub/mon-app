@@ -5349,13 +5349,25 @@ function provCardHTML(rec) {
 function allVisibleForSaleSearch() {
   const arts = (buy.articles || [])
     .filter(a => {
-      // on garde ta règle
-      if (isVisibleOnDay(a)) return true;
+  // 1) visibilité "temps" (créé/supprimé)
+  const visibleByDate = isVisibleOnDay(a);
 
-      // ✅ même si l’article “disparaît”, on le garde si provisoires actifs (utile pour les résultats)
-      const provs = activeProvRecordsForOriginOnDay(a.code, isoDate);
-      return provs.length > 0;
-    })
+  // 2) provisoires actifs (même si l’article “disparaît”)
+  const provs = activeProvRecordsForOriginOnDay(a.code, isoDate);
+  const hasProv = provs.length > 0;
+
+  // 3) règle stock : on n’affiche/recherche l’article que si stock début du jour > 0
+  //    sauf s’il a des provisoires actifs
+  const startQty = computeStartQtyForDay(a, isoDate);
+  const hasStockToday = Number.isFinite(startQty) ? (startQty > 0) : true;
+
+  if (hasProv) return true;                  // provisoires => garder
+  if (!visibleByDate) return false;          // sinon il faut être visible
+  if (!hasStockToday) return false;          // stock=0 => ne plus suggérer dès ce jour
+
+  return true;
+})
+
     .map(a => ({ kind:"article", id:a.id, code:String(a.code||""), name:String(a.name||""), a }));
 
   const provs = provRecordsActiveTodayForSearch()
