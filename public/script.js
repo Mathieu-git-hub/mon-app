@@ -7219,22 +7219,22 @@ function renderBuyArticlesPage(isoDate) {
   }
 
   function isNameTaken(name, exceptId = null) {
-    const n = normSearch(name);
-    return activeArticles().some(a =>
-      a.id !== exceptId &&
-      String(a.createdAtIso || "") === String(isoDate) &&
-      normSearch(a.name) === n
-    );
-  }
+  const n = normSearch(name);
+  return activeArticles().some(a =>
+    a.id !== exceptId &&
+    normSearch(a.name) === n
+  );
+}
+
 
   function findCodeOwner(code, exceptId = null) {
-    const c0 = normSearch(code);
-    return activeArticles().find(a =>
-      a.id !== exceptId &&
-      String(a.createdAtIso || "") === String(isoDate) &&
-      normSearch(a.code) === c0
-    ) || null;
-  }
+  const c0 = normSearch(code);
+  return activeArticles().find(a =>
+    a.id !== exceptId &&
+    normSearch(a.code) === c0
+  ) || null;
+}
+
 
   function markBuyTouchedAndPersist() {
     const d = ensureBuyDayMark(isoDate);
