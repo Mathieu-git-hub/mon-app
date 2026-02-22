@@ -4711,22 +4711,28 @@ const kindByKey = new Map();    // "sale" | "advance"
 
 for (const s of list) {
 
-  // ✅ Avance : on compresse par valeur "avance" (et on affiche (A))
-  if (s.type === "advance") {
-    const aN = parseLooseNumber(s.avance);
-    if (!Number.isFinite(aN) || aN <= 0) continue;
+  // ✅ Avance : on compresse par code provisoire + valeur avance (et on affiche le code provisoire)
+if (s.type === "advance") {
+  const aN = parseLooseNumber(s.avance);
+  if (!Number.isFinite(aN) || aN <= 0) continue;
 
-    const k = "A|" + String(aN).replace(".", ","); // clé stable (affichage)
-    if (!qtyByKey.has(k)) {
-      qtyByKey.set(k, 1);
-      valByKey.set(k, aN);
-      kindByKey.set(k, "advance");
-      order.push(k);
-    } else {
-      qtyByKey.set(k, qtyByKey.get(k) + 1);
-    }
-    continue;
+  const prov = String(s.provCode || "").trim();   // ex: "A 12.07"
+  if (!prov) continue; // sécurité : une avance sans provCode ne doit pas arriver ici
+
+  // clé stable = provCode + valeur (si plusieurs avances identiques sur le même prov)
+  const k = "A|" + prov.toUpperCase() + "|" + String(aN).replace(".", ",");
+
+  if (!qtyByKey.has(k)) {
+    qtyByKey.set(k, 1);
+    valByKey.set(k, aN);
+    kindByKey.set(k, "advance");
+    order.push(k);
+  } else {
+    qtyByKey.set(k, qtyByKey.get(k) + 1);
   }
+  continue;
+}
+
 
   // ✅ Vente normale : PV × quantité (ta logique inchangée)
   const pvN = parseLooseNumber(s.pv);
@@ -4754,8 +4760,12 @@ for (const k of order) {
 
   let disp = fmtResult(n);
 
-  // ✅ Avance : ajouter (A) après la valeur
-  if (kind === "advance") disp = `${disp} (A)`;
+  // ✅ Avance : afficher le code provisoire (ex: "A 12.07")
+if (kind === "advance") {
+  const provCode = String(k.split("|")[1] || "").trim(); // k = "A|PROVCODE|val"
+  disp = provCode ? `${disp} (${escapeHtml(provCode)})` : disp;
+}
+
 
   // ✅ même règle de multiplication : répétition => "×"
   if (qSum === 1) parts.push(`${disp}`);
