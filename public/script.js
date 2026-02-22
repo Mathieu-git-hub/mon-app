@@ -8919,11 +8919,30 @@ function cardWithDate(a) {
     }
 
     const list = allVisibleForSearch();
-    const filtered = list.filter(a => {
-      const n = normSearch(a.name);
-      const cd = normSearch(a.code);
-      return n.includes(nq) || cd.includes(nq);
-    });
+
+// ✅ mode préfixe si l’utilisateur tape un début de code (lettres/chiffres/point)
+// ex: "A", "A1", "A1.", "12", "12.", "B3"
+const raw = String(q || "");
+const qNoSpace = raw.replace(/\s+/g, "");
+const isCodePrefixQuery = /^[A-Za-z0-9]+(\.)?$/.test(qNoSpace);
+
+let filtered;
+
+if (isCodePrefixQuery) {
+  const prefix = qNoSpace.toUpperCase();
+  filtered = list.filter(a => {
+    const codeRaw = String(a.code || "").replace(/\s+/g, "").toUpperCase();
+    return codeRaw.startsWith(prefix);
+  });
+} else {
+  // mode générique : nom contient OU code contient
+  filtered = list.filter(a => {
+    const n = normSearch(a.name);
+    const cd = normSearch(a.code);
+    return n.includes(nq) || cd.includes(nq);
+  });
+}
+
 
     const top = filtered.slice(0, 7);
     if (!top.length) {
