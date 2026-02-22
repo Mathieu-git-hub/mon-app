@@ -4883,19 +4883,34 @@ function isoToFr(iso) {
 }
 
 // ---- format milliers (réutilise tes fonctions existantes)
+
 function fmtWhite(v) {
   const s = String(v ?? "").trim();
   if (!s) return "";
+
+  const n = parseLooseNumber(s);
+  if (Number.isFinite(n)) return fmtResult(n); // ✅ applique 2 décimales + milliers
+
   if (typeof formatInputNumberDisplay === "function") return formatInputNumberDisplay(s.replace(/\s+/g, ""));
   return s;
 }
+
+
 function fmtResult(n) {
   if (!Number.isFinite(n)) return "(...)";
-  const s = String(n).replace(".", ",");
+
+  // ✅ arrondi affichage à 2 décimales si nécessaire
+  const rounded = Math.round(n * 100) / 100;
+  const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9;
+
+  let s = isInt ? String(Math.trunc(rounded)) : rounded.toFixed(2);
+  s = s.replace(".", ",");
+
   if (typeof formatInputNumberDisplay === "function") return formatInputNumberDisplay(s);
-  if (typeof formatCommaNumber === "function") return formatCommaNumber(n);
+  if (typeof formatCommaNumber === "function") return formatCommaNumber(rounded);
   return s;
 }
+
 
 // ✅ cartes blanches réutilisables (hors modales)
 function whiteCardHtml(text) {
