@@ -4453,12 +4453,28 @@ function findProvRecord(provCode) {
 }
 
 // ✅ actif un jour donné (actif jusqu’au jour de clôture inclus ; inactif à partir du lendemain)
+// ✅ actif un jour donné :
+// - commence au 1er jour de l’avance (createdAtIso)
+// - reste actif jusqu’au jour de clôture (closedAtIso) inclus
+// - cesse dès le lendemain du jour où Nouv RAP = 0
 function isProvActiveOnDay(provCode, iso) {
   const rec = findProvRecord(provCode);
   if (!rec) return false;
+
+  const cur = isoToDayTs(iso);
+
+  // ✅ ne commence pas avant le jour de création
+  const created = rec.createdAtIso ? isoToDayTs(rec.createdAtIso) : NaN;
+  if (Number.isFinite(created) && cur < created) return false;
+
+  // ✅ si pas clôturé => actif
   if (!rec.closedAtIso) return true;
-  return isoToDayTs(iso) <= isoToDayTs(rec.closedAtIso);
+
+  // ✅ actif jusqu’au jour de clôture inclus (pas le lendemain)
+  const closed = isoToDayTs(rec.closedAtIso);
+  return cur <= closed;
 }
+
 
 // ✅ RAP “tel qu’il était” ce jour-là (ou dernier RAP connu avant ce jour)
 function rapForProvOnDay(provCode, iso) {
