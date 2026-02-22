@@ -2598,7 +2598,32 @@ const ncInputHTML = `
   
     const capitalNum = toNumberLoose(data.capital || "0") ?? 0;
 
-// ✅ Total apport
+  // ===============================
+  // ✅ NC théorique = PVT global (vente du jour) + Caisse départ
+  // - si prélèvement sur caisse effectué : utiliser "caisse départ après prélèvement"
+  // ===============================
+  const pvtGlobalN = (saleG && saleG.has) ? Number(saleG.pvtGlobal) : NaN;
+
+  const caisseBaseForNcTheo = showCaisseDepartAfterPrelev ? caisseDepartAfter : caisseDepartNum;
+
+  const ncTheoN =
+    (Number.isFinite(pvtGlobalN) && Number.isFinite(caisseBaseForNcTheo))
+      ? (pvtGlobalN + caisseBaseForNcTheo)
+      : NaN;
+
+  const ncTheoHTML = `
+    <div class="${rowClass}">
+      <div class="label">NC théorique :</div>
+      <div class="total-row">
+        <div class="card card-white lift">
+          ${Number.isFinite(ncTheoN) ? escapeHtml(fmtThousandsNumber(ncTheoN)) : "(...)"}
+        </div>
+      </div>
+    </div>
+  `;
+
+
+    // ✅ Total apport
 const apportTotal = computePrelevementTotal((pApport && pApport.items) ? pApport.items : []);
 const showCapitalAfterApport =
   !!pApport?.finalized &&
@@ -2887,24 +2912,23 @@ ${
 
           <!-- ✅ DÉPENSES (pile) -->
           ${renderPrelevementSectionHTML(pDep, "depenses", "Dépenses", rowClass, data.daySaved)}
-          
-          ${!pDep.finalized ? nouvelleCaisseHTML : ``}
 
+${!pDep.finalized ? (ncTheoHTML + nouvelleCaisseHTML) : ``}
 
-          ${
-            pDep.finalized
-              ? `
-                <div class="${rowClass}">
-                  <div class="label">Dépenses totales :</div>
-                  <div class="total-row">
-                    <div class="card card-white lift">Total : ${formatTotal(depensesWeekTotal)}</div>
-                  </div>
-                </div>
-              `
-              : ``
-          }
+${
+  pDep.finalized
+    ? `
+      <div class="${rowClass}">
+        <div class="label">Dépenses totales :</div>
+        <div class="total-row">
+          <div class="card card-white lift">Total : ${formatTotal(depensesWeekTotal)}</div>
+        </div>
+      </div>
+    `
+    : ``
+}
 
-          ${pDep.finalized ? nouvelleCaisseHTML : ``}
+${pDep.finalized ? (ncTheoHTML + nouvelleCaisseHTML) : ``}
 
 
           
