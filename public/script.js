@@ -5491,37 +5491,51 @@ function renderDailySaleRecap() {
   listEl.innerHTML = html;
 }
 
+// ✅ 1 seul binding (délégation) qui survit aux rerenders
 bindDailySaleCardActions();
+
 renderDailySaleRecap();
 renderDailySaleGlobals();
+
 
 // ===============================
 // ✅ Actions sur cartes (toggle + suppression)
 // ===============================
 function bindDailySaleCardActions() {
-  // toggle plié/déplié
-  document.querySelectorAll("[data-sale-toggle]").forEach(btn => {
-    btn.addEventListener("click", async (e) => {
+  const listEl = document.getElementById("dailySaleList");
+  if (!listEl) return;
+
+  // ✅ éviter de binder 2 fois si renderDailySalePage est rappelée
+  if (listEl.__boundDailySaleActions) return;
+  listEl.__boundDailySaleActions = true;
+
+  listEl.addEventListener("click", async (e) => {
+    const toggleBtn = e.target.closest("[data-sale-toggle]");
+    if (toggleBtn) {
       e.preventDefault();
       e.stopPropagation();
-      const code = btn.getAttribute("data-sale-toggle") || "";
+
+      const code = toggleBtn.getAttribute("data-sale-toggle") || "";
       const cur = getFoldState(isoDate, code);
       await setFoldState(isoDate, code, !cur);
+
       renderDailySaleRecap();
       renderDailySaleGlobals();
-    });
-  });
+      return;
+    }
 
-  // suppression rétroactive
-  document.querySelectorAll("[data-sale-del]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
+    const delBtn = e.target.closest("[data-sale-del]");
+    if (delBtn) {
       e.preventDefault();
       e.stopPropagation();
-      const code = btn.getAttribute("data-sale-del") || "";
+
+      const code = delBtn.getAttribute("data-sale-del") || "";
       openDailySaleDelModal(code);
-    });
+      return;
+    }
   });
 }
+
 
 // ===============================
 // ✅ MODAL suppression (Vente du jour) — identique esprit "Articles"
