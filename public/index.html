@@ -682,6 +682,14 @@
 
 .buy-cat-card-deleted{ opacity: .75; }
 
+/* Vente du jour: pli/dépli instantané (pas de rerender) */
+.sale-card .sale-expanded { display: none; }
+.sale-card.is-expanded .sale-expanded { display: block; }
+
+.sale-card .sale-folded { display: block; }
+.sale-card.is-expanded .sale-folded { display: none; }
+
+
 .buy-cat-body{
   display:flex;
   flex-direction:column;

@@ -5320,36 +5320,47 @@ function saleCardHTML(a) {
   const shouldShowProvOnly =
     Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length > 0;
 
-  if (shouldShowProvOnly && !expanded) {
-    // plié : on montre juste "Vendu" (et les avances éventuelles)
+    if (shouldShowProvOnly && !expanded) {
     return `
-      <div class="buy-cat-card" style="padding:14px; display:block;">
+      <div class="buy-cat-card sale-card" style="padding:14px; display:block;">
         ${headerRow}
-        ${foldedBody}
+        <div class="sale-folded">${foldedBody}</div>
+        <div class="sale-expanded" style="display:none;"></div>
       </div>
     `;
   }
 
-  if (shouldShowProvOnly && expanded) {
-    // déplié : on montre pile des provisoires (comme avant)
-    const stack = provList.map(p => `
-      <div style="display:flex; align-items:center; gap:10px;">
-        <div style="font-weight:1000; white-space:nowrap;">${escapeHtml(p.provCode)} :</div>
-        <div class="buy-cat-white" style="flex:1; min-width:0;">
-          ${escapeHtml(`Reste à payer : ${fmtResult(p.rap)}`)}
-        </div>
-      </div>
-    `).join(`<div style="height:10px;"></div>`);
 
-    return `
-      <div class="buy-cat-card" style="padding:14px; display:block;">
-        ${headerRow}
+  if (shouldShowProvOnly && expanded) {
+  // déplié : on montre pile des provisoires (comme avant)
+  const stack = provList.map(p => `
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="font-weight:1000; white-space:nowrap;">${escapeHtml(p.provCode)} :</div>
+      <div class="buy-cat-white" style="flex:1; min-width:0;">
+        ${escapeHtml(`Reste à payer : ${fmtResult(p.rap)}`)}
+      </div>
+    </div>
+  `).join(`<div style="height:10px;"></div>`);
+
+  return `
+    <div class="buy-cat-card sale-card is-expanded" style="padding:14px; display:block;">
+      ${headerRow}
+
+      <!-- (optionnel) folded caché -->
+      <div class="sale-folded" style="display:none;">
+        ${foldedBody}
+      </div>
+
+      <!-- expanded visible -->
+      <div class="sale-expanded">
         <div style="display:flex; flex-direction:column; gap:10px;">
           ${stack}
         </div>
       </div>
-    `;
-  }
+    </div>
+  `;
+}
+
 
   const expandedBody = `
     <div style="
@@ -5392,12 +5403,20 @@ function saleCardHTML(a) {
     </div>
   `;
 
-  return `
-    <div class="buy-cat-card" style="padding:14px; display:block;">
+    return `
+    <div class="buy-cat-card sale-card ${expanded ? "is-expanded" : ""}" style="padding:14px; display:block;">
       ${headerRow}
-      ${expanded ? expandedBody : foldedBody}
+
+      <div class="sale-folded">
+        ${foldedBody}
+      </div>
+
+      <div class="sale-expanded">
+        ${expandedBody}
+      </div>
     </div>
   `;
+
 }
 
 
@@ -5510,19 +5529,34 @@ function bindDailySaleCardActions() {
   listEl.__boundDailySaleActions = true;
 
   listEl.addEventListener("click", async (e) => {
-    const toggleBtn = e.target.closest("[data-sale-toggle]");
-    if (toggleBtn) {
-      e.preventDefault();
-      e.stopPropagation();
+   const toggleBtn = e.target.closest("[data-sale-toggle]");
+if (toggleBtn) {
+  e.preventDefault();
+  e.stopPropagation();
 
-      const code = toggleBtn.getAttribute("data-sale-toggle") || "";
-      const cur = getFoldState(isoDate, code);
-      await setFoldState(isoDate, code, !cur);
+  const code = toggleBtn.getAttribute("data-sale-toggle") || "";
 
-      renderDailySaleRecap();
-      renderDailySaleGlobals();
-      return;
-    }
+  // ✅ UI immédiate (aucun rerender)
+  const card = toggleBtn.closest(".sale-card");
+  const expandedNow = card ? !card.classList.contains("is-expanded") : !getFoldState(isoDate, code);
+
+  if (card) {
+    card.classList.toggle("is-expanded", expandedNow);
+
+    // met à jour la rotation flèche (tu l’avais en inline style)
+    const svg = toggleBtn.querySelector("svg");
+    if (svg) svg.style.transform = expandedNow ? "rotate(180deg)" : "rotate(0deg)";
+
+    toggleBtn.setAttribute("aria-label", expandedNow ? "Replier" : "Déplier");
+    toggleBtn.setAttribute("title", expandedNow ? "Replier" : "Déplier");
+  }
+
+  // ✅ persistance sans bloquer l’UI
+  setFoldState(isoDate, code, expandedNow).catch(console.error);
+
+  return;
+}
+
 
     const delBtn = e.target.closest("[data-sale-del]");
     if (delBtn) {
