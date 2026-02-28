@@ -4831,6 +4831,12 @@ function salesOfDayForArticleKey(iso, articleKey) {
   return getSalesOfDay(iso).filter(s => saleArticleKeyFromSale(s) === k);
 }
 
+// ✅ Alias compat : "aujourd'hui" (= isoDate) pour une clé stable
+function salesTodayForArticleKey(articleKey) {
+  return salesOfDayForArticleKey(isoDate, articleKey);
+}
+
+
 // ✅ Vendu cumulé STRICTEMENT avant un jour, pour CET article (clé stable)
 function sumSoldQtyBeforeDayForArticleKey(articleKey, iso) {
   const k = String(articleKey || "");
