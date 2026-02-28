@@ -4498,6 +4498,18 @@ buy.dailySaleDraftByIso = buy.dailySaleDraftByIso || {}; // optionnel (draft mod
 // ===============================
 buy.dailySaleFoldByIso = buy.dailySaleFoldByIso || {}; // { [iso]: { [originCodeNorm]: true/false } }
 
+// ===============================
+// ✅ Articles masqués de "Vente du jour"
+// ===============================
+buy.dailySaleHiddenCodes = buy.dailySaleHiddenCodes || {}; // { [codeNorm]: true }
+
+function isSaleHidden(code) {
+  return !!buy.dailySaleHiddenCodes[saleNormCode(code)];
+}
+
+function hideSaleCode(code) {
+  buy.dailySaleHiddenCodes[saleNormCode(code)] = true;
+}
 
 
 function saleNormCode(code) {
