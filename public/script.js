@@ -4498,6 +4498,8 @@ buy.dailySaleDraftByIso = buy.dailySaleDraftByIso || {}; // optionnel (draft mod
 // ===============================
 buy.dailySaleFoldByIso = buy.dailySaleFoldByIso || {}; // { [iso]: { [originCodeNorm]: true/false } }
 
+
+
 function saleNormCode(code) {
   return normSearch(String(code || ""));
 }
@@ -4590,6 +4592,10 @@ function deleteAllSalesForArticleRetro(originCode) {
       }
     }
   }
+
+    // ✅ 5) masquer définitivement de "Vente du jour"
+  hideSaleCode(originCode);
+
 }
 
 
@@ -5207,6 +5213,10 @@ function kv(label, value) {
 function saleCardHTML(a) {
   const title = `${a.name || ""} (${a.code || ""})`;
 
+    // ✅ supprimé de Vente du jour → ne jamais afficher
+  if (isSaleHidden(a.code)) return "";
+
+
   // ✅ format Ajout : mobile => jj/mm/aa, sinon => jj/mm/aaaa
   const ajout = isMobileSaleUi() ? isoToFrShort(a.createdAtIso) : isoToFr(a.createdAtIso);
 
@@ -5426,6 +5436,9 @@ function saleCardHTML(a) {
 function buildGroupedArticles() {
     const arts = (buy.articles || [])
     .filter(a => {
+            // ✅ supprimé de Vente du jour
+      if (isSaleHidden(a.code)) return false;
+
       if (isVisibleOnDay(a)) return true;
 
       // ✅ même si "invisible" (cas stock=0 le lendemain), on garde si provisoires actifs RAP>0
@@ -5702,6 +5715,10 @@ function provCardHTML(rec) {
 function allVisibleForSaleSearch() {
   const arts = (buy.articles || [])
     .filter(a => {
+
+        // ✅ supprimé de Vente du jour
+  if (isSaleHidden(a.code)) return false;
+
   // 1) visibilité "temps" (créé/supprimé)
   const visibleByDate = isVisibleOnDay(a);
 
