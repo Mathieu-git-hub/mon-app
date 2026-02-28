@@ -4494,10 +4494,104 @@ buy.dailySalesByIso = buy.dailySalesByIso || {};        // { [iso]: [sale...] }
 buy.dailySaleDraftByIso = buy.dailySaleDraftByIso || {}; // optionnel (draft modale)
 
 // ===============================
+// ✅ UI state (plié/déplié) — Vente du jour
+// ===============================
+buy.dailySaleFoldByIso = buy.dailySaleFoldByIso || {}; // { [iso]: { [originCodeNorm]: true/false } }
+
+function saleNormCode(code) {
+  return normSearch(String(code || ""));
+}
+
+function isMobileSaleUi() {
+  // même logique que tes autres pages : mobile <= 520px
+  return !!(window.matchMedia && window.matchMedia("(max-width: 520px)").matches);
+}
+
+function isoToFrShort(iso) {
+  // jj/mm/aa
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (!m) return "";
+  const dd = String(m[3]).padStart(2, "0");
+  const mm = String(m[2]).padStart(2, "0");
+  const yy = String(m[1]).slice(-2);
+  return `${dd}/${mm}/${yy}`;
+}
+
+function getFoldState(iso, code) {
+  const k = saleNormCode(code);
+  buy.dailySaleFoldByIso[iso] = buy.dailySaleFoldByIso[iso] || {};
+  // ✅ par défaut : plié (false = plié, true = déplié)
+  return !!buy.dailySaleFoldByIso[iso][k];
+}
+
+async function setFoldState(iso, code, expanded) {
+  const k = saleNormCode(code);
+  buy.dailySaleFoldByIso[iso] = buy.dailySaleFoldByIso[iso] || {};
+  buy.dailySaleFoldByIso[iso][k] = !!expanded;
+  await safePersistNow();
+}
+
+
+// ===============================
 // ✅ Provisoires (RAP figé par jour)
 // ===============================
 buy.provByCode = buy.provByCode || {}; 
 // { [provCode]: { provCode, originCode, articleNameSnap, pvSnap, createdAtIso, closedAtIso|null, rapByIso: { [iso]: number } } }
+
+// ===============================
+// ✅ Suppression rétroactive d’un article dans les ventes
+// => on retire TOUTES les ventes (toutes dates) liées à ce code
+// + on retire tous les provisoires dont originCode = code
+// + on retire tous les paiements (advance) liés à ces provisoires
+// ===============================
+function deleteAllSalesForArticleRetro(originCode) {
+  const ocNorm = saleNormCode(originCode);
+
+  // 1) provisoires à supprimer
+  const provToRemove = new Set();
+  for (const k in (buy.provByCode || {})) {
+    const rec = buy.provByCode[k];
+    if (!rec) continue;
+    if (saleNormCode(rec.originCode) === ocNorm) {
+      provToRemove.add(normProvCode(rec.provCode));
+    }
+  }
+
+  // 2) supprimer ventes dans toutes les dates
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    buy.dailySalesByIso[dayIso] = arr.filter(s => {
+      if (!s) return false;
+
+      // ✅ tout ce qui est directement sur l’article (vente OU avance) : code = originCode
+      if (saleNormCode(s.code) === ocNorm) return false;
+
+      // ✅ paiements de provisoires à supprimer
+      if (s.type === "advance" && s.provCode) {
+        const pk = normProvCode(s.provCode);
+        if (provToRemove.has(pk)) return false;
+      }
+
+      return true;
+    });
+  }
+
+  // 3) supprimer les provisoires
+  for (const pk of provToRemove) {
+    delete buy.provByCode[pk];
+  }
+
+  // 4) nettoyer l’état plié/déplié (optionnel)
+  if (buy.dailySaleFoldByIso) {
+    for (const dIso in buy.dailySaleFoldByIso) {
+      if (buy.dailySaleFoldByIso[dIso]) {
+        delete buy.dailySaleFoldByIso[dIso][ocNorm];
+      }
+    }
+  }
+}
+
 
 function normProvCode(s) {
   return String(s || "").trim().replace(/\s+/g, " ").toUpperCase();
@@ -5113,150 +5207,199 @@ function kv(label, value) {
 function saleCardHTML(a) {
   const title = `${a.name || ""} (${a.code || ""})`;
 
-  // ✅ si stock début du jour = 0, on cache l’article SAUF s’il reste des provisoires actifs (RAP > 0)
-// dans ce cas, on affiche une carte minimaliste avec pile des codes provisoires.
-const startQtyN_top = computeStartQtyForDay(a, isoDate);
-const provList = activeProvRecordsForOriginOnDay(a.code, isoDate);
+  // ✅ format Ajout : mobile => jj/mm/aa, sinon => jj/mm/aaaa
+  const ajout = isMobileSaleUi() ? isoToFrShort(a.createdAtIso) : isoToFr(a.createdAtIso);
 
-const shouldHideBecauseZeroStock = Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length === 0;
-if (shouldHideBecauseZeroStock) return "";
+  // ✅ état plié/déplié (par défaut plié)
+  const expanded = getFoldState(isoDate, a.code);
 
-const shouldShowProvOnly = Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length > 0;
-if (shouldShowProvOnly) {
-  const stack = provList.map(p => `
-    <div style="display:flex; align-items:center; gap:10px;">
-      <div style="font-weight:1000; white-space:nowrap;">${escapeHtml(p.provCode)} :</div>
-      <div class="buy-cat-white" style="flex:1; min-width:0;">
-        ${escapeHtml(`Reste à payer : ${fmtResult(p.rap)}`)}
-      </div>
-    </div>
-  `).join(`<div style="height:10px;"></div>`);
+  // ✅ Vendu du jour (quantité vendue) + avances du jour (format comme PVT)
+  const salesToday = salesTodayForCode(a.code);
+  const venduN = sumQtySales(salesToday);
+  const venduDisp = salesToday.length ? fmtResult(venduN) : "";
 
-  return `
-    <div class="buy-cat-card" style="padding:14px; display:block;">
-      <div style="display:block; text-align:center; font-weight:1000; margin:0 0 12px 0;">
+  const advancesToday = (salesToday || [])
+    .filter(s => s && s.type === "advance")
+    .map(s => {
+      const aN = parseLooseNumber(s.avance);
+      if (!Number.isFinite(aN) || aN <= 0) return null;
+      const pc = String(s.provCode || "").trim();
+      const part = fmtResult(aN);
+      return pc ? `${part} (${escapeHtml(pc)})` : part;
+    })
+    .filter(Boolean);
+
+  const venduLineParts = [];
+  if (venduDisp) venduLineParts.push(venduDisp);
+  if (advancesToday.length) venduLineParts.push(...advancesToday);
+
+  const venduLineText = venduLineParts.join(" + ");
+
+  // ✅ provisoires actifs (pour le cas stock=0)
+  const startQtyN_top = computeStartQtyForDay(a, isoDate);
+  const provList = activeProvRecordsForOriginOnDay(a.code, isoDate);
+
+  const shouldHideBecauseZeroStock =
+    Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length === 0;
+  if (shouldHideBecauseZeroStock) return "";
+
+  // ✅ bouton flèche + poubelle (même ligne que le titre)
+  const headerRow = `
+    <div style="display:flex; align-items:center; gap:10px; margin:0 0 10px 0;">
+      <!-- flèche à gauche -->
+      <button
+        type="button"
+        class="buy-cat-iconbtn"
+        data-sale-toggle="${escapeAttr(a.code)}"
+        aria-label="${expanded ? "Replier" : "Déplier"}"
+        title="${expanded ? "Replier" : "Déplier"}"
+        style="width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center;"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"
+             style="width:18px; height:18px; transform:${expanded ? "rotate(180deg)" : "rotate(0deg)"};">
+          <path d="M6 9l6 6 6-6"></path>
+        </svg>
+      </button>
+
+      <!-- titre centré (reste au même endroit) -->
+      <div style="flex:1; text-align:center; font-weight:1000; margin:0;">
         ${escapeHtml(title)}
       </div>
 
-      <div style="display:flex; flex-direction:column; gap:10px;">
-        ${stack}
-      </div>
+      <!-- poubelle à droite (identique Articles) -->
+      <button
+        type="button"
+        class="buy-cat-iconbtn"
+        data-sale-del="${escapeAttr(a.code)}"
+        aria-label="Supprimer"
+        title="Supprimer"
+        style="width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center;"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"
+          style="width:18px; height:18px;">
+          <path d="M3 6h18"></path>
+          <path d="M8 6V4h8v2"></path>
+          <path d="M6 6l1 16h10l1-16"></path>
+          <path d="M10 11v6"></path>
+          <path d="M14 11v6"></path>
+        </svg>
+      </button>
     </div>
   `;
-}
 
+  // ✅ RECTANGLE PLIÉ : seulement "Vendu: [case blanche]"
+  const foldedBody = `
+    <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+      ${kv("Vendu", venduLineText)}
+    </div>
+  `;
 
+  // ✅ RECTANGLE DÉPLIÉ : ton contenu originel (inchangé) + Ajout/Qté ini/Vendu/Qté res + PRT/PVT
+  // (on reprend exactement ta logique existante)
   const pr  = fmtResult(Number(a.prResult));
   const prg = fmtResult(Number(a.prgResult));
   const pv  = fmtWhite(a.pv || "");
 
-  const ajout = isoToFr(a.createdAtIso);
-  // ✅ Qté ini = stock au début du jour (reste de la veille)
-// ✅ base évolutive pour Qté res (NE PAS TOUCHER)
-const startQtyN = startQtyN_top;
+  const startQtyN = startQtyN_top;
+  const qteIni = fmtWhite(a.qty || "");
 
-
-// ✅ Qté ini = quantité initiale constante de l’article
-const qteIni = fmtWhite(a.qty || "");
-
-
-
-    // ✅ Vendu = somme des ventes du jour pour cet article
-  const salesToday = salesTodayForCode(a.code);
-  const venduN = sumQtySales(salesToday);
   const vendu = salesToday.length ? fmtResult(venduN) : "";
 
+  const resN = (Number.isFinite(startQtyN) ? startQtyN : 0) - (Number.isFinite(venduN) ? venduN : 0);
+  const qteRes = Number.isFinite(startQtyN) ? fmtResult(resN) : "";
 
-  const qtyN  = (typeof toNumberLoose === "function")
-    ? toNumberLoose(String(a.qty || "").replace(/\s+/g, ""))
-    : Number(String(a.qty || "").replace(/\s+/g, "").replace(",", "."));
+  const prt = prtExpressionForToday(a);
+  const pvt = pvtExpressionForToday(a.code);
 
-  const vendN = venduN; // ✅ déjà numérique
+  let showPRT = prt.hasAny;
+  let pvtLineDisplay = pvt.hasAny ? pvt.displaySaleDay : pvt.displayNoSale;
 
+  // ✅ cas stock=0 mais provisoires actifs : on garde ton affichage minimaliste
+  const shouldShowProvOnly =
+    Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length > 0;
 
-  // ✅ Qté res = stock début du jour - vendu du jour
-const resN = (Number.isFinite(startQtyN) ? startQtyN : 0) - (Number.isFinite(venduN) ? venduN : 0);
-const qteRes = Number.isFinite(startQtyN) ? fmtResult(resN) : "";
+  if (shouldShowProvOnly && !expanded) {
+    // plié : on montre juste "Vendu" (et les avances éventuelles)
+    return `
+      <div class="buy-cat-card" style="padding:14px; display:block;">
+        ${headerRow}
+        ${foldedBody}
+      </div>
+    `;
+  }
 
+  if (shouldShowProvOnly && expanded) {
+    // déplié : on montre pile des provisoires (comme avant)
+    const stack = provList.map(p => `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="font-weight:1000; white-space:nowrap;">${escapeHtml(p.provCode)} :</div>
+        <div class="buy-cat-white" style="flex:1; min-width:0;">
+          ${escapeHtml(`Reste à payer : ${fmtResult(p.rap)}`)}
+        </div>
+      </div>
+    `).join(`<div style="height:10px;"></div>`);
 
-    const prt = prtExpressionForToday(a);     // {hasAny, display}
-  const pvt = pvtExpressionForToday(a.code); // {hasAny, display}
+    return `
+      <div class="buy-cat-card" style="padding:14px; display:block;">
+        ${headerRow}
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          ${stack}
+        </div>
+      </div>
+    `;
+  }
 
-  // ✅ Cas "pas de vente aujourd’hui" : PVT = cumul des jours précédents (jusqu’à hier)
-// ✅ Cas "vente aujourd’hui" : PVT = expression du jour + (cumul jusqu’à aujourd’hui)
-let showPRT = prt.hasAny;
-let pvtLineDisplay = "";
+  const expandedBody = `
+    <div style="
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap:12px;
+      margin:0 0 10px 0;
+    ">
+      ${kv("PR", pr)}
+      ${kv("PRG", prg)}
+      ${kv("PV", pv)}
+    </div>
 
-if (pvt.hasAny) {
-  // vente aujourd'hui => expression + total + (cumul à date)
-  pvtLineDisplay = pvt.displaySaleDay;
-} else {
-  // pas de vente aujourd’hui => récap cumul avant aujourd’hui (ne doit pas inclure le futur)
-  pvtLineDisplay = pvt.displayNoSale;
-}
+    <div style="
+      display:grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap:12px;
+      margin:0;
+    ">
+      ${kv("Ajout", ajout)}
+      ${kv("Qté ini", qteIni)}
+      ${kv("Vendu", vendu)}
+      ${kv("Qté res", qteRes)}
+    </div>
 
+    ${
+      showPRT
+        ? `
+          <div style="height:10px;"></div>
+          <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+            ${kv("PRT", prt.display)}
+          </div>
+        `
+        : ``
+    }
 
+    <div style="height:10px;"></div>
+    <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+      ${kv("PVT", pvtLineDisplay)}
+    </div>
+  `;
 
   return `
     <div class="buy-cat-card" style="padding:14px; display:block;">
-      
-      <!-- ✅ (1) Titre : sa propre ligne -->
-      <div style="
-        display:block;
-        text-align:center;
-        font-weight:1000;
-        margin:0 0 12px 0;
-      ">
-        ${escapeHtml(title)}
-      </div>
-
-      <!-- ✅ (2) Ligne PR/PRG/PV : 3 colonnes égales -->
-      <div style="
-        display:grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap:12px;
-        margin:0 0 10px 0;
-      ">
-        ${kv("PR", pr)}
-        ${kv("PRG", prg)}
-        ${kv("PV", pv)}
-      </div>
-
-      <!-- ✅ (3) Ligne Ajout/Qté ini/Vendu/Qté res : 4 colonnes égales -->
-      <div style="
-        display:grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap:12px;
-        margin:0;
-      ">
-        ${kv("Ajout", ajout)}
-        ${kv("Qté ini", qteIni)}
-        ${kv("Vendu", vendu)}
-        ${kv("Qté res", qteRes)}
-      </div>
-
-            <!-- ✅ (4) Ligne PRT (seulement si vente aujourd’hui) -->
-      ${
-        showPRT
-          ? `
-            <div style="height:10px;"></div>
-            <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
-              ${kv("PRT", prt.display)}
-            </div>
-          `
-          : ``
-      }
-
-      <!-- ✅ (5) Ligne PVT (toujours : jour=expression, sinon=cumul) -->
-      <div style="height:10px;"></div>
-      <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
-        ${kv("PVT", pvtLineDisplay)}
-      </div>
-
-
+      ${headerRow}
+      ${expanded ? expandedBody : foldedBody}
     </div>
   `;
 }
+
 
 
 
@@ -5348,10 +5491,85 @@ function renderDailySaleRecap() {
   listEl.innerHTML = html;
 }
 
-
-
+bindDailySaleCardActions();
 renderDailySaleRecap();
 renderDailySaleGlobals();
+
+// ===============================
+// ✅ Actions sur cartes (toggle + suppression)
+// ===============================
+function bindDailySaleCardActions() {
+  // toggle plié/déplié
+  document.querySelectorAll("[data-sale-toggle]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const code = btn.getAttribute("data-sale-toggle") || "";
+      const cur = getFoldState(isoDate, code);
+      await setFoldState(isoDate, code, !cur);
+      renderDailySaleRecap();
+      renderDailySaleGlobals();
+    });
+  });
+
+  // suppression rétroactive
+  document.querySelectorAll("[data-sale-del]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const code = btn.getAttribute("data-sale-del") || "";
+      openDailySaleDelModal(code);
+    });
+  });
+}
+
+// ===============================
+// ✅ MODAL suppression (Vente du jour) — identique esprit "Articles"
+// ===============================
+function closeDailySaleDelModal() {
+  const bd = document.getElementById("dailySaleDelBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleDelModal(originCode) {
+  if (document.getElementById("dailySaleDelBackdrop")) return;
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleDelBackdrop";
+  bd.className = "cat-del-backdrop";
+
+  bd.innerHTML = `
+    <div class="cat-del-modal" role="dialog" aria-modal="true" aria-label="Suppression vente">
+      <div class="cat-del-text">Supprimer cette vente ?</div>
+      <div class="cat-del-actions">
+        <button id="dailySaleDelCancel" class="cat-del-btn cat-del-cancel" type="button">Annuler</button>
+        <button id="dailySaleDelOk" class="cat-del-btn cat-del-ok" type="button">confirmer</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => { if (e.target === bd) closeDailySaleDelModal(); });
+  document.body.appendChild(bd);
+
+  const cancel = document.getElementById("dailySaleDelCancel");
+  const ok = document.getElementById("dailySaleDelOk");
+
+  if (cancel) cancel.addEventListener("click", closeDailySaleDelModal);
+
+  if (ok) {
+    ok.addEventListener("click", async () => {
+      // ✅ suppression rétroactive (comme si l’article n’avait jamais existé dans les ventes)
+      deleteAllSalesForArticleRetro(originCode);
+
+      await safePersistNow();
+      closeDailySaleDelModal();
+
+      renderDailySaleRecap();
+      renderDailySaleGlobals();
+    });
+  }
+}
+
 
 
 // ===============================
