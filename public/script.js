@@ -4826,10 +4826,28 @@ function saleArticleKeyFromSale(s) {
   return `code:${saleNormCode(s?.code)}`;
 }
 
-function salesTodayForArticleKey(articleKey) {
+function salesOfDayForArticleKey(iso, articleKey) {
   const k = String(articleKey || "");
-  return getSalesOfDay(isoDate).filter(s => saleArticleKeyFromSale(s) === k);
+  return getSalesOfDay(iso).filter(s => saleArticleKeyFromSale(s) === k);
 }
+
+// ✅ Vendu cumulé STRICTEMENT avant un jour, pour CET article (clé stable)
+function sumSoldQtyBeforeDayForArticleKey(articleKey, iso) {
+  const k = String(articleKey || "");
+  let total = 0;
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    if (isoToDayTs(dayIso) >= isoToDayTs(iso)) continue;
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    for (const s of arr) {
+      if (saleArticleKeyFromSale(s) !== k) continue;
+      const q = parseLooseNumber(s.qty);
+      if (Number.isFinite(q)) total += q;
+    }
+  }
+  return total;
+}
+
 
 
 function sumQtySales(list) {
@@ -4905,14 +4923,28 @@ function totalPvAllDaysForCode(code) {
   return total;
 }
 
+function totalPvtBeforeDayForArticleKey(articleKey, iso) {
+  const k = String(articleKey || "");
+  let total = 0;
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    if (isoToDayTs(dayIso) >= isoToDayTs(iso)) continue;
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    for (const s of arr) {
+      if (saleArticleKeyFromSale(s) !== k) continue;
+      total += pvtAmountOfEntry(s); // ✅ garde ta logique avances=PVT via avance
+    }
+  }
+  return total;
+}
+
+
 // compression PV du jour : conserve l’ordre d’apparition des valeurs uniques
-function pvtExpressionForToday(code) {
-  const list = salesTodayForCode(code);
+function pvtExpressionForToday(articleKey) {
+  const list = salesTodayForArticleKey(articleKey);
 
-  // ✅ cumul AVANT aujourd’hui (ne doit jamais modifier les jours passés)
-  const prevCum = totalPvtBeforeDayForCode(code, isoDate);
+  const prevCum = totalPvtBeforeDayForArticleKey(articleKey, isoDate);
 
-  // ✅ pas de vente aujourd’hui => ligne PVT = cumul précédent
   if (!list.length) {
     return {
       hasAny: false,
@@ -4923,85 +4955,70 @@ function pvtExpressionForToday(code) {
     };
   }
 
-  // ✅ vente aujourd’hui => expression compressée
-  // ✅ vente aujourd’hui => expression compressée (PV × Quantité)
-// ✅ vente aujourd’hui => expression compressée (ventes + avances)
-const order = [];               // clés ordonnées (S|... ou A|...)
-const qtyByKey = new Map();     // somme qty (vente) ou compteur (avance)
-const valByKey = new Map();     // valeur numérique (pv ou avance)
-const kindByKey = new Map();    // "sale" | "advance"
+  const order = [];
+  const qtyByKey = new Map();
+  const valByKey = new Map();
+  const kindByKey = new Map();
 
-for (const s of list) {
+  for (const s of list) {
+    if (s.type === "advance") {
+      const aN = parseLooseNumber(s.avance);
+      if (!Number.isFinite(aN) || aN <= 0) continue;
 
-  // ✅ Avance : on compresse par code provisoire + valeur avance (et on affiche le code provisoire)
-if (s.type === "advance") {
-  const aN = parseLooseNumber(s.avance);
-  if (!Number.isFinite(aN) || aN <= 0) continue;
+      const prov = String(s.provCode || "").trim();
+      if (!prov) continue;
 
-  const prov = String(s.provCode || "").trim();   // ex: "A 12.07"
-  if (!prov) continue; // sécurité : une avance sans provCode ne doit pas arriver ici
+      const k = "A|" + prov.toUpperCase() + "|" + String(aN).replace(".", ",");
 
-  // clé stable = provCode + valeur (si plusieurs avances identiques sur le même prov)
-  const k = "A|" + prov.toUpperCase() + "|" + String(aN).replace(".", ",");
+      if (!qtyByKey.has(k)) {
+        qtyByKey.set(k, 1);
+        valByKey.set(k, aN);
+        kindByKey.set(k, "advance");
+        order.push(k);
+      } else {
+        qtyByKey.set(k, qtyByKey.get(k) + 1);
+      }
+      continue;
+    }
 
-  if (!qtyByKey.has(k)) {
-    qtyByKey.set(k, 1);
-    valByKey.set(k, aN);
-    kindByKey.set(k, "advance");
-    order.push(k);
-  } else {
-    qtyByKey.set(k, qtyByKey.get(k) + 1);
+    const pvN = parseLooseNumber(s.pv);
+    const qtyN = parseLooseNumber(s.qty);
+    if (!Number.isFinite(pvN) || !Number.isFinite(qtyN) || qtyN <= 0) continue;
+
+    const k = "S|" + String(pvN).replace(".", ",");
+    if (!qtyByKey.has(k)) {
+      qtyByKey.set(k, qtyN);
+      valByKey.set(k, pvN);
+      kindByKey.set(k, "sale");
+      order.push(k);
+    } else {
+      qtyByKey.set(k, qtyByKey.get(k) + qtyN);
+    }
   }
-  continue;
-}
 
+  const parts = [];
+  for (const k of order) {
+    const n = valByKey.get(k);
+    const qSum = qtyByKey.get(k) || 0;
+    const kind = kindByKey.get(k);
 
-  // ✅ Vente normale : PV × quantité (ta logique inchangée)
-  const pvN = parseLooseNumber(s.pv);
-  const qtyN = parseLooseNumber(s.qty);
-  if (!Number.isFinite(pvN) || !Number.isFinite(qtyN) || qtyN <= 0) continue;
+    if (!Number.isFinite(n) || !Number.isFinite(qSum) || qSum <= 0) continue;
 
-  const k = "S|" + String(pvN).replace(".", ","); // clé stable
-  if (!qtyByKey.has(k)) {
-    qtyByKey.set(k, qtyN);
-    valByKey.set(k, pvN);
-    kindByKey.set(k, "sale");
-    order.push(k);
-  } else {
-    qtyByKey.set(k, qtyByKey.get(k) + qtyN);
+    let disp = fmtResult(n);
+
+    if (kind === "advance") {
+      const provCode = String(k.split("|")[1] || "").trim();
+      disp = provCode ? `${disp} (${escapeHtml(provCode)})` : disp;
+    }
+
+    if (qSum === 1) parts.push(`${disp}`);
+    else parts.push(`${disp} × ${fmtResult(qSum)}`);
   }
-}
-
-const parts = [];
-for (const k of order) {
-  const n = valByKey.get(k);
-  const qSum = qtyByKey.get(k) || 0;
-  const kind = kindByKey.get(k);
-
-  if (!Number.isFinite(n) || !Number.isFinite(qSum) || qSum <= 0) continue;
-
-  let disp = fmtResult(n);
-
-  // ✅ Avance : afficher le code provisoire (ex: "A 12.07")
-if (kind === "advance") {
-  const provCode = String(k.split("|")[1] || "").trim(); // k = "A|PROVCODE|val"
-  disp = provCode ? `${disp} (${escapeHtml(provCode)})` : disp;
-}
-
-
-  // ✅ même règle de multiplication : répétition => "×"
-  if (qSum === 1) parts.push(`${disp}`);
-  else parts.push(`${disp} × ${fmtResult(qSum)}`);
-}
-
-
-
 
   const dayTotal = sumPvtEntries(list);
   const expr = parts.length ? parts.join(" + ") : "";
   const exprWithTotal = expr ? `${expr} = ${fmtResult(dayTotal)}` : `${fmtResult(dayTotal)}`;
 
-  // ✅ cumul à date = cumul avant + total du jour
   const cumToDay = prevCum + dayTotal;
 
   return {
@@ -5014,10 +5031,13 @@ if (kind === "advance") {
 }
 
 
+
 // PRT du jour : PR × qtyVendueJour = résultat
 function prtExpressionForToday(article) {
-  const list = salesTodayForCode(article.code);
-  const qtySum = sumQtySales(list);
+  const articleKey = saleArticleKeyFromArticle(article);
+  const list = salesTodayForArticleKey(articleKey);
+
+  const qtySum = sumQtySales(list); // ✅ ta logique “createProv qty=1 / rapPay qty=0”
   const pr = Number(article.prResult);
 
   if (!list.length || !Number.isFinite(pr)) {
@@ -5029,6 +5049,7 @@ function prtExpressionForToday(article) {
   return { hasAny:true, qtySum, display };
 }
 
+
 // ===============================
 // ✅ Globals (évolutifs) : PRT global / PVT global
 // ===============================
@@ -5036,28 +5057,40 @@ function computeGlobalsForDay(iso) {
   const sales = getSalesOfDay(iso);
   if (!sales.length) return { has:false, prtGlobal:0, pvtGlobal:0 };
 
-  // regroupe par code
-  const byCode = new Map();
+  // ✅ regroupe par clé stable (id:xxx ou code:xxx legacy)
+  const byKey = new Map();
   for (const s of sales) {
-    const code = String(s.code || "").trim();
-    if (!code) continue;
-    if (!byCode.has(code)) byCode.set(code, []);
-    byCode.get(code).push(s);
+    const k = saleArticleKeyFromSale(s);
+    if (!k) continue;
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(s);
   }
 
   let prtGlobal = 0;
   let pvtGlobal = 0;
 
-  for (const [code, list] of byCode.entries()) {
-    // article correspondant
-    const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code));
+  for (const [key, list] of byKey.entries()) {
+    // retrouver l’article : priorité articleId si dispo
+    let art = null;
+
+    if (key.startsWith("id:")) {
+      const id = key.slice(3);
+      art = (buy.articles || []).find(a => !a.deletedAtIso && String(a.id) === String(id));
+    } else {
+      // legacy par code si vieux historiques
+      const codeNorm = key.startsWith("code:") ? key.slice(5) : saleNormCode(key);
+      art = (buy.articles || []).find(a => !a.deletedAtIso && saleNormCode(a.code) === codeNorm);
+    }
+
     if (!art) continue;
 
     const pr = Number(art.prResult);
+
+    // ✅ qtySum respecte ta règle createProv qty=1 / rapPay qty=0
     const qtySum = sumQtySales(list);
+
+    // ✅ PVT = ventes + avances
     const pvSum = sumPvtEntries(list);
-
-
 
     if (Number.isFinite(pr)) prtGlobal += pr * qtySum;
     pvtGlobal += pvSum;
@@ -5065,6 +5098,7 @@ function computeGlobalsForDay(iso) {
 
   return { has:true, prtGlobal, pvtGlobal };
 }
+
 
 function renderDailySaleGlobals() {
   const wrap = document.getElementById("dailySaleGlobals");
@@ -5166,13 +5200,15 @@ function sumSoldQtyBeforeDayForCode(code, iso) {
 }
 
 function computeStartQtyForDay(article, iso) {
-  // qty initiale de l’article (celle que tu stockes dans a.qty)
   const ini = parseLooseNumber(article.qty);
   if (!Number.isFinite(ini)) return NaN;
 
-  const soldBefore = sumSoldQtyBeforeDayForCode(article.code, iso);
+  const articleKey = saleArticleKeyFromArticle(article);
+  const soldBefore = sumSoldQtyBeforeDayForArticleKey(articleKey, iso);
+
   return ini - soldBefore;
 }
+
 
 
 function totalPvBeforeDayForCode(code, iso) {
@@ -5261,6 +5297,9 @@ function kv(label, value) {
 
 
 function saleCardHTML(a) {
+
+  const title = `${a.name || ""} (${a.code || ""})`;
+
   const articleKey = saleArticleKeyFromArticle(a);
 
 
@@ -5378,7 +5417,8 @@ const salesToday = salesTodayForArticleKey(articleKey);
   const qteRes = Number.isFinite(startQtyN) ? fmtResult(resN) : "";
 
   const prt = prtExpressionForToday(a);
-  const pvt = pvtExpressionForToday(a.code);
+  const pvt = pvtExpressionForToday(articleKey);
+
 
   let showPRT = prt.hasAny;
   let pvtLineDisplay = pvt.hasAny ? pvt.displaySaleDay : pvt.displayNoSale;
@@ -5777,7 +5817,8 @@ function allVisibleForSaleSearch() {
     .filter(a => {
 
         // ✅ supprimé de Vente du jour
-  if (isSaleHidden(a.code)) return false;
+  if (isSaleHiddenByArticle(a)) return false;
+
 
   // 1) visibilité "temps" (créé/supprimé)
   const visibleByDate = isVisibleOnDay(a);
