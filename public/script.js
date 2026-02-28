@@ -4509,8 +4509,13 @@ buy.dailySaleHiddenCodes = buy.dailySaleHiddenCodes || {}; // { [codeNorm]: true
 function isSaleHiddenByArticle(a) {
   const key = saleArticleKeyFromArticle(a);
   if (buy.dailySaleHiddenKeys[key]) return true;
-  return !!buy.dailySaleHiddenCodes[saleNormCode(a?.code)]; // legacy
+
+  // ✅ legacy seulement si pas d'id (anciens historiques)
+  if (!(a && a.id)) return !!buy.dailySaleHiddenCodes[saleNormCode(a?.code)];
+
+  return false;
 }
+
 
 function hideSaleArticle(aOrKeyOrCode) {
   // accepte: article, key "id:xxx", ou code
