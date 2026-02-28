@@ -4501,15 +4501,32 @@ buy.dailySaleFoldByIso = buy.dailySaleFoldByIso || {}; // { [iso]: { [originCode
 // ===============================
 // ✅ Articles masqués de "Vente du jour"
 // ===============================
+// ✅ Articles masqués de "Vente du jour" (clé stable)
+buy.dailySaleHiddenKeys = buy.dailySaleHiddenKeys || {};   // { [key]: true }
+// legacy (on garde si déjà utilisé)
 buy.dailySaleHiddenCodes = buy.dailySaleHiddenCodes || {}; // { [codeNorm]: true }
 
-function isSaleHidden(code) {
-  return !!buy.dailySaleHiddenCodes[saleNormCode(code)];
+function isSaleHiddenByArticle(a) {
+  const key = saleArticleKeyFromArticle(a);
+  if (buy.dailySaleHiddenKeys[key]) return true;
+  return !!buy.dailySaleHiddenCodes[saleNormCode(a?.code)]; // legacy
 }
 
-function hideSaleCode(code) {
-  buy.dailySaleHiddenCodes[saleNormCode(code)] = true;
+function hideSaleArticle(aOrKeyOrCode) {
+  // accepte: article, key "id:xxx", ou code
+  if (typeof aOrKeyOrCode === "string" && aOrKeyOrCode.startsWith("id:")) {
+    buy.dailySaleHiddenKeys[aOrKeyOrCode] = true;
+    return;
+  }
+  if (typeof aOrKeyOrCode === "object") {
+    const key = saleArticleKeyFromArticle(aOrKeyOrCode);
+    buy.dailySaleHiddenKeys[key] = true;
+    return;
+  }
+  // fallback code (legacy)
+  buy.dailySaleHiddenCodes[saleNormCode(aOrKeyOrCode)] = true;
 }
+
 
 
 function saleNormCode(code) {
@@ -4532,19 +4549,23 @@ function isoToFrShort(iso) {
   return `${dd}/${mm}/${yy}`;
 }
 
-function getFoldState(iso, code) {
-  const k = saleNormCode(code);
+function foldKey(k) {
+  return String(k || "").trim(); // on garde tel quel (id:xxx)
+}
+
+function getFoldState(iso, key) {
+  const k = foldKey(key);
   buy.dailySaleFoldByIso[iso] = buy.dailySaleFoldByIso[iso] || {};
-  // ✅ par défaut : plié (false = plié, true = déplié)
   return !!buy.dailySaleFoldByIso[iso][k];
 }
 
-async function setFoldState(iso, code, expanded) {
-  const k = saleNormCode(code);
+async function setFoldState(iso, key, expanded) {
+  const k = foldKey(key);
   buy.dailySaleFoldByIso[iso] = buy.dailySaleFoldByIso[iso] || {};
   buy.dailySaleFoldByIso[iso][k] = !!expanded;
   await safePersistNow();
 }
+
 
 
 // ===============================
@@ -4559,56 +4580,53 @@ buy.provByCode = buy.provByCode || {};
 // + on retire tous les provisoires dont originCode = code
 // + on retire tous les paiements (advance) liés à ces provisoires
 // ===============================
-function deleteAllSalesForArticleRetro(originCode) {
-  const ocNorm = saleNormCode(originCode);
-
-  // 1) provisoires à supprimer
+function deleteAllSalesForArticleRetroByKey(articleKey) {
+  const key = String(articleKey || "");
   const provToRemove = new Set();
+
+  // 1) provisoires à supprimer (par articleId si dispo, sinon fallback legacy sur originCode)
   for (const k in (buy.provByCode || {})) {
     const rec = buy.provByCode[k];
     if (!rec) continue;
-    if (saleNormCode(rec.originCode) === ocNorm) {
+
+    const recKey = rec.articleId ? `id:${String(rec.articleId)}` : `code:${saleNormCode(rec.originCode)}`;
+    if (recKey === key) {
       provToRemove.add(normProvCode(rec.provCode));
     }
   }
 
-  // 2) supprimer ventes dans toutes les dates
+  // 2) supprimer ventes (toutes dates) liées à CET articleKey
   for (const dayIso in (buy.dailySalesByIso || {})) {
     const arr = buy.dailySalesByIso[dayIso] || [];
     buy.dailySalesByIso[dayIso] = arr.filter(s => {
       if (!s) return false;
 
-      // ✅ tout ce qui est directement sur l’article (vente OU avance) : code = originCode
-      if (saleNormCode(s.code) === ocNorm) return false;
+      // vente/avance de cet article
+      if (saleArticleKeyFromSale(s) === key) return false;
 
-      // ✅ paiements de provisoires à supprimer
+      // paiements de provisoires supprimés
       if (s.type === "advance" && s.provCode) {
         const pk = normProvCode(s.provCode);
         if (provToRemove.has(pk)) return false;
       }
-
       return true;
     });
   }
 
   // 3) supprimer les provisoires
-  for (const pk of provToRemove) {
-    delete buy.provByCode[pk];
-  }
+  for (const pk of provToRemove) delete buy.provByCode[pk];
 
-  // 4) nettoyer l’état plié/déplié (optionnel)
+  // 4) fold state
   if (buy.dailySaleFoldByIso) {
     for (const dIso in buy.dailySaleFoldByIso) {
-      if (buy.dailySaleFoldByIso[dIso]) {
-        delete buy.dailySaleFoldByIso[dIso][ocNorm];
-      }
+      if (buy.dailySaleFoldByIso[dIso]) delete buy.dailySaleFoldByIso[dIso][foldKey(key)];
     }
   }
 
-    // ✅ 5) masquer définitivement de "Vente du jour"
-  hideSaleCode(originCode);
-
+  // 5) masquer définitivement de Vente du jour
+  hideSaleArticle(key);
 }
+
 
 
 function normProvCode(s) {
@@ -4793,6 +4811,26 @@ function salesTodayForCode(code) {
   const c = normSearch(String(code || ""));
   return getSalesOfDay(isoDate).filter(s => normSearch(s.code) === c);
 }
+
+// ===============================
+// ✅ Vente du jour — clé stable article (évite amalgame si code réutilisé)
+// ===============================
+function saleArticleKeyFromArticle(a) {
+  // priorité à l'id (stable)
+  return (a && a.id) ? `id:${String(a.id)}` : `code:${saleNormCode(a?.code)}`;
+}
+
+function saleArticleKeyFromSale(s) {
+  if (s?.articleId) return `id:${String(s.articleId)}`;
+  // legacy
+  return `code:${saleNormCode(s?.code)}`;
+}
+
+function salesTodayForArticleKey(articleKey) {
+  const k = String(articleKey || "");
+  return getSalesOfDay(isoDate).filter(s => saleArticleKeyFromSale(s) === k);
+}
+
 
 function sumQtySales(list) {
   return list.reduce((acc, s) => {
@@ -5223,20 +5261,25 @@ function kv(label, value) {
 
 
 function saleCardHTML(a) {
-  const title = `${a.name || ""} (${a.code || ""})`;
+  const articleKey = saleArticleKeyFromArticle(a);
+
 
     // ✅ supprimé de Vente du jour → ne jamais afficher
-  if (isSaleHidden(a.code)) return "";
+  if (isSaleHiddenByArticle(a)) return "";
+
 
 
   // ✅ format Ajout : mobile => jj/mm/aa, sinon => jj/mm/aaaa
   const ajout = isMobileSaleUi() ? isoToFrShort(a.createdAtIso) : isoToFr(a.createdAtIso);
 
   // ✅ état plié/déplié (par défaut plié)
-  const expanded = getFoldState(isoDate, a.code);
+  const expanded = getFoldState(isoDate, articleKey);
+
 
   // ✅ Vendu du jour (quantité vendue) + avances du jour (format comme PVT)
-  const salesToday = salesTodayForCode(a.code);
+  
+const salesToday = salesTodayForArticleKey(articleKey);
+
   const venduN = sumQtySales(salesToday);
   const venduDisp = salesToday.length ? fmtResult(venduN) : "";
 
@@ -5272,7 +5315,8 @@ function saleCardHTML(a) {
       <button
         type="button"
         class="buy-cat-iconbtn"
-        data-sale-toggle="${escapeAttr(a.code)}"
+        data-sale-toggle="${escapeAttr(articleKey)}"
+
         aria-label="${expanded ? "Replier" : "Déplier"}"
         title="${expanded ? "Replier" : "Déplier"}"
         style="width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center;"
@@ -5293,7 +5337,8 @@ function saleCardHTML(a) {
       <button
         type="button"
         class="buy-cat-iconbtn"
-        data-sale-del="${escapeAttr(a.code)}"
+        data-sale-del="${escapeAttr(articleKey)}"
+
         aria-label="Supprimer"
         title="Supprimer"
         style="width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center;"
@@ -5449,7 +5494,8 @@ function buildGroupedArticles() {
     const arts = (buy.articles || [])
     .filter(a => {
             // ✅ supprimé de Vente du jour
-      if (isSaleHidden(a.code)) return false;
+      if (isSaleHiddenByArticle(a)) return false;
+
 
       if (isVisibleOnDay(a)) return true;
 
@@ -5559,11 +5605,11 @@ if (toggleBtn) {
   e.preventDefault();
   e.stopPropagation();
 
-  const code = toggleBtn.getAttribute("data-sale-toggle") || "";
+  const key = toggleBtn.getAttribute("data-sale-toggle") || "";
 
   // ✅ UI immédiate (aucun rerender)
   const card = toggleBtn.closest(".sale-card");
-  const expandedNow = card ? !card.classList.contains("is-expanded") : !getFoldState(isoDate, code);
+  const expandedNow = card ? !card.classList.contains("is-expanded") : !getFoldState(isoDate, key);
 
   if (card) {
     card.classList.toggle("is-expanded", expandedNow);
@@ -5577,7 +5623,7 @@ if (toggleBtn) {
   }
 
   // ✅ persistance sans bloquer l’UI
-  setFoldState(isoDate, code, expandedNow).catch(console.error);
+  setFoldState(isoDate, key, expandedNow).catch(console.error);
 
   return;
 }
@@ -5588,8 +5634,9 @@ if (toggleBtn) {
       e.preventDefault();
       e.stopPropagation();
 
-      const code = delBtn.getAttribute("data-sale-del") || "";
-      openDailySaleDelModal(code);
+      const key = delBtn.getAttribute("data-sale-del") || "";
+openDailySaleDelModal(key);
+
       return;
     }
   });
@@ -5632,7 +5679,8 @@ function openDailySaleDelModal(originCode) {
   if (ok) {
     ok.addEventListener("click", async () => {
       // ✅ suppression rétroactive (comme si l’article n’avait jamais existé dans les ventes)
-      deleteAllSalesForArticleRetro(originCode);
+      deleteAllSalesForArticleRetroByKey(originCode); // ici originCode = key désormais
+
 
       await safePersistNow();
       closeDailySaleDelModal();
@@ -6184,13 +6232,26 @@ if (okBtn) {
     const qty  = String(draft.qty || "").trim();
     const pv   = String(draft.pv  || "").trim();
 
-    const sale = {
-      id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
-      code,
-      qty,
-      pv,
-      ts: Date.now(),
-    };
+    const art = (buy.articles || []).find(a => !a.deletedAtIso && normSearch(a.code) === normSearch(code));
+
+const sale = {
+  id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+
+  // ✅ stable
+  articleId: art?.id || null,
+
+  // ✅ snapshots (évite mélange si article renommé / code changé)
+  codeSnap: String(art?.code || code),
+  nameSnap: String(art?.name || ""),
+
+  // legacy
+  code,
+  qty,
+  pv,
+
+  ts: Date.now(),
+};
+
     getSalesOfDay(isoDate).push(sale);
 
     delete buy.dailySaleDraftByIso[isoDate];
@@ -6791,16 +6852,24 @@ if (draft.isProv) {
   setRapForProvOnDay(provKey, isoDate, rapNew);
 
   const sale = {
-    id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
-    type: "advance",
-    subType: "rapPay",
-    code: rec.originCode,        // article réel
-    qty: "0",                    // ✅ NE TOUCHE PAS PRT/VENDU
-    pv: String(rec.pvSnap ?? ""),
-    avance,
-    provCode: rec.provCode,
-    ts: Date.now(),
-  };
+  id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+  type: "advance",
+  subType: "rapPay",
+
+  // ✅ AJOUT : stable + snapshots (issus du provisoire)
+  articleId: rec.articleId || null,
+  codeSnap: String(rec.originCode || ""),
+  nameSnap: String(rec.articleNameSnap || ""),
+
+  // legacy
+  code: rec.originCode,        // article réel
+  qty: "0",                    // ✅ NE TOUCHE PAS PRT/VENDU
+  pv: String(rec.pvSnap ?? ""),
+  avance,
+  provCode: rec.provCode,
+  ts: Date.now(),
+};
+
 
   getSalesOfDay(isoDate).push(sale);
 
@@ -6822,28 +6891,41 @@ if (draft.isProv) {
 
   // ✅ créer dossier provisoire (snapshot + rapByIso)
   buy.provByCode[normProvCode(provCode)] = {
-    provCode,
-    originCode: typed,
-    articleNameSnap: art.name || "",
-    pvSnap: pvN,
-    createdAtIso: isoDate,
-    createdAtTs: Date.now(),
-    closedAtIso: null,
-    rapByIso: { [isoDate]: rap0 }
-  };
+  provCode,
+  originCode: typed,
+
+  // ✅ AJOUT : clé stable (évite amalgame si code réutilisé)
+  articleId: art.id || null,
+
+  articleNameSnap: art.name || "",
+  pvSnap: pvN,
+  createdAtIso: isoDate,
+  createdAtTs: Date.now(),
+  closedAtIso: null,
+  rapByIso: { [isoDate]: rap0 }
+};
+
 
   const sale = {
-    id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
-    type: "advance",
-    subType: "createProv",
-    code: typed,
-    qty: "1",     // ✅ première avance = vendu +1 (PRT pris en compte)
-    pv,
-    avance,
-    provLetter: letter,
-    provCode,
-    ts: Date.now(),
-  };
+  id: "sale_" + Math.random().toString(16).slice(2) + Date.now().toString(16),
+  type: "advance",
+  subType: "createProv",
+
+  // ✅ AJOUT : stable + snapshots
+  articleId: art.id || null,
+  codeSnap: String(art.code || typed),
+  nameSnap: String(art.name || ""),
+
+  // legacy (on garde)
+  code: typed,
+  qty: "1",
+  pv,
+  avance,
+  provLetter: letter,
+  provCode,
+  ts: Date.now(),
+};
+
 
   getSalesOfDay(isoDate).push(sale);
 }
