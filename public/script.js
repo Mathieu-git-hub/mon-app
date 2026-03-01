@@ -8954,10 +8954,15 @@ if (okBtn) {
       }
 
       markBuyTouchedAndPersist();
-      await safePersistNow();
-      closeArtModal();
-      renderBuyArticlesPage(isoDate);
-      return;
+
+// ✅ 1) UI immédiate
+closeArtModal();
+renderBuyArticlesPage(isoDate);
+
+// ✅ 2) persistance après
+safePersistNow().catch(console.error);
+return;
+
     }
 
     // ✅ EDIT
@@ -8986,10 +8991,15 @@ if (okBtn) {
       }
 
       markBuyTouchedAndPersist();
-      await safePersistNow();
-      closeArtModal();
-      renderBuyArticlesPage(isoDate);
-      return;
+
+// ✅ 1) UI immédiate
+closeArtModal();
+renderBuyArticlesPage(isoDate);
+
+// ✅ 2) persistance après
+safePersistNow().catch(console.error);
+return;
+
     }
   });
 }
