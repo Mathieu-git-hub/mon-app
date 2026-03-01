@@ -8710,16 +8710,21 @@ function bindOneSimpleNum({ key, finalizedKey, inputId, validateId, modifyId }) 
 
   // ---- Valider
   if (vBtn) {
-    vBtn.addEventListener("click", async () => {
-      const v = String(draft[key] || "").trim();
-      if (!v) {
-        if (typeof shake === "function") shake(vBtn);
-        return;
-      }
-      draft[finalizedKey] = true;
-      await safePersistNow();
-      rerenderArtModalBody();
-    });
+    vBtn.addEventListener("click", () => {
+  const v = String(draft[key] || "").trim();
+  if (!v) {
+    if (typeof shake === "function") shake(vBtn);
+    return;
+  }
+
+  // ✅ 1) UI immédiate
+  draft[finalizedKey] = true;
+  rerenderArtModalBody();
+
+  // ✅ 2) persistance en arrière-plan (sans bloquer)
+  safePersistNow().catch(console.error);
+});
+
   }
 
   // ---- Modifier
