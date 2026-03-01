@@ -9109,16 +9109,18 @@ async function cascadeFrom(key, newResultNumber) {
       draft[finalizedKey] = false;
       draft[resultKey] = null;
       draft[errKey] = "";
-      await safePersistNow();
       rerenderArtModalBody();
+safePersistNow().catch(console.error);
+
       return;
     }
 
     if (typeof charsAllowedForOpInput === "function" && !charsAllowedForOpInput(raw)) {
       draft[errKey] = "Caractères invalides.";
       draft[finalizedKey] = false;
-      await safePersistNow();
       rerenderArtModalBody();
+safePersistNow().catch(console.error);
+
       return;
     }
 
@@ -9126,8 +9128,9 @@ async function cascadeFrom(key, newResultNumber) {
     if (res === null) {
       draft[errKey] = "Opération invalide.";
       draft[finalizedKey] = false;
-      await safePersistNow();
       rerenderArtModalBody();
+safePersistNow().catch(console.error);
+
       return;
     }
 
