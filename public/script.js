@@ -8887,13 +8887,17 @@ bindRajoutSuggest();
   // bouton Annuler
   const cancelBtn = document.getElementById("artCancelBtn");
   if (cancelBtn) {
-    cancelBtn.addEventListener("click", async () => {
-      if (buy.articleDraftByIso && buy.articleDraftByIso[isoDate]) {
-        delete buy.articleDraftByIso[isoDate];
-      }
-      await safePersistNow();
-      closeArtModal();
-    });
+    cancelBtn.addEventListener("click", () => {
+  // ✅ 1) fermer tout de suite (UI)
+  closeArtModal();
+
+  // ✅ 2) nettoyer + persister après (non bloquant)
+  if (buy.articleDraftByIso && buy.articleDraftByIso[isoDate]) {
+    delete buy.articleDraftByIso[isoDate];
+  }
+  safePersistNow().catch(console.error);
+});
+
   }
 
   // bouton OK (création / modification)
