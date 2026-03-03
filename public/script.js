@@ -4457,17 +4457,24 @@ function renderDailySalePage(isoDate) {
 
         <!-- ✅ Totaux globaux du jour (apparaît dès qu’il y a ≥ 1 vente) -->
     <div id="dailySaleGlobals" style="display:none; margin-top:12px;">
-      <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px;">
-        <div>
-          <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PRT global :</div>
-          <div id="dailySalePRTGlobal" class="buy-cat-white"></div>
-        </div>
-        <div>
-          <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PVT global :</div>
-          <div id="dailySalePVTGlobal" class="buy-cat-white"></div>
-        </div>
-      </div>
+  <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px;">
+    <div>
+      <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PRT global :</div>
+      <div id="dailySalePRTGlobal" class="buy-cat-white"></div>
     </div>
+    <div>
+      <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PVT global :</div>
+      <div id="dailySalePVTGlobal" class="buy-cat-white"></div>
+    </div>
+  </div>
+
+  <!-- ✅ Valeur totale : [case blanche] (ligne figée) -->
+  <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
+    <div style="font-weight:1000; opacity:.95; white-space:nowrap;">Valeur totale :</div>
+    <div id="dailySaleValeurTotalGlobal" class="buy-cat-white" style="flex:1;"></div>
+  </div>
+</div>
+
 
 
     <!-- ✅ LISTE : récapitulatifs (groupés par catégorie) -->
@@ -5079,6 +5086,8 @@ function computeGlobalsForDay(iso) {
 
   let prtGlobal = 0;
   let pvtGlobal = 0;
+  let valeurTotal = 0;
+
 
   for (const [key, list] of byKey.entries()) {
     // retrouver l’article : priorité articleId si dispo
@@ -5107,7 +5116,16 @@ function computeGlobalsForDay(iso) {
     pvtGlobal += pvSum;
   }
 
-  return { has:true, prtGlobal, pvtGlobal };
+  // ✅ Valeur (carte) = PR × Qté res du jour  ; Qté res = Qté ini du jour - Vendu du jour
+const startQtyN = computeStartQtyForDay(art, iso); // Qté ini du jour (début)
+if (Number.isFinite(pr) && Number.isFinite(startQtyN)) {
+  const resN = startQtyN - qtySum;     // Qté res du jour
+  valeurTotal += (pr * resN);
+}
+
+
+  return { has:true, prtGlobal, pvtGlobal, valeurTotal };
+
 }
 
 
@@ -5115,6 +5133,7 @@ function renderDailySaleGlobals() {
   const wrap = document.getElementById("dailySaleGlobals");
   const elPRT = document.getElementById("dailySalePRTGlobal");
   const elPVT = document.getElementById("dailySalePVTGlobal");
+  const elVAL = document.getElementById("dailySaleValeurTotalGlobal");
   if (!wrap || !elPRT || !elPVT) return;
 
   const g = computeGlobalsForDay(isoDate);
@@ -5122,12 +5141,15 @@ function renderDailySaleGlobals() {
     wrap.style.display = "none";
     elPRT.textContent = "";
     elPVT.textContent = "";
+    elVAL.textContent = "";
     return;
   }
 
   wrap.style.display = "";
-  elPRT.textContent = fmtResult(g.prtGlobal);
-  elPVT.textContent = fmtResult(g.pvtGlobal);
+elPRT.textContent = fmtResult(g.prtGlobal);
+elPVT.textContent = fmtResult(g.pvtGlobal);
+elVAL.textContent = fmtResult(g.valeurTotal); // ✅ AJOUT ICI
+
 }
 
 
