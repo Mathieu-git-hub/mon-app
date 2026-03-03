@@ -5073,9 +5073,8 @@ function prtExpressionForToday(article) {
 // ===============================
 function computeGlobalsForDay(iso) {
   const sales = getSalesOfDay(iso);
-  if (!sales.length) return { has:false, prtGlobal:0, pvtGlobal:0 };
 
-  // ✅ regroupe par clé stable (id:xxx ou code:xxx legacy)
+  // ✅ regroupe les ventes du jour par clé stable
   const byKey = new Map();
   for (const s of sales) {
     const k = saleArticleKeyFromSale(s);
@@ -5086,18 +5085,15 @@ function computeGlobalsForDay(iso) {
 
   let prtGlobal = 0;
   let pvtGlobal = 0;
-  let valeurTotal = 0;
 
-
+  // ✅ PRT/PVT globaux = uniquement basé sur les ventes du jour
   for (const [key, list] of byKey.entries()) {
-    // retrouver l’article : priorité articleId si dispo
     let art = null;
 
     if (key.startsWith("id:")) {
       const id = key.slice(3);
       art = (buy.articles || []).find(a => !a.deletedAtIso && String(a.id) === String(id));
     } else {
-      // legacy par code si vieux historiques
       const codeNorm = key.startsWith("code:") ? key.slice(5) : saleNormCode(key);
       art = (buy.articles || []).find(a => !a.deletedAtIso && saleNormCode(a.code) === codeNorm);
     }
@@ -5105,30 +5101,62 @@ function computeGlobalsForDay(iso) {
     if (!art) continue;
 
     const pr = Number(art.prResult);
-
-    // ✅ qtySum respecte ta règle createProv qty=1 / rapPay qty=0
-    const qtySum = sumQtySales(list);
-
-    // ✅ PVT = ventes + avances
-    const pvSum = sumPvtEntries(list);
+    const qtySum = sumQtySales(list);      // vendu du jour (selon tes règles)
+    const pvSum  = sumPvtEntries(list);    // PVT (ventes + avances)
 
     if (Number.isFinite(pr)) prtGlobal += pr * qtySum;
     pvtGlobal += pvSum;
-
-    // ✅ Valeur (carte) = PR × Qté res du jour  ; Qté res = Qté ini du jour - Vendu du jour
-const startQtyN = computeStartQtyForDay(art, iso); // Qté ini du jour (début)
-if (Number.isFinite(pr) && Number.isFinite(startQtyN)) {
-  const resN = startQtyN - qtySum;     // Qté res du jour
-  valeurTotal += (pr * resN);
-}
   }
 
-  
+  // ✅ Valeur totale = somme des "Valeur" de TOUS les articles présents dans Vente du jour
+  // (donc pas seulement ceux qui ont eu des ventes)
+  let valeurTotal = 0;
 
+  const arts = (buy.articles || []).filter(a => {
+    // mêmes exclusions que ta page
+    if (a.deletedAtIso) {
+      // supprimé le même jour ou avant => pas présent
+      const dts = isoToDayTs(a.deletedAtIso);
+      if (Number.isFinite(dts) && dts <= isoToDayTs(iso)) return false;
+    }
 
-  return { has:true, prtGlobal, pvtGlobal, valeurTotal };
+    // masqué dans Vente du jour => pas présent
+    if (isSaleHiddenByArticle(a)) return false;
 
+    // visible par date (créé avant ou le même jour)
+    const cts = isoToDayTs(a.createdAtIso);
+    if (!Number.isFinite(cts) || cts > isoToDayTs(iso)) return false;
+
+    // règle stock + provisoires (comme ton buildGroupedArticles)
+    const provs = activeProvRecordsForOriginOnDay(a.code, iso);
+    if (provs.length > 0) return true;
+
+    const startQty = computeStartQtyForDay(a, iso);
+    const hasStock = Number.isFinite(startQty) ? (startQty > 0) : true;
+    return hasStock;
+  });
+
+  for (const a of arts) {
+    const prN = Number(a.prResult);
+    if (!Number.isFinite(prN)) continue;
+
+    const articleKey = saleArticleKeyFromArticle(a);
+    const salesToday = salesOfDayForArticleKey(iso, articleKey); // peut être vide
+    const venduN = sumQtySales(salesToday); // 0 si aucune vente
+
+    const startQtyN = computeStartQtyForDay(a, iso);
+    if (!Number.isFinite(startQtyN)) continue;
+
+    const resN = startQtyN - venduN;  // Qté res du jour
+    valeurTotal += (prN * resN);
+  }
+
+  // ✅ "has" reste basé sur l'existence de ventes (comme ton affichage actuel des globals)
+  const has = sales.length > 0;
+
+  return { has, prtGlobal, pvtGlobal, valeurTotal };
 }
+
 
 
 function renderDailySaleGlobals() {
