@@ -5114,14 +5114,16 @@ function computeGlobalsForDay(iso) {
 
     if (Number.isFinite(pr)) prtGlobal += pr * qtySum;
     pvtGlobal += pvSum;
-  }
 
-  // ✅ Valeur (carte) = PR × Qté res du jour  ; Qté res = Qté ini du jour - Vendu du jour
+    // ✅ Valeur (carte) = PR × Qté res du jour  ; Qté res = Qté ini du jour - Vendu du jour
 const startQtyN = computeStartQtyForDay(art, iso); // Qté ini du jour (début)
 if (Number.isFinite(pr) && Number.isFinite(startQtyN)) {
   const resN = startQtyN - qtySum;     // Qté res du jour
   valeurTotal += (pr * resN);
 }
+  }
+
+  
 
 
   return { has:true, prtGlobal, pvtGlobal, valeurTotal };
@@ -5134,7 +5136,8 @@ function renderDailySaleGlobals() {
   const elPRT = document.getElementById("dailySalePRTGlobal");
   const elPVT = document.getElementById("dailySalePVTGlobal");
   const elVAL = document.getElementById("dailySaleValeurTotalGlobal");
-  if (!wrap || !elPRT || !elPVT) return;
+  if (!wrap || !elPRT || !elPVT || !elVAL) return;
+
 
   const g = computeGlobalsForDay(isoDate);
   if (!g.has) {
