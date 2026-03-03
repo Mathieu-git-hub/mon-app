@@ -5305,6 +5305,28 @@ function kv(label, value) {
   `;
 }
 
+// ✅ kv avec mise en rouge optionnelle de la "case blanche" si valeur non vide
+function kvRedIfValue(label, value) {
+  const has = String(value || "").trim().length > 0;
+
+  // rouge uniquement si valeur
+  const extraStyle = has
+    ? "background:#ff3b30; color:#fff; border-color:rgba(255,255,255,0.65);"
+    : "";
+
+  return `
+    <div style="min-width:0; display:flex; align-items:center; gap:8px;">
+      <div style="font-weight:900; opacity:.95; white-space:nowrap; flex:0 0 auto;">
+        ${escapeHtml(label)} :
+      </div>
+      <div class="buy-cat-white" style="flex:1 1 auto; min-width:0; ${extraStyle}">
+        ${escapeHtml(value || "")}
+      </div>
+    </div>
+  `;
+}
+
+
 
 
 function saleCardHTML(a) {
