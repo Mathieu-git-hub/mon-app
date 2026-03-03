@@ -5541,6 +5541,12 @@ const salesToday = salesTodayForArticleKey(articleKey);
     <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
       ${kv("PVT", pvtLineDisplay)}
     </div>
+
+    <div style="height:10px;"></div>
+<div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+  ${kv("Valeur", valeurDisplay)}
+</div>
+
   `;
 
     return `
