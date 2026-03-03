@@ -5431,7 +5431,7 @@ const salesToday = salesTodayForArticleKey(articleKey);
   // ✅ RECTANGLE PLIÉ : seulement "Vendu: [case blanche]"
   const foldedBody = `
     <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
-      ${kv("Vendu", venduLineText)}
+      ${kvRedIfValue("Vendu", venduLineText)}
     </div>
   `;
 
