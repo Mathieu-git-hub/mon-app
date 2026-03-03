@@ -5449,6 +5449,14 @@ const salesToday = salesTodayForArticleKey(articleKey);
   const resN = (Number.isFinite(startQtyN) ? startQtyN : 0) - (Number.isFinite(venduN) ? venduN : 0);
   const qteRes = Number.isFinite(startQtyN) ? fmtResult(resN) : "";
 
+  // ✅ VALEUR = PR × Qté res (du même jour) — évolutif
+const prN = Number(a.prResult);
+const valeurN = (Number.isFinite(prN) && Number.isFinite(startQtyN)) ? (prN * resN) : NaN;
+const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
+  ? `${fmtResult(prN)} × ${fmtResult(resN)} = ${fmtResult(valeurN)}`
+  : "";
+
+
   const prt = prtExpressionForToday(a);
   const pvt = pvtExpressionForToday(articleKey);
 
