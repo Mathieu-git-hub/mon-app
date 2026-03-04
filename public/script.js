@@ -4455,24 +4455,28 @@ function renderDailySalePage(isoDate) {
       <span>+</span>
     </button>
 
-        <!-- ✅ Totaux globaux du jour (apparaît dès qu’il y a ≥ 1 vente) -->
-    <div id="dailySaleGlobals" style="display:none; margin-top:12px;">
-  <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px;">
+        <!-- ✅ Totaux globaux du jour -->
+<div id="dailySaleGlobals" style="display:none; margin-top:12px;">
+
+  <!-- ✅ PRT / PVT (affichés seulement s'il y a des ventes) -->
+  <div id="dailySalePRTPVTWrap" style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px;">
     <div>
       <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PRT global :</div>
       <div id="dailySalePRTGlobal" class="buy-cat-white"></div>
     </div>
+
     <div>
       <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">PVT global :</div>
       <div id="dailySalePVTGlobal" class="buy-cat-white"></div>
     </div>
   </div>
 
-  <!-- ✅ Valeur totale : [case blanche] (ligne figée) -->
+  <!-- ✅ Valeur totale (toujours visible) -->
   <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
     <div style="font-weight:1000; opacity:.95; white-space:nowrap;">Valeur totale :</div>
     <div id="dailySaleValeurTotalGlobal" class="buy-cat-white" style="flex:1;"></div>
   </div>
+
 </div>
 
 
@@ -5161,27 +5165,47 @@ function computeGlobalsForDay(iso) {
 
 function renderDailySaleGlobals() {
   const wrap = document.getElementById("dailySaleGlobals");
+  const prtpvtWrap = document.getElementById("dailySalePRTPVTWrap");
+
   const elPRT = document.getElementById("dailySalePRTGlobal");
   const elPVT = document.getElementById("dailySalePVTGlobal");
   const elVAL = document.getElementById("dailySaleValeurTotalGlobal");
-  if (!wrap || !elPRT || !elPVT || !elVAL) return;
 
+  if (!wrap || !prtpvtWrap || !elPRT || !elPVT || !elVAL) return;
 
+  // ✅ Valeur totale doit toujours être visible (même sans ventes)
+  wrap.style.display = "";
+
+  // 1) PRT/PVT : logique inchangée (basée sur les ventes du jour)
   const g = computeGlobalsForDay(isoDate);
+
   if (!g.has) {
-    wrap.style.display = "none";
+    // pas de ventes => on cache seulement PRT/PVT
+    prtpvtWrap.style.display = "none";
     elPRT.textContent = "";
     elPVT.textContent = "";
-    elVAL.textContent = "";
-    return;
+  } else {
+    // ventes => on affiche PRT/PVT
+    prtpvtWrap.style.display = "grid";
+    elPRT.textContent = fmtResult(g.prtGlobal);
+    elPVT.textContent = fmtResult(g.pvtGlobal);
   }
 
-  wrap.style.display = "";
-elPRT.textContent = fmtResult(g.prtGlobal);
-elPVT.textContent = fmtResult(g.pvtGlobal);
-elVAL.textContent = fmtResult(g.valeurTotal); // ✅ AJOUT ICI
+  // 2) Valeur totale : doit toujours s'afficher
+  //    et doit être 0 quand aucun article n'apparait
+  let v = 0;
+  if (typeof computeValeurTotalForDay === "function") {
+    v = computeValeurTotalForDay(isoDate);
+  } else if (g && Number.isFinite(g.valeurTotal)) {
+    v = g.valeurTotal;
+  } else {
+    v = 0;
+  }
 
+  // si aucun article "présent", computeValeurTotalForDay doit déjà renvoyer 0.
+  elVAL.textContent = fmtResult(Number.isFinite(v) ? v : 0);
 }
+
 
 
 // ---- helpers date robustes
