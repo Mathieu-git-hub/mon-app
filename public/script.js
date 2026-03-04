@@ -4879,6 +4879,17 @@ function sumQtySales(list) {
   }, 0);
 }
 
+// ✅ Vendu "normal" = somme des quantités des ventes qui ne sont PAS des avances
+function sumNormalSoldQty(list) {
+  return (list || []).reduce((acc, s) => {
+    if (!s) return acc;
+    if (s.type === "advance") return acc; // ✅ exclut createProv & rapPay
+    const q = parseLooseNumber(s.qty);
+    return acc + (Number.isFinite(q) ? q : 0);
+  }, 0);
+}
+
+
 function sumPvSales(list) {
   return list.reduce((acc, s) => {
     const p = parseLooseNumber(s.pv);
@@ -5429,25 +5440,29 @@ function saleCardHTML(a) {
   
 const salesToday = salesTodayForArticleKey(articleKey);
 
-  const venduN = sumQtySales(salesToday);
-  const venduDisp = salesToday.length ? fmtResult(venduN) : "";
+// ✅ vendu affiché = uniquement ventes normales (pas les avances)
+const venduNormalN = sumNormalSoldQty(salesToday);
+const venduNormalDisp = (Number.isFinite(venduNormalN) && venduNormalN > 0) ? fmtResult(venduNormalN) : "";
 
-  const advancesToday = (salesToday || [])
-    .filter(s => s && s.type === "advance")
-    .map(s => {
-      const aN = parseLooseNumber(s.avance);
-      if (!Number.isFinite(aN) || aN <= 0) return null;
-      const pc = String(s.provCode || "").trim();
-      const part = fmtResult(aN);
-      return pc ? `${part} (${escapeHtml(pc)})` : part;
-    })
-    .filter(Boolean);
+// avances du jour (inchangé)
+const advancesToday = (salesToday || [])
+  .filter(s => s && s.type === "advance")
+  .map(s => {
+    const aN = parseLooseNumber(s.avance);
+    if (!Number.isFinite(aN) || aN <= 0) return null;
+    const pc = String(s.provCode || "").trim();
+    const part = fmtResult(aN);
+    return pc ? `${part} (${escapeHtml(pc)})` : part;
+  })
+  .filter(Boolean);
 
-  const venduLineParts = [];
-  if (venduDisp) venduLineParts.push(venduDisp);
-  if (advancesToday.length) venduLineParts.push(...advancesToday);
+// ✅ assemblage : le chiffre "vendu" n'apparaît QUE si vente normale > 0
+const venduLineParts = [];
+if (venduNormalDisp) venduLineParts.push(venduNormalDisp);
+if (advancesToday.length) venduLineParts.push(...advancesToday);
 
-  const venduLineText = venduLineParts.join(" + ");
+const venduLineText = venduLineParts.join(" + ");
+
 
   // ✅ provisoires actifs (pour le cas stock=0)
   const startQtyN_top = computeStartQtyForDay(a, isoDate);
@@ -5521,7 +5536,8 @@ const salesToday = salesTodayForArticleKey(articleKey);
   const startQtyN = startQtyN_top;
   const qteIni = fmtWhite(a.qty || "");
 
-  const vendu = salesToday.length ? fmtResult(venduN) : "";
+  const vendu = venduNormalDisp; // ✅ affiche seulement les ventes normales
+
 
   const resN = (Number.isFinite(startQtyN) ? startQtyN : 0) - (Number.isFinite(venduN) ? venduN : 0);
   const qteRes = Number.isFinite(startQtyN) ? fmtResult(resN) : "";
