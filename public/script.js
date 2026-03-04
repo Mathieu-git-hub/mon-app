@@ -5440,6 +5440,9 @@ function saleCardHTML(a) {
   
 const salesToday = salesTodayForArticleKey(articleKey);
 
+const venduN = sumQtySales(salesToday); // ✅ logique interne (inclut createProv qty=1 si c'est ta règle)
+
+
 // ✅ vendu affiché = uniquement ventes normales (pas les avances)
 const venduNormalN = sumNormalSoldQty(salesToday);
 const venduNormalDisp = (Number.isFinite(venduNormalN) && venduNormalN > 0) ? fmtResult(venduNormalN) : "";
