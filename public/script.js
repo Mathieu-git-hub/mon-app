@@ -520,12 +520,15 @@ function getDailyData(isoDate) {
       capital: "",
       capitalFinalized: false,
 
-      // ✅ Apport (comme prélèvements)
+            // ✅ Apport (comme prélèvements)
       apport: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
 
+      // ✅ Apport caisse (comme prélèvements)
+      apportCaisse: { items: [], editing: false, finalized: false, draft: "", editIndex: null, editDraft: "", editBackup: null },
 
       caisseDepart: "",
       caisseDepartFinalized: false,
+
 
       nouvelleCaisse: "",
       nouvelleCaisseFinalized: false,
@@ -641,16 +644,54 @@ function getDailyData(isoDate) {
     }
   }
 
-  if (!d.prelevementCaisse) {
-    d.prelevementCaisse = { items: [], editing: false, finalized: false, draft: "" };
+   if (!d.prelevementCaisse) {
+    d.prelevementCaisse = {
+      items: [],
+      editing: false,
+      finalized: false,
+      draft: "",
+      editIndex: null,
+      editDraft: "",
+      editBackup: null
+    };
   }
+
   if (!d.prelevement) {
-    d.prelevement = { items: [], editing: false, finalized: false, draft: "" };
+    d.prelevement = {
+      items: [],
+      editing: false,
+      finalized: false,
+      draft: "",
+      editIndex: null,
+      editDraft: "",
+      editBackup: null
+    };
   }
-  
+
   if (!d.apport) {
-  d.apport = { items: [], editing: false, finalized: false, draft: "" };
+    d.apport = {
+      items: [],
+      editing: false,
+      finalized: false,
+      draft: "",
+      editIndex: null,
+      editDraft: "",
+      editBackup: null
+    };
   }
+
+  if (!d.apportCaisse) {
+    d.apportCaisse = {
+      items: [],
+      editing: false,
+      finalized: false,
+      draft: "",
+      editIndex: null,
+      editDraft: "",
+      editBackup: null
+    };
+  }
+
 
 
   // ✅ migration dépenses
@@ -2150,10 +2191,12 @@ function renderDailyDayPage(isoDate) {
   }
 
 
-  const pApport = data.apport;
+    const pApport = data.apport;
   const pCap = data.prelevement;
+  const pApportCaisse = data.apportCaisse;
   const pCaisse = data.prelevementCaisse;
   const pDep = data.depenses; // ✅ Dépenses = pile comme prélèvements
+
 
   const depensesWeekTotal = computeWeeklyDepensesTotal(isoDate);
   const apportWeekTotal = computeWeeklyApportTotal(isoDate);
@@ -2555,13 +2598,15 @@ const ncInputHTML = `
       data.beneficeReelFinalized &&
       data.nouvelleLiquiditeFinalized;
 
-    const requiredRecorded =
+        const requiredRecorded =
      pApport.finalized &&
      pCap.finalized &&
+     pApportCaisse.finalized &&
      pCaisse.finalized &&
      pDep.finalized &&
      nc.finalized &&
      data.nouvelleCaisseReelleFinalized; // ✅ champ simple
+
 
 
     return !!(requiredFinalized && requiredRecorded);
@@ -2583,16 +2628,41 @@ const ncInputHTML = `
 
   const migrateEligible = computeMigrateEligible();
 
-  // ✅ caisse départ après prélèvement (affiché seulement après Enregistrer, si total ≠ 0)
+    // ✅ caisse départ
   const caisseDepartNum = toNumberLoose(data.caisseDepart || "0") ?? 0;
-  const prelevCaisseTotal = computePrelevementTotal((pCaisse && pCaisse.items) ? pCaisse.items : []);
-  
+
+  // ✅ apport caisse total
+  const apportCaisseTotal = computePrelevementTotal(
+    (pApportCaisse && pApportCaisse.items) ? pApportCaisse.items : []
+  );
+
+  const showCaisseDepartAfterApport =
+    !!pApportCaisse?.finalized &&
+    Math.abs(apportCaisseTotal) > 0.0000001;
+
+  // ✅ caisse départ après apport
+  const caisseDepartAfterApport = caisseDepartNum + apportCaisseTotal;
+
+  // ✅ prélèvement sur caisse total
+  const prelevCaisseTotal = computePrelevementTotal(
+    (pCaisse && pCaisse.items) ? pCaisse.items : []
+  );
+
   const showCaisseDepartAfterPrelev =
-  !!pCaisse?.finalized &&
-  Math.abs(prelevCaisseTotal) > 0.0000001;
+    !!pCaisse?.finalized &&
+    Math.abs(prelevCaisseTotal) > 0.0000001;
 
+  // ✅ base de calcul pour le prélèvement sur caisse :
+  // - si apport caisse existe => on prélève depuis "caisse départ après apport"
+  // - sinon => on prélève depuis "caisse départ"
+  const baseCaisseForPrelev = showCaisseDepartAfterApport
+    ? caisseDepartAfterApport
+    : caisseDepartNum;
 
-  const caisseDepartAfter = caisseDepartNum - prelevCaisseTotal;
+  const caisseDepartAfter = baseCaisseForPrelev - prelevCaisseTotal;
+
+  
+  
 
     // ✅ capital après prélèvement (affiché si prélèvement sur capital terminé et total ≠ 0)
   
@@ -2604,7 +2674,12 @@ const ncInputHTML = `
   // ===============================
   const pvtGlobalN = (saleG && saleG.has) ? Number(saleG.pvtGlobal) : NaN;
 
-  const caisseBaseForNcTheo = showCaisseDepartAfterPrelev ? caisseDepartAfter : caisseDepartNum;
+    const caisseBaseForNcTheo = showCaisseDepartAfterPrelev
+    ? caisseDepartAfter
+    : showCaisseDepartAfterApport
+      ? caisseDepartAfterApport
+      : caisseDepartNum;
+
 
   const ncTheoN =
     (Number.isFinite(pvtGlobalN) && Number.isFinite(caisseBaseForNcTheo))
@@ -2657,8 +2732,16 @@ function buildOverlaySearchItems() {
     ? capBase
     : capitalAfter;
 
+    const apC = (pApportCaisse?.finalized) ? apportCaisseTotal : 0;
   const prC = (pCaisse?.finalized) ? prelevCaisseTotal : 0;
-  const caisseShown = (Math.abs(prC) < 1e-9) ? cdBase : caisseDepartAfter;
+
+  const caisseShown =
+    (Math.abs(prC) >= 1e-9)
+      ? caisseDepartAfter
+      : (Math.abs(apC) >= 1e-9)
+        ? caisseDepartAfterApport
+        : cdBase;
+
 
   function valOrDots(isOk, valueNumber) {
     return isOk ? formatCommaNumber(valueNumber ?? 0) : "(...)";
@@ -2886,17 +2969,38 @@ ${
             }
           </div>
 
+                    <!-- APPORT CAISSE -->
+          ${renderPrelevementSectionHTML(pApportCaisse, "apportCaisse", "Apport caisse", rowClass, data.daySaved)}
+
+          ${
+            showCaisseDepartAfterApport
+              ? `
+                <div class="${rowClass}">
+                  <div class="label">Caisse départ après apport :</div>
+                  <div class="total-row">
+                    <div class="card card-white lift">
+                      ${escapeHtml(formatInputNumberDisplay(data.caisseDepart || "0"))}
+                      + ${formatCommaNumber(apportCaisseTotal)}
+                      = ${formatCommaNumber(caisseDepartAfterApport)}
+                    </div>
+                  </div>
+                </div>
+              `
+              : ``
+          }
+
+
                     <!-- PRÉLÈVEMENT SUR CAISSE -->
           ${renderPrelevementSectionHTML(pCaisse, "prelevCaisse", "Prélèvement sur caisse", rowClass, data.daySaved)}
 
-          ${
+                    ${
             showCaisseDepartAfterPrelev
              ? `
                <div class="${rowClass}">
                 <div class="label">Caisse départ après prélèvement :</div>
                 <div class="total-row">
                  <div class="card card-white lift">
-                  ${escapeHtml(formatInputNumberDisplay(data.caisseDepart || "0"))}
+                  ${formatCommaNumber(baseCaisseForPrelev)}
                   - ${formatCommaNumber(prelevCaisseTotal)}
                   = ${formatCommaNumber(caisseDepartAfter)}
                  </div>
@@ -2905,6 +3009,7 @@ ${
              `
             : ``
           }
+
 
 
         
@@ -3286,10 +3391,12 @@ if (backBtn) backBtn.addEventListener("click", () => smartBack());
   // -------------------------
   // ✅ Prélèvements + Dépenses
   // -------------------------
-  bindPrelevementHandlers(pDep, "depenses", isoDate, markDirty);
+    bindPrelevementHandlers(pDep, "depenses", isoDate, markDirty);
   bindPrelevementHandlers(pApport, "apport", isoDate, markDirty);
   bindPrelevementHandlers(pCap, "prelevCap", isoDate, markDirty);
+  bindPrelevementHandlers(pApportCaisse, "apportCaisse", isoDate, markDirty);
   bindPrelevementHandlers(pCaisse, "prelevCaisse", isoDate, markDirty);
+
 
   // -------------------------
   // ✅ Opérations (Recette / NL / Bénéfice réel)
