@@ -720,6 +720,32 @@ function getDailyData(isoDate) {
     }
   }
 
+    function normalizePrelevementItems(stack) {
+    if (!stack || !Array.isArray(stack.items)) return;
+
+    stack.items = stack.items.map((it) => {
+      if (it && typeof it === "object" && !Array.isArray(it)) {
+        if (it.value == null) it.value = "";
+        if (it.tag == null) it.tag = "";
+        if (it.label == null) it.label = "";
+        return it;
+      }
+
+      return {
+        value: it,
+        tag: "",
+        label: ""
+      };
+    });
+  }
+
+  normalizePrelevementItems(d.apport);
+  normalizePrelevementItems(d.prelevement);
+  normalizePrelevementItems(d.prelevementCaisse);
+  normalizePrelevementItems(d.depenses);
+  if (d.apportCaisse) normalizePrelevementItems(d.apportCaisse);
+
+
   return d;
 }
 // ===============================
@@ -729,12 +755,20 @@ function getDailyData(isoDate) {
 
 function computePrelevementTotal(items) {
   let sum = 0;
-  for (const it of items) {
-    const n = toNumberLoose(it);
+
+  for (const it of (items || [])) {
+    const raw =
+      (it && typeof it === "object" && !Array.isArray(it))
+        ? it.value
+        : it;
+
+    const n = toNumberLoose(raw);
     if (n !== null) sum += n;
   }
+
   return sum;
 }
+
 
 function formatTotal(n) {
   if (!Number.isFinite(n)) return "0";
@@ -1875,23 +1909,40 @@ function renderPrelevementSectionHTML(p, prefix, label, rowClass, daySaved) {
             : `
               <div class="prelev-items" id="${prefix}Items" ${itemsContainerStyle}>
                ${p.items
-                .map(
-                  (val, idx) => `
-                   <div
-                    class="card card-white lift"
-                    data-prelev-edit="${prefix}:${idx}"
-                    ${forceColumn ? `style="width:100%; cursor:${p.editIndex === null ? "pointer" : "default"};"` : `style="cursor:${p.editIndex === null ? "pointer" : "default"};"`}
-                  >
-                    ${escapeHtml(formatNumberTextFR(val))}
-                    ${
-                     (!p.finalized && (p.editIndex === null))
-                      ? `<button class="close-x" data-prelev-del="${prefix}:${idx}" title="Supprimer">×</button>`
-                      : ``
-                    }
-                  </div>
-                `
-              )
-              .join("")}
+  .map((item, idx) => {
+    const isObj = item && typeof item === "object" && !Array.isArray(item);
+    const rawValue = isObj ? (item.value ?? "") : item;
+    const tag = isObj ? (item.tag || "") : "";
+    const storedLabel = isObj ? (item.label || "") : "";
+    const isExtra = tag === "depenses-extraordinaires";
+
+    const extraLabel = storedLabel
+      ? `<div class="prelev-item-label">${escapeHtml(storedLabel)}</div>`
+      : ``;
+
+    const cardClasses = `card lift ${isExtra ? "card-extraordinary" : "card-white"}`;
+    const baseStyle = forceColumn
+      ? `width:100%; cursor:${p.editIndex === null ? "pointer" : "default"};`
+      : `cursor:${p.editIndex === null ? "pointer" : "default"};`;
+
+    return `
+      <div
+        class="${cardClasses}"
+        data-prelev-edit="${prefix}:${idx}"
+        style="${baseStyle}"
+      >
+        ${extraLabel}
+        ${escapeHtml(formatNumberTextFR(rawValue))}
+        ${
+          (!p.finalized && (p.editIndex === null))
+            ? `<button class="close-x" data-prelev-del="${prefix}:${idx}" title="Supprimer">×</button>`
+            : ``
+        }
+      </div>
+    `;
+  })
+  .join("")}
+
 
 
                 ${
@@ -2110,47 +2161,134 @@ function bindPrelevementHandlers(p, prefix, isoDate, onDirty) {
     });
   });
   
-  // ✅ Clic sur une case blanche -> édition de cette valeur (sans déplacer)
+    // ✅ Clic sur une case blanche -> ouvre une modale d'actions
   app.querySelectorAll("[data-prelev-edit]").forEach((card) => {
-   const payload = card.getAttribute("data-prelev-edit") || "";
-   const [pfx, idxStr] = payload.split(":");
-   if (pfx !== prefix) return;
+    const payload = card.getAttribute("data-prelev-edit") || "";
+    const [pfx, idxStr] = payload.split(":");
+    if (pfx !== prefix) return;
 
-   card.addEventListener("click", async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+    card.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const idx = Number(idxStr);
-    if (!Number.isFinite(idx)) return;
+      const idx = Number(idxStr);
+      if (!Number.isFinite(idx)) return;
 
-    // ✅ si déjà en édition : on bloque les autres
-    if (p.editIndex !== null) return;
+      // ✅ si déjà en édition : on bloque les autres
+      if (p.editIndex !== null) return;
 
-    // ✅ snapshot pour Annuler
-    p.editBackup = {
-     items: (p.items || []).slice(),
-     draft: p.draft || "",
-     editing: !!p.editing,
-     finalized: !!p.finalized
-   };
+      openPrelevementItemActionModal({
+        onModify: async () => {
+          // ✅ snapshot pour Annuler
+          p.editBackup = {
+            items: (p.items || []).slice(),
+            draft: p.draft || "",
+            editing: !!p.editing,
+            finalized: !!p.finalized
+          };
 
+          const currentItem = p.items[idx];
+          const rawValue =
+            (currentItem && typeof currentItem === "object" && !Array.isArray(currentItem))
+              ? (currentItem.value ?? "")
+              : currentItem;
 
-    p.editIndex = idx;
-    p.editDraft = String(p.items[idx] ?? "");
-    p.draft = ""; // on vide le draft normal
+          p.editIndex = idx;
+          p.editDraft = String(rawValue ?? "");
+          p.draft = "";
 
-    if (input) {
-      input.value = p.editDraft;
-      input.focus();
-    }
+          if (typeof onDirty === "function") onDirty();
+          await safePersistNow();
+          renderDailyDayPage(isoDate);
+        },
 
-    if (typeof onDirty === "function") onDirty();
-    await safePersistNow();
-    renderDailyDayPage(isoDate);
+        onExtraordinary: async () => {
+          const currentItem = p.items[idx];
+
+          if (currentItem && typeof currentItem === "object" && !Array.isArray(currentItem)) {
+            currentItem.tag = "depenses-extraordinaires";
+            currentItem.label = "Dépenses extraordinaires";
+          } else {
+            p.items[idx] = {
+              value: currentItem,
+              tag: "depenses-extraordinaires",
+              label: "Dépenses extraordinaires"
+            };
+          }
+
+          if (typeof onDirty === "function") onDirty();
+          await safePersistNow();
+          renderDailyDayPage(isoDate);
+        },
+
+        onAnnotate: async () => {
+          // laissé de côté pour le moment
+        }
+      });
+    });
   });
-});
+
 
 }
+
+function openPrelevementItemActionModal({ onModify, onExtraordinary, onAnnotate }) {
+  const old = document.getElementById("prelev-item-action-overlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "prelev-item-action-overlay";
+
+  overlay.innerHTML = `
+    <div class="prelev-item-action-backdrop"></div>
+    <div class="prelev-item-action-modal">
+      <button id="prelevActionModify" class="prelev-action-btn" type="button">Modifier</button>
+      <button id="prelevActionExtra" class="prelev-action-btn" type="button">Dépenses extraordinaires</button>
+      <button id="prelevActionAnnotate" class="prelev-action-btn" type="button">Annoter</button>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  function closeModal() {
+    overlay.remove();
+    document.removeEventListener("keydown", escHandler);
+  }
+
+  function escHandler(e) {
+    if (e.key === "Escape") closeModal();
+  }
+
+  document.addEventListener("keydown", escHandler);
+
+  const backdrop = overlay.querySelector(".prelev-item-action-backdrop");
+  if (backdrop) backdrop.addEventListener("click", closeModal);
+
+  const modifyBtn = document.getElementById("prelevActionModify");
+  const extraBtn = document.getElementById("prelevActionExtra");
+  const annotateBtn = document.getElementById("prelevActionAnnotate");
+
+  if (modifyBtn) {
+    modifyBtn.addEventListener("click", async () => {
+      closeModal();
+      if (typeof onModify === "function") await onModify();
+    });
+  }
+
+  if (extraBtn) {
+    extraBtn.addEventListener("click", async () => {
+      closeModal();
+      if (typeof onExtraordinary === "function") await onExtraordinary();
+    });
+  }
+
+  if (annotateBtn) {
+    annotateBtn.addEventListener("click", async () => {
+      closeModal();
+      if (typeof onAnnotate === "function") await onAnnotate();
+    });
+  }
+}
+
 
 // ===============================
 // ✅ DÉBUT — renderDailyDayPage(isoDate)
@@ -4376,13 +4514,25 @@ function doPrelevValidate(p, prefix, isoDate, onDirty) {
   const normalized = raw.replace(/\s+/g, "").replace(",", ".");
 
   if (p.editIndex !== null && Number.isFinite(p.editIndex)) {
-    // ✅ ÉDITION : remplace sans déplacer
-    p.items[p.editIndex] = normalized;
+    // ✅ ÉDITION : remplace sans perdre le tag/libellé existant
+    const oldItem = p.items[p.editIndex];
+    const oldIsObj = oldItem && typeof oldItem === "object" && !Array.isArray(oldItem);
+
+    p.items[p.editIndex] = {
+      value: normalized,
+      tag: oldIsObj ? (oldItem.tag || "") : "",
+      label: oldIsObj ? (oldItem.label || "") : ""
+    };
+
     p.editIndex = null;
     p.editDraft = "";
   } else {
     // ✅ AJOUT : le plus récent vers la droite
-    p.items.push(normalized);
+    p.items.push({
+      value: normalized,
+      tag: "",
+      label: ""
+    });
     p.draft = "";
   }
 
@@ -4392,6 +4542,7 @@ function doPrelevValidate(p, prefix, isoDate, onDirty) {
   if (typeof onDirty === "function") onDirty();
   renderDailyDayPage(isoDate);
 }
+
 
 
 // --------- PAGES "HEBDO/ACHAT" (provisoire) ---------
