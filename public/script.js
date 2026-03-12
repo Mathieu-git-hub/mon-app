@@ -6478,74 +6478,77 @@ function openDailySaleEditModal(articleKey, cardWidthPx = 0) {
       <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
         <div style="display:flex; flex-direction:column; gap:12px;">
           ${rows.map((row, idx) => {
-            // ✅ consigne la plus récente :
-            // - case gauche = Quantité (vente) / Avance (avance)
-            // - case droite = PV
-            const cols = (row.kind === "advance") ? "1fr 1fr" : "1fr 3fr";
+  // ✅ correction :
+  // - case gauche = PV
+  // - case droite = Quantité (vente) / Avance (avance)
+  // largeur :
+  // - vente normale => gauche 3/4, droite 1/4
+  // - avance => 1/2 - 1/2
+  const cols = (row.kind === "advance") ? "1fr 1fr" : "3fr 1fr";
 
-            const leftTitle  = row.kind === "advance" ? "Avance" : "Quantité";
-            const rightTitle = "PV";
+  const leftTitle  = "PV";
+  const rightTitle = row.kind === "advance" ? "Avance" : "Quantité";
 
-            const leftField  = row.kind === "advance" ? "avance" : "qty";
-            const rightField = "pv";
+  const leftField  = "pv";
+  const rightField = row.kind === "advance" ? "avance" : "qty";
 
-            const leftValue = row.kind === "advance"
-              ? fmtWhite(row.avance)
-              : fmtWhite(row.qty);
+  const leftValue = fmtWhite(row.pv);
+  const rightValue = row.kind === "advance"
+    ? fmtWhite(row.avance)
+    : fmtWhite(row.qty);
 
-            const rightValue = fmtWhite(row.pv);
+  const idsAttr = escapeAttr((row.saleIds || []).join(","));
+  const provAttr = escapeAttr(row.provCode || "");
 
-            const idsAttr = escapeAttr((row.saleIds || []).join(","));
-            const provAttr = escapeAttr(row.provCode || "");
+  return `
+    <div
+      class="daily-sale-edit-row"
+      data-sale-row-index="${idx}"
+      data-sale-row-kind="${escapeAttr(row.kind)}"
+      data-sale-ids="${idsAttr}"
+      data-sale-prov="${provAttr}"
+      style="
+        display:grid;
+        grid-template-columns:${cols};
+        gap:12px;
+        align-items:stretch;
+      "
+    >
+      <div
+        class="buy-cat-white"
+        data-sale-edit-open="1"
+        data-sale-edit-kind="${escapeAttr(row.kind)}"
+        data-sale-edit-field="${escapeAttr(leftField)}"
+        data-sale-edit-title="${escapeAttr(leftTitle)}"
+        data-sale-edit-value="${escapeAttr(leftValue)}"
+        data-sale-edit-ids="${idsAttr}"
+        data-sale-edit-prov="${provAttr}"
+        data-sale-edit-article="${escapeAttr(articleKey)}"
+        data-sale-edit-width="${widthPx}"
+        style="min-width:0; cursor:pointer;"
+      >
+        ${escapeHtml(leftValue)}
+      </div>
 
-            return `
-              <div
-                class="daily-sale-edit-row"
-                data-sale-row-index="${idx}"
-                data-sale-row-kind="${escapeAttr(row.kind)}"
-                data-sale-ids="${idsAttr}"
-                data-sale-prov="${provAttr}"
-                style="
-                  display:grid;
-                  grid-template-columns:${cols};
-                  gap:12px;
-                  align-items:stretch;
-                "
-              >
-                <div
-                  class="buy-cat-white"
-                  data-sale-edit-open="1"
-                  data-sale-edit-kind="${escapeAttr(row.kind)}"
-                  data-sale-edit-field="${escapeAttr(leftField)}"
-                  data-sale-edit-title="${escapeAttr(leftTitle)}"
-                  data-sale-edit-value="${escapeAttr(leftValue)}"
-                  data-sale-edit-ids="${idsAttr}"
-                  data-sale-edit-prov="${provAttr}"
-                  data-sale-edit-article="${escapeAttr(articleKey)}"
-                  data-sale-edit-width="${widthPx}"
-                  style="min-width:0; cursor:pointer;"
-                >
-                  ${escapeHtml(leftValue)}
-                </div>
+      <div
+        class="buy-cat-white"
+        data-sale-edit-open="1"
+        data-sale-edit-kind="${escapeAttr(row.kind)}"
+        data-sale-edit-field="${escapeAttr(rightField)}"
+        data-sale-edit-title="${escapeAttr(rightTitle)}"
+        data-sale-edit-value="${escapeAttr(rightValue)}"
+        data-sale-edit-ids="${idsAttr}"
+        data-sale-edit-prov="${provAttr}"
+        data-sale-edit-article="${escapeAttr(articleKey)}"
+        data-sale-edit-width="${widthPx}"
+        style="min-width:0; cursor:pointer;"
+      >
+        ${escapeHtml(rightValue)}
+      </div>
+    </div>
+  `;
+}).join("")}
 
-                <div
-                  class="buy-cat-white"
-                  data-sale-edit-open="1"
-                  data-sale-edit-kind="${escapeAttr(row.kind)}"
-                  data-sale-edit-field="${escapeAttr(rightField)}"
-                  data-sale-edit-title="${escapeAttr(rightTitle)}"
-                  data-sale-edit-value="${escapeAttr(rightValue)}"
-                  data-sale-edit-ids="${idsAttr}"
-                  data-sale-edit-prov="${provAttr}"
-                  data-sale-edit-article="${escapeAttr(articleKey)}"
-                  data-sale-edit-width="${widthPx}"
-                  style="min-width:0; cursor:pointer;"
-                >
-                  ${escapeHtml(rightValue)}
-                </div>
-              </div>
-            `;
-          }).join("")}
         </div>
       </div>
 
