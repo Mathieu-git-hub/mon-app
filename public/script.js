@@ -5053,6 +5053,174 @@ function paymentsTotal(payments) {
   return (payments || []).reduce((acc, p) => acc + (Number.isFinite(p.amount) ? p.amount : 0), 0);
 }
 
+// ===============================
+// ✅ Helpers édition / recalcul vente & avances
+// ===============================
+function saleRawNumberString(v) {
+  return String(v ?? "").trim();
+}
+
+function findSalesEntriesByIds(ids, iso = isoDate) {
+  const wanted = new Set((ids || []).map(x => String(x || "").trim()).filter(Boolean));
+  if (!wanted.size) return [];
+
+  return (getSalesOfDay(iso) || []).filter(s => wanted.has(String(s.id || "").trim()));
+}
+
+function removeSalesEntriesByIds(ids, iso = isoDate, exceptId = null) {
+  const wanted = new Set((ids || []).map(x => String(x || "").trim()).filter(Boolean));
+  const keepId = String(exceptId || "").trim();
+
+  buy.dailySalesByIso[iso] = (getSalesOfDay(iso) || []).filter(s => {
+    const sid = String(s?.id || "").trim();
+    if (!wanted.has(sid)) return true;
+    if (keepId && sid === keepId) return true;
+    return false;
+  });
+}
+
+function applyPvToProvChain(provCode, pvRaw) {
+  const pk = normProvCode(provCode);
+  const pvText = saleRawNumberString(pvRaw);
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    for (const s of arr) {
+      if (!s || s.type !== "advance") continue;
+      if (normProvCode(s.provCode) !== pk) continue;
+      s.pv = pvText;
+    }
+  }
+
+  const rec = findProvRecord(pk);
+  if (rec) {
+    const pvN = parseLooseNumber(pvText);
+    rec.pvSnap = Number.isFinite(pvN) ? pvN : pvText;
+  }
+}
+
+function recomputeProvRecordFromSales(provCode) {
+  const pk = normProvCode(provCode);
+  const rec = findProvRecord(pk);
+  if (!rec) return;
+
+  const all = [];
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    const arr = buy.dailySalesByIso[dayIso] || [];
+    for (const s of arr) {
+      if (!s || s.type !== "advance") continue;
+      if (normProvCode(s.provCode) !== pk) continue;
+
+      all.push({
+        sale: s,
+        dayIso,
+        ts: Number(s.ts) || 0
+      });
+    }
+  }
+
+  if (!all.length) {
+    delete buy.provByCode[pk];
+    return;
+  }
+
+  all.sort((a, b) =>
+    isoToDayTs(a.dayIso) - isoToDayTs(b.dayIso) ||
+    (a.ts || 0) - (b.ts || 0)
+  );
+
+  const first = all[0].sale;
+  const pvBase = parseLooseNumber(first.pv);
+  const pvSnap = Number.isFinite(pvBase) ? pvBase : parseLooseNumber(rec.pvSnap);
+
+  const groupedByDay = new Map();
+  for (const item of all) {
+    const av = parseLooseNumber(item.sale.avance);
+    const amt = Number.isFinite(av) ? av : 0;
+    groupedByDay.set(item.dayIso, (groupedByDay.get(item.dayIso) || 0) + amt);
+  }
+
+  const days = Array.from(groupedByDay.keys()).sort((a, b) => isoToDayTs(a) - isoToDayTs(b));
+
+  let running = Number.isFinite(pvSnap) ? pvSnap : 0;
+  const rapByIso = {};
+  let closedAtIso = null;
+
+  for (const dIso of days) {
+    running -= groupedByDay.get(dIso) || 0;
+    if (running < 0) running = 0;
+    if (Object.is(running, -0)) running = 0;
+
+    rapByIso[dIso] = running;
+
+    if (running === 0 && !closedAtIso) {
+      closedAtIso = dIso;
+    }
+  }
+
+  rec.pvSnap = Number.isFinite(pvSnap) ? pvSnap : rec.pvSnap;
+  rec.rapByIso = rapByIso;
+  rec.closedAtIso = closedAtIso;
+}
+
+function updateGroupedSaleRowValue({
+  iso = isoDate,
+  rowKind,
+  field,
+  ids,
+  rawValue,
+  provCode = ""
+}) {
+  const valueText = saleRawNumberString(rawValue);
+  const n = parseLooseNumber(valueText);
+
+  if (!valueText || !Number.isFinite(n) || n < 0) return false;
+
+  const rows = findSalesEntriesByIds(ids, iso);
+  if (!rows.length) return false;
+
+  const first = rows[0];
+
+  // ✅ VENTE NORMALE
+  if (rowKind === "sale") {
+    if (field === "pv") {
+      for (const s of rows) s.pv = valueText;
+      return true;
+    }
+
+    if (field === "qty") {
+      first.qty = valueText;
+      removeSalesEntriesByIds(ids, iso, first.id);
+      return true;
+    }
+
+    return false;
+  }
+
+  // ✅ AVANCE
+  if (rowKind === "advance") {
+    const pk = normProvCode(provCode || first.provCode || "");
+    if (!pk) return false;
+
+    if (field === "pv") {
+      applyPvToProvChain(pk, valueText);
+      recomputeProvRecordFromSales(pk);
+      return true;
+    }
+
+    if (field === "avance") {
+      first.avance = valueText;
+      removeSalesEntriesByIds(ids, iso, first.id);
+      recomputeProvRecordFromSales(pk);
+      return true;
+    }
+
+    return false;
+  }
+
+  return false;
+}
 
 
 
@@ -6310,18 +6478,33 @@ function openDailySaleEditModal(articleKey, cardWidthPx = 0) {
       <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
         <div style="display:flex; flex-direction:column; gap:12px;">
           ${rows.map((row, idx) => {
-            const cols = (row.kind === "advance") ? "1fr 1fr" : "3fr 1fr";
-            const firstValue = fmtWhite(row.pv);
-            const secondValue = row.kind === "advance"
+            // ✅ consigne la plus récente :
+            // - case gauche = Quantité (vente) / Avance (avance)
+            // - case droite = PV
+            const cols = (row.kind === "advance") ? "1fr 1fr" : "1fr 3fr";
+
+            const leftTitle  = row.kind === "advance" ? "Avance" : "Quantité";
+            const rightTitle = "PV";
+
+            const leftField  = row.kind === "advance" ? "avance" : "qty";
+            const rightField = "pv";
+
+            const leftValue = row.kind === "advance"
               ? fmtWhite(row.avance)
               : fmtWhite(row.qty);
+
+            const rightValue = fmtWhite(row.pv);
+
+            const idsAttr = escapeAttr((row.saleIds || []).join(","));
+            const provAttr = escapeAttr(row.provCode || "");
 
             return `
               <div
                 class="daily-sale-edit-row"
                 data-sale-row-index="${idx}"
                 data-sale-row-kind="${escapeAttr(row.kind)}"
-                data-sale-ids="${escapeAttr((row.saleIds || []).join(","))}"
+                data-sale-ids="${idsAttr}"
+                data-sale-prov="${provAttr}"
                 style="
                   display:grid;
                   grid-template-columns:${cols};
@@ -6329,11 +6512,36 @@ function openDailySaleEditModal(articleKey, cardWidthPx = 0) {
                   align-items:stretch;
                 "
               >
-                <div class="buy-cat-white" style="min-width:0;">
-                  ${escapeHtml(firstValue)}
+                <div
+                  class="buy-cat-white"
+                  data-sale-edit-open="1"
+                  data-sale-edit-kind="${escapeAttr(row.kind)}"
+                  data-sale-edit-field="${escapeAttr(leftField)}"
+                  data-sale-edit-title="${escapeAttr(leftTitle)}"
+                  data-sale-edit-value="${escapeAttr(leftValue)}"
+                  data-sale-edit-ids="${idsAttr}"
+                  data-sale-edit-prov="${provAttr}"
+                  data-sale-edit-article="${escapeAttr(articleKey)}"
+                  data-sale-edit-width="${widthPx}"
+                  style="min-width:0; cursor:pointer;"
+                >
+                  ${escapeHtml(leftValue)}
                 </div>
-                <div class="buy-cat-white" style="min-width:0;">
-                  ${escapeHtml(secondValue)}
+
+                <div
+                  class="buy-cat-white"
+                  data-sale-edit-open="1"
+                  data-sale-edit-kind="${escapeAttr(row.kind)}"
+                  data-sale-edit-field="${escapeAttr(rightField)}"
+                  data-sale-edit-title="${escapeAttr(rightTitle)}"
+                  data-sale-edit-value="${escapeAttr(rightValue)}"
+                  data-sale-edit-ids="${idsAttr}"
+                  data-sale-edit-prov="${provAttr}"
+                  data-sale-edit-article="${escapeAttr(articleKey)}"
+                  data-sale-edit-width="${widthPx}"
+                  style="min-width:0; cursor:pointer;"
+                >
+                  ${escapeHtml(rightValue)}
                 </div>
               </div>
             `;
@@ -6355,6 +6563,219 @@ function openDailySaleEditModal(articleKey, cardWidthPx = 0) {
 
   const closeBtn = document.getElementById("dailySaleEditCloseBtn");
   if (closeBtn) closeBtn.addEventListener("click", closeDailySaleEditModal);
+
+  bd.addEventListener("click", (e) => {
+    const box = e.target.closest("[data-sale-edit-open]");
+    if (!box) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    openDailySaleValueEditModal({
+      articleKey: box.getAttribute("data-sale-edit-article") || "",
+      cardWidthPx: Number(box.getAttribute("data-sale-edit-width") || 0),
+      rowKind: box.getAttribute("data-sale-edit-kind") || "",
+      field: box.getAttribute("data-sale-edit-field") || "",
+      title: box.getAttribute("data-sale-edit-title") || "",
+      rawValue: box.getAttribute("data-sale-edit-value") || "",
+      ids: String(box.getAttribute("data-sale-edit-ids") || "")
+        .split(",")
+        .map(x => x.trim())
+        .filter(Boolean),
+      provCode: box.getAttribute("data-sale-edit-prov") || ""
+    });
+  });
+}
+
+// ===============================
+// ✅ 2e modale : édition d'une valeur de vente / avance
+// ===============================
+function closeDailySaleValueEditModal() {
+  const bd = document.getElementById("dailySaleValueEditBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleValueEditModal({
+  articleKey,
+  cardWidthPx = 0,
+  rowKind,
+  field,
+  title,
+  rawValue,
+  ids,
+  provCode
+}) {
+  if (document.getElementById("dailySaleValueEditBackdrop")) return;
+
+  const widthPx = Math.max(280, Math.round(cardWidthPx || 0));
+  const initialValue = String(rawValue || "").trim();
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleValueEditBackdrop";
+  bd.className = "cat-modal-backdrop";
+
+  bd.innerHTML = `
+    <div
+      class="cat-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="${escapeAttr(title || "Modification")}"
+      style="
+        width:${widthPx ? `${widthPx}px` : "min(720px, calc(100vw - 24px))"};
+        max-width:calc(100vw - 24px);
+        display:flex;
+        flex-direction:column;
+        max-height:min(78vh, 420px);
+      "
+    >
+      <div class="cat-modal-title" style="flex:0 0 auto;">
+        ${escapeHtml(title || "Modification")}
+      </div>
+
+      <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <input
+            id="dailySaleValueEditInput"
+            class="input"
+            inputmode="decimal"
+            autocomplete="off"
+            value="${escapeAttr(initialValue)}"
+          />
+          <div id="dailySaleValueEditErr" class="cat-err" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div
+        class="cat-modal-actions"
+        style="flex:0 0 auto; margin-top:14px; justify-content:center; gap:12px;"
+      >
+        <button
+          id="dailySaleValueEditCancel"
+          type="button"
+          style="
+            min-width:120px;
+            background:#000;
+            color:#fff;
+            border:1px solid rgba(255,255,255,0.95);
+            border-radius:12px;
+            padding:10px 16px;
+            font-weight:900;
+            cursor:pointer;
+          "
+        >Annuler</button>
+
+        <button
+          id="dailySaleValueEditOk"
+          type="button"
+          style="
+            min-width:120px;
+            background:#000;
+            color:#fff;
+            border:1px solid rgba(255,255,255,0.95);
+            border-radius:12px;
+            padding:10px 16px;
+            font-weight:900;
+            cursor:pointer;
+          "
+        >OK</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeDailySaleValueEditModal();
+  });
+
+  document.body.appendChild(bd);
+
+  const input = document.getElementById("dailySaleValueEditInput");
+  const errEl = document.getElementById("dailySaleValueEditErr");
+  const cancelBtn = document.getElementById("dailySaleValueEditCancel");
+  const okBtn = document.getElementById("dailySaleValueEditOk");
+
+  function setErr(msg) {
+    if (!errEl) return;
+    if (!msg) {
+      errEl.style.display = "none";
+      errEl.textContent = "";
+    } else {
+      errEl.style.display = "block";
+      errEl.textContent = msg;
+    }
+  }
+
+  if (input) {
+    input.addEventListener("input", () => {
+      const filtered = digitsCommaOnly(input.value);
+      if (filtered !== input.value) input.value = filtered;
+      setErr("");
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (okBtn) okBtn.click();
+      }
+    });
+
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      closeDailySaleValueEditModal();
+    });
+  }
+
+  if (okBtn) {
+    okBtn.addEventListener("click", async () => {
+      const raw = String(input?.value || "").trim();
+      const n = parseLooseNumber(raw);
+
+      if (!raw) {
+        setErr("valeur vide");
+        if (typeof shake === "function" && input) shake(input);
+        return;
+      }
+
+      if (!Number.isFinite(n) || n < 0) {
+        setErr("valeur invalide");
+        if (typeof shake === "function" && input) shake(input);
+        return;
+      }
+
+      const ok = updateGroupedSaleRowValue({
+        iso: isoDate,
+        rowKind,
+        field,
+        ids,
+        rawValue: raw,
+        provCode
+      });
+
+      if (!ok) {
+        setErr("modification impossible");
+        if (typeof shake === "function" && input) shake(input);
+        return;
+      }
+
+      await safePersistNow();
+
+      closeDailySaleValueEditModal();
+      closeDailySaleEditModal();
+
+      renderDailySaleRecap();
+      renderDailySaleGlobals();
+
+      // ✅ on rouvre la modale principale actualisée
+      setTimeout(() => {
+        openDailySaleEditModal(articleKey, cardWidthPx);
+      }, 0);
+    });
+  }
 }
 
 
