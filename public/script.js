@@ -5325,6 +5325,11 @@ function pvtExpressionForToday(articleKey) {
 // ✅ Lignes de modale "Vendu" / "Annulation - modification"
 // ordre identique à l'intitulé PVT
 // ===============================
+// ===============================
+// ✅ Lignes de modale "Vendu" / "Annulation - modification"
+// ordre identique à l'intitulé PVT
+// ✅ inclut ventes normales + TOUTES les avances affichées dans PVT
+// ===============================
 function getSaleEditRowsForArticleKey(articleKey, iso = isoDate) {
   const list = salesOfDayForArticleKey(iso, articleKey);
   if (!list.length) return [];
@@ -5335,7 +5340,7 @@ function getSaleEditRowsForArticleKey(articleKey, iso = isoDate) {
   for (const s of list) {
     if (!s) continue;
 
-    // ✅ AVANCE
+    // ✅ AVANCES : toutes les avances visibles dans PVT
     if (s.type === "advance") {
       const avanceN = parseLooseNumber(s.avance);
       const pvN = parseLooseNumber(s.pv);
@@ -5343,6 +5348,10 @@ function getSaleEditRowsForArticleKey(articleKey, iso = isoDate) {
       if (!Number.isFinite(avanceN) || avanceN <= 0) continue;
 
       const provCode = String(s.provCode || "").trim();
+
+      // ✅ clé distincte comme dans PVT :
+      // - code provisoire
+      // - montant avance
       const key = `A|${provCode.toUpperCase()}|${String(avanceN).replace(".", ",")}`;
 
       if (!grouped.has(key)) {
@@ -5362,12 +5371,13 @@ function getSaleEditRowsForArticleKey(articleKey, iso = isoDate) {
       continue;
     }
 
-    // ✅ VENTE NORMALE
+    // ✅ VENTES NORMALES
     const pvN = parseLooseNumber(s.pv);
     const qtyN = parseLooseNumber(s.qty);
 
     if (!Number.isFinite(pvN) || !Number.isFinite(qtyN) || qtyN <= 0) continue;
 
+    // ✅ regroupement identique à PVT : même PV => une ligne, quantité cumulée
     const key = `S|${String(pvN).replace(".", ",")}`;
 
     if (!grouped.has(key)) {
@@ -5377,7 +5387,7 @@ function getSaleEditRowsForArticleKey(articleKey, iso = isoDate) {
         qty: qtyN,
         saleIds: s.id ? [s.id] : []
       });
-      order.push(key);
+        order.push(key);
     } else {
       const row = grouped.get(key);
       row.qty += qtyN;
@@ -5387,6 +5397,7 @@ function getSaleEditRowsForArticleKey(articleKey, iso = isoDate) {
 
   return order.map(k => grouped.get(k)).filter(Boolean);
 }
+
 
 
 
@@ -5828,7 +5839,9 @@ if (advancesToday.length) venduLineParts.push(...advancesToday);
 const venduLineText = venduLineParts.join(" + ");
 
 const venduEditRows = getSaleEditRowsForArticleKey(articleKey, isoDate);
-const canOpenVenduModal = venduEditRows.length > 0;
+const hasRedVendu = String(venduLineText || "").trim().length > 0;
+const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
+
 
 
 
@@ -5890,10 +5903,11 @@ const canOpenVenduModal = venduEditRows.length > 0;
 
   // ✅ RECTANGLE PLIÉ : seulement "Vendu: [case blanche]"
   const foldedBody = `
-    <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
-      ${kvRedIfValue("Vendu", venduLineText)}
-    </div>
-  `;
+  <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+    ${kvRedClickableVendu("Vendu", venduLineText, articleKey, canOpenVenduModal)}
+  </div>
+`;
+
 
   // ✅ RECTANGLE DÉPLIÉ : ton contenu originel (inchangé) + Ajout/Qté ini/Vendu/Qté res + PRT/PVT
   // (on reprend exactement ta logique existante)
@@ -5991,9 +6005,10 @@ const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
 ">
   ${kv("Ajout", ajout)}
   ${kv("Qté ini", qteIni)}
-  ${kvRedClickableVendu("Vendu", venduLineText, articleKey, canOpenVenduModal)}
+  ${kv("Vendu", vendu)}
   ${kv("Qté res", qteRes)}
 </div>
+
 
 
     ${
