@@ -5321,6 +5321,73 @@ function pvtExpressionForToday(articleKey) {
   };
 }
 
+// ===============================
+// ✅ Lignes de modale "Vendu" / "Annulation - modification"
+// ordre identique à l'intitulé PVT
+// ===============================
+function getSaleEditRowsForArticleKey(articleKey, iso = isoDate) {
+  const list = salesOfDayForArticleKey(iso, articleKey);
+  if (!list.length) return [];
+
+  const order = [];
+  const grouped = new Map();
+
+  for (const s of list) {
+    if (!s) continue;
+
+    // ✅ AVANCE
+    if (s.type === "advance") {
+      const avanceN = parseLooseNumber(s.avance);
+      const pvN = parseLooseNumber(s.pv);
+
+      if (!Number.isFinite(avanceN) || avanceN <= 0) continue;
+
+      const provCode = String(s.provCode || "").trim();
+      const key = `A|${provCode.toUpperCase()}|${String(avanceN).replace(".", ",")}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          kind: "advance",
+          pv: Number.isFinite(pvN) ? pvN : String(s.pv || ""),
+          avance: avanceN,
+          provCode,
+          saleIds: s.id ? [s.id] : []
+        });
+        order.push(key);
+      } else {
+        const row = grouped.get(key);
+        if (s.id) row.saleIds.push(s.id);
+      }
+
+      continue;
+    }
+
+    // ✅ VENTE NORMALE
+    const pvN = parseLooseNumber(s.pv);
+    const qtyN = parseLooseNumber(s.qty);
+
+    if (!Number.isFinite(pvN) || !Number.isFinite(qtyN) || qtyN <= 0) continue;
+
+    const key = `S|${String(pvN).replace(".", ",")}`;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        kind: "sale",
+        pv: pvN,
+        qty: qtyN,
+        saleIds: s.id ? [s.id] : []
+      });
+      order.push(key);
+    } else {
+      const row = grouped.get(key);
+      row.qty += qtyN;
+      if (s.id) row.saleIds.push(s.id);
+    }
+  }
+
+  return order.map(k => grouped.get(k)).filter(Boolean);
+}
+
 
 
 // PRT du jour : PR × qtyVendueJour = résultat
@@ -5672,6 +5739,42 @@ function kvRedIfValue(label, value) {
   `;
 }
 
+// ✅ case rouge "Vendu" cliquable dans le rectangle déplié
+function kvRedClickableVendu(label, value, articleKey, clickable) {
+  const has = String(value || "").trim().length > 0;
+
+  const extraStyle = has
+    ? "background:#ff3b30; color:#fff; border-color:rgba(255,255,255,0.65);"
+    : "";
+
+  const actionAttrs = (has && clickable)
+    ? `
+        data-sale-vendu="${escapeAttr(articleKey)}"
+        role="button"
+        tabindex="0"
+        title="Modifier ou annuler une vente"
+        aria-label="Modifier ou annuler une vente"
+      `
+    : "";
+
+  const cursorStyle = (has && clickable) ? "cursor:pointer;" : "";
+
+  return `
+    <div style="min-width:0; display:flex; align-items:center; gap:8px;">
+      <div style="font-weight:900; opacity:.95; white-space:nowrap; flex:0 0 auto;">
+        ${escapeHtml(label)} :
+      </div>
+      <div
+        class="buy-cat-white"
+        ${actionAttrs}
+        style="flex:1 1 auto; min-width:0; ${extraStyle} ${cursorStyle}"
+      >
+        ${escapeHtml(value || "")}
+      </div>
+    </div>
+  `;
+}
+
 
 
 
@@ -5723,6 +5826,10 @@ if (venduNormalDisp) venduLineParts.push(venduNormalDisp);
 if (advancesToday.length) venduLineParts.push(...advancesToday);
 
 const venduLineText = venduLineParts.join(" + ");
+
+const venduEditRows = getSaleEditRowsForArticleKey(articleKey, isoDate);
+const canOpenVenduModal = venduEditRows.length > 0;
+
 
 
   // ✅ provisoires actifs (pour le cas stock=0)
@@ -5877,16 +5984,17 @@ const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
     </div>
 
     <div style="
-      display:grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap:12px;
-      margin:0;
-    ">
-      ${kv("Ajout", ajout)}
-      ${kv("Qté ini", qteIni)}
-      ${kv("Vendu", vendu)}
-      ${kv("Qté res", qteRes)}
-    </div>
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap:12px;
+  margin:0;
+">
+  ${kv("Ajout", ajout)}
+  ${kv("Qté ini", qteIni)}
+  ${kvRedClickableVendu("Vendu", venduLineText, articleKey, canOpenVenduModal)}
+  ${kv("Qté res", qteRes)}
+</div>
+
 
     ${
       showPRT
@@ -6069,6 +6177,20 @@ if (toggleBtn) {
   return;
 }
 
+    const venduBtn = e.target.closest("[data-sale-vendu]");
+    if (venduBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const key = venduBtn.getAttribute("data-sale-vendu") || "";
+      const card = venduBtn.closest(".sale-card");
+      const cardWidth = card ? card.getBoundingClientRect().width : 0;
+
+      openDailySaleEditModal(key, cardWidth);
+      return;
+    }
+
+
 
     const delBtn = e.target.closest("[data-sale-del]");
     if (delBtn) {
@@ -6131,6 +6253,95 @@ function openDailySaleDelModal(originCode) {
     });
   }
 }
+
+// ===============================
+// ✅ MODALE "Vendu" — annulation / modification (base d'affichage)
+// ===============================
+function closeDailySaleEditModal() {
+  const bd = document.getElementById("dailySaleEditBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleEditModal(articleKey, cardWidthPx = 0) {
+  if (document.getElementById("dailySaleEditBackdrop")) return;
+
+  const rows = getSaleEditRowsForArticleKey(articleKey, isoDate);
+  if (!rows.length) return;
+
+  const widthPx = Math.max(280, Math.round(cardWidthPx || 0));
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleEditBackdrop";
+  bd.className = "cat-modal-backdrop";
+
+  bd.innerHTML = `
+    <div
+      class="cat-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Modification ou annulation de vente"
+      style="
+        width:${widthPx ? `${widthPx}px` : "min(720px, calc(100vw - 24px))"};
+        max-width:calc(100vw - 24px);
+        display:flex;
+        flex-direction:column;
+        max-height:min(78vh, 560px);
+      "
+    >
+      <div class="cat-modal-title" style="flex:0 0 auto;">
+        Vendu
+      </div>
+
+      <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${rows.map((row, idx) => {
+            const cols = (row.kind === "advance") ? "1fr 1fr" : "3fr 1fr";
+            const firstValue = fmtWhite(row.pv);
+            const secondValue = row.kind === "advance"
+              ? fmtWhite(row.avance)
+              : fmtWhite(row.qty);
+
+            return `
+              <div
+                class="daily-sale-edit-row"
+                data-sale-row-index="${idx}"
+                data-sale-row-kind="${escapeAttr(row.kind)}"
+                data-sale-ids="${escapeAttr((row.saleIds || []).join(","))}"
+                style="
+                  display:grid;
+                  grid-template-columns:${cols};
+                  gap:12px;
+                  align-items:stretch;
+                "
+              >
+                <div class="buy-cat-white" style="min-width:0;">
+                  ${escapeHtml(firstValue)}
+                </div>
+                <div class="buy-cat-white" style="min-width:0;">
+                  ${escapeHtml(secondValue)}
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+
+      <div class="cat-modal-actions" style="flex:0 0 auto; margin-top:10px;">
+        <button id="dailySaleEditCloseBtn" class="modal-btn cancel" type="button">Fermer</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeDailySaleEditModal();
+  });
+
+  document.body.appendChild(bd);
+
+  const closeBtn = document.getElementById("dailySaleEditCloseBtn");
+  if (closeBtn) closeBtn.addEventListener("click", closeDailySaleEditModal);
+}
+
 
 
 
