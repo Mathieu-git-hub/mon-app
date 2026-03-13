@@ -4768,6 +4768,13 @@ buy.dailySaleDraftByIso = buy.dailySaleDraftByIso || {}; // optionnel (draft mod
 buy.dailySaleFoldByIso = buy.dailySaleFoldByIso || {}; // { [iso]: { [originCodeNorm]: true/false } }
 
 // ===============================
+// ✅ UI state (date ajout <-> âge article)
+// ===============================
+buy.dailySaleAjoutModeByIso = buy.dailySaleAjoutModeByIso || {}; 
+// { [iso]: { [articleKey]: "date" | "age" } }
+
+
+// ===============================
 // ✅ Articles masqués de "Vente du jour"
 // ===============================
 // ✅ Articles masqués de "Vente du jour" (clé stable)
@@ -4839,6 +4846,78 @@ async function setFoldState(iso, key, expanded) {
   buy.dailySaleFoldByIso[iso][k] = !!expanded;
   await safePersistNow();
 }
+
+function getAjoutModeState(iso, key) {
+  const k = foldKey(key);
+  buy.dailySaleAjoutModeByIso[iso] = buy.dailySaleAjoutModeByIso[iso] || {};
+  return buy.dailySaleAjoutModeByIso[iso][k] === "age" ? "age" : "date";
+}
+
+async function setAjoutModeState(iso, key, mode) {
+  const k = foldKey(key);
+  buy.dailySaleAjoutModeByIso[iso] = buy.dailySaleAjoutModeByIso[iso] || {};
+  buy.dailySaleAjoutModeByIso[iso][k] = (mode === "age") ? "age" : "date";
+  await safePersistNow();
+}
+
+function daysSinceIsoInclusive(fromIso, toIso) {
+  const fromTs = isoToDayTs(fromIso);
+  const toTs = isoToDayTs(toIso);
+  if (!Number.isFinite(fromTs) || !Number.isFinite(toTs)) return null;
+
+  const diffDays = Math.floor((toTs - fromTs) / 86400000);
+  if (!Number.isFinite(diffDays) || diffDays < 0) return null;
+
+  // ✅ jour de création = 1er jour d’existence
+  return diffDays + 1;
+}
+
+function ajoutDisplayTextForArticle(article, iso, articleKey) {
+  const mode = getAjoutModeState(iso, articleKey);
+
+  if (mode === "age") {
+    const n = daysSinceIsoInclusive(article?.createdAtIso, iso);
+    if (!Number.isFinite(n)) return "";
+
+    return n === 1 ? "1 jour" : `${fmtResult(n)} jours`;
+  }
+
+  return isMobileSaleUi()
+    ? isoToFrShort(article?.createdAtIso)
+    : isoToFr(article?.createdAtIso);
+}
+
+function kvClickableAjout(label, value, articleKey) {
+  const has = String(value || "").trim().length > 0;
+
+  const actionAttrs = has
+    ? `
+        data-sale-ajout-toggle="${escapeAttr(articleKey)}"
+        role="button"
+        tabindex="0"
+        title="Afficher l'âge de l'article"
+        aria-label="Afficher l'âge de l'article"
+      `
+    : "";
+
+  const cursorStyle = has ? "cursor:pointer;" : "";
+
+  return `
+    <div style="min-width:0; display:flex; align-items:center; gap:8px;">
+      <div style="font-weight:900; opacity:.95; white-space:nowrap; flex:0 0 auto;">
+        ${escapeHtml(label)} :
+      </div>
+      <div
+        class="buy-cat-white"
+        ${actionAttrs}
+        style="flex:1 1 auto; min-width:0; ${cursorStyle}"
+      >
+        ${escapeHtml(value || "")}
+      </div>
+    </div>
+  `;
+}
+
 
 
 
@@ -5970,7 +6049,8 @@ function saleCardHTML(a) {
 
 
   // ✅ format Ajout : mobile => jj/mm/aa, sinon => jj/mm/aaaa
-  const ajout = isMobileSaleUi() ? isoToFrShort(a.createdAtIso) : isoToFr(a.createdAtIso);
+  const ajout = ajoutDisplayTextForArticle(a, isoDate, articleKey);
+
 
   // ✅ état plié/déplié (par défaut plié)
   const expanded = getFoldState(isoDate, articleKey);
@@ -6189,7 +6269,7 @@ const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
   gap:12px;
   margin:0;
 ">
-  ${kv("Ajout", ajout)}
+  ${kvClickableAjout("Ajout", ajout, articleKey)}
   ${kv("Qté ini", qteIni)}
   ${kv("Vendu", vendu)}
   ${kv("Qté res", qteRes)}
@@ -6390,6 +6470,50 @@ if (toggleBtn) {
       openDailySaleEditModal(key, cardWidth);
       return;
     }
+
+        const ajoutBtn = e.target.closest("[data-sale-ajout-toggle]");
+    if (ajoutBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const key = ajoutBtn.getAttribute("data-sale-ajout-toggle") || "";
+      const currentMode = getAjoutModeState(isoDate, key);
+      const nextMode = currentMode === "age" ? "date" : "age";
+
+      // ✅ UI immédiate
+      const box = ajoutBtn;
+      const card = ajoutBtn.closest(".sale-card");
+      let createdAtIso = "";
+
+      if (card) {
+        // on retrouve l’article à partir de la clé
+        let art = null;
+
+        if (key.startsWith("id:")) {
+          const id = key.slice(3);
+          art = (buy.articles || []).find(a => !a.deletedAtIso && String(a.id) === String(id));
+        } else {
+          const codeNorm = key.startsWith("code:") ? key.slice(5) : saleNormCode(key);
+          art = (buy.articles || []).find(a => !a.deletedAtIso && saleNormCode(a.code) === codeNorm);
+        }
+
+        createdAtIso = art?.createdAtIso || "";
+
+        let newText = "";
+        if (nextMode === "age") {
+          const n = daysSinceIsoInclusive(createdAtIso, isoDate);
+          newText = Number.isFinite(n) ? (n === 1 ? "1 jour" : `${fmtResult(n)} jours`) : "";
+        } else {
+          newText = isMobileSaleUi() ? isoToFrShort(createdAtIso) : isoToFr(createdAtIso);
+        }
+
+        box.textContent = newText;
+      }
+
+      setAjoutModeState(isoDate, key, nextMode).catch(console.error);
+      return;
+    }
+
 
 
 
