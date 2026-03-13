@@ -6112,13 +6112,31 @@ const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
     Number.isFinite(startQtyN_top) && startQtyN_top <= 0 && provList.length > 0;
 
     if (shouldShowProvOnly && !expanded) {
-    return `
-      <div class="buy-cat-card sale-card" style="padding:14px; display:block;">
-        ${headerRow}
-        <div class="sale-folded">${foldedBody}</div>
-        <div class="sale-expanded" style="display:none;"></div>
+  const stack = provList.map(p => `
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="font-weight:1000; white-space:nowrap;">${escapeHtml(p.provCode)} :</div>
+      <div class="buy-cat-white" style="flex:1; min-width:0;">
+        ${escapeHtml(`Reste à payer : ${fmtResult(p.rap)}`)}
       </div>
-    `;
+    </div>
+  `).join(`<div style="height:10px;"></div>`);
+
+  return `
+    <div class="buy-cat-card sale-card" style="padding:14px; display:block;">
+      ${headerRow}
+
+      <div class="sale-folded">
+        ${foldedBody}
+      </div>
+
+      <div class="sale-expanded">
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          ${stack}
+        </div>
+      </div>
+    </div>
+  `;
+
   }
 
 
