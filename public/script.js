@@ -6468,13 +6468,14 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
   // ✅ hypothèse cohérente :
   // la valorisation monétaire de la perte = cumul perte × PR unitaire
   // (PRT affiché étant déjà une opération du jour, non une valeur unitaire stable)
-  const lossAmountN = (Number.isFinite(lossTodayN) && Number.isFinite(prN))
+    const lossAmountN = (Number.isFinite(lossTodayN) && Number.isFinite(prN))
     ? (lossTodayN * prN)
     : 0;
 
   const lossDisplay = (Number.isFinite(lossTodayN) && lossTodayN > 0)
     ? `${fmtResult(lossTodayN)} × ${fmtResult(prN)} = ${fmtResult(lossAmountN)}`
-    : `0 × ${fmtResult(prN)} = 0`;
+    : "";
+
 
   const lossDraft = String(lossUi.draft || "").trim();
   const lossDraftHasValue = Number.isFinite(parseLooseNumber(lossDraft)) && parseLooseNumber(lossDraft) >= 0;
