@@ -5464,6 +5464,59 @@ function sumNormalSoldQty(list) {
   }, 0);
 }
 
+// ✅ Vendu affiché = ventes normales + avances initiales (createProv)
+// ❌ exclut les paiements de RAP (rapPay)
+function sumVenduQtyDisplay(list) {
+  return (list || []).reduce((acc, s) => {
+    if (!s) return acc;
+
+    // vente normale
+    if (s.type !== "advance") {
+      const q = parseLooseNumber(s.qty);
+      return acc + (Number.isFinite(q) ? q : 0);
+    }
+
+    // avance initiale uniquement
+    if (s.subType === "createProv") {
+      const q = parseLooseNumber(s.qty);
+      return acc + (Number.isFinite(q) ? q : 0);
+    }
+
+    // rapPay => ne compte pas dans "Vendu"
+    return acc;
+  }, 0);
+}
+
+function sumVenduQtyUpToDayForArticleKey(articleKey, iso) {
+  const k = String(articleKey || "");
+  let total = 0;
+
+  for (const dayIso in (buy.dailySalesByIso || {})) {
+    if (isoToDayTs(dayIso) > isoToDayTs(iso)) continue; // ✅ pas les jours d'après
+    const arr = buy.dailySalesByIso[dayIso] || [];
+
+    for (const s of arr) {
+      if (saleArticleKeyFromSale(s) !== k) continue;
+
+      // vente normale
+      if (s?.type !== "advance") {
+        const q = parseLooseNumber(s.qty);
+        if (Number.isFinite(q)) total += q;
+        continue;
+      }
+
+      // avance initiale uniquement
+      if (s?.subType === "createProv") {
+        const q = parseLooseNumber(s.qty);
+        if (Number.isFinite(q)) total += q;
+      }
+    }
+  }
+
+  return total;
+}
+
+
 
 function sumPvSales(list) {
   return list.reduce((acc, s) => {
@@ -6134,14 +6187,27 @@ function saleCardHTML(a) {
   
 const salesToday = salesTodayForArticleKey(articleKey);
 
-const venduN = sumQtySales(salesToday); // ✅ logique interne (inclut createProv qty=1 si c'est ta règle)
+const venduN = sumQtySales(salesToday); // ✅ logique stock / qté res inchangée
 
+// ✅ affichage "Vendu" = ventes normales + avances initiales createProv
+const venduDisplayN = sumVenduQtyDisplay(salesToday);
+const venduDisplayDisp = (Number.isFinite(venduDisplayN) && venduDisplayN > 0)
+  ? fmtResult(venduDisplayN)
+  : "";
 
-// ✅ vendu affiché = uniquement ventes normales (pas les avances)
-const venduNormalN = sumNormalSoldQty(salesToday);
-const venduNormalDisp = (Number.isFinite(venduNormalN) && venduNormalN > 0) ? fmtResult(venduNormalN) : "";
+// ✅ cumul jusqu’au jour affiché inclus
+//    = ventes normales + avances initiales createProv
+const venduCumN = sumVenduQtyUpToDayForArticleKey(articleKey, isoDate);
+const venduCumDisp = fmtResult(Number.isFinite(venduCumN) ? venduCumN : 0);
 
-// avances du jour (inchangé)
+// ✅ règle d'affichage :
+// - s'il y a une vente / avance initiale ce jour : "x (cumul)"
+// - sinon : "(cumul)"
+const venduBaseText = venduDisplayDisp
+  ? `${venduDisplayDisp} (${venduCumDisp})`
+  : `(${venduCumDisp})`;
+
+// ✅ détails avances du jour conservés
 const advancesToday = (salesToday || [])
   .filter(s => s && s.type === "advance")
   .map(s => {
@@ -6149,13 +6215,12 @@ const advancesToday = (salesToday || [])
     if (!Number.isFinite(aN) || aN <= 0) return null;
     const pc = String(s.provCode || "").trim();
     const part = fmtResult(aN);
-    return pc ? `${part} (${escapeHtml(pc)})` : part;
+    return pc ? `${part} (${pc})` : part;
   })
   .filter(Boolean);
 
-// ✅ assemblage : le chiffre "vendu" n'apparaît QUE si vente normale > 0
-const venduLineParts = [];
-if (venduNormalDisp) venduLineParts.push(venduNormalDisp);
+// ✅ assemblage final
+const venduLineParts = [venduBaseText];
 if (advancesToday.length) venduLineParts.push(...advancesToday);
 
 const venduLineText = venduLineParts.join(" + ");
@@ -6163,6 +6228,7 @@ const venduLineText = venduLineParts.join(" + ");
 const venduEditRows = getSaleEditRowsForArticleKey(articleKey, isoDate);
 const hasRedVendu = String(venduLineText || "").trim().length > 0;
 const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
+
 
 
 
@@ -6240,7 +6306,8 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
   const startQtyN = startQtyN_top;
   const qteIni = fmtWhite(a.qty || "");
 
-    const vendu = venduNormalDisp; // ✅ affiche seulement les ventes normales
+    const vendu = venduBaseText; // ✅ ventes normales + avances initiales, avec cumul
+
 
   const lossTodayN = getLossTotalForArticleKey(isoDate, articleKey);
 
