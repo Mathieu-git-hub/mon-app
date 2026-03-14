@@ -4739,15 +4739,34 @@ function renderDailySalePage(isoDate) {
   <div id="dailySaleLossGlobalsWrap" style="margin-top:12px;">
     <div id="dailySaleLossGlobalsRow"
          style="display:grid; grid-template-columns: 2fr 1fr; gap:12px; align-items:start;">
-      <div style="min-width:0;">
+            <div style="min-width:0;">
         <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">Perte totale :</div>
-        <div id="dailySaleLossTotalGlobal" class="buy-cat-white"></div>
+        <div
+          id="dailySaleLossTotalGlobal"
+          class="buy-cat-white"
+          data-sale-loss-day-open="1"
+          role="button"
+          tabindex="0"
+          title="Voir les pertes du jour"
+          aria-label="Voir les pertes du jour"
+          style="cursor:pointer;"
+        ></div>
       </div>
 
       <div id="dailySaleLossMonthCol" style="min-width:0; display:none;">
         <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">Ce mois :</div>
-        <div id="dailySaleLossMonthGlobal" class="buy-cat-white"></div>
+        <div
+          id="dailySaleLossMonthGlobal"
+          class="buy-cat-white"
+          data-sale-loss-month-open="1"
+          role="button"
+          tabindex="0"
+          title="Voir les pertes du mois"
+          aria-label="Voir les pertes du mois"
+          style="cursor:pointer;"
+        ></div>
       </div>
+
     </div>
   </div>
 
@@ -4946,6 +4965,103 @@ function isLastDayOfMonthIso(iso) {
   const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
   return d === last;
 }
+
+function findArticleByArticleKey(articleKey) {
+  const key = String(articleKey || "").trim();
+
+  if (key.startsWith("id:")) {
+    const id = key.slice(3);
+    return (buy.articles || []).find(a => String(a.id) === String(id)) || null;
+  }
+
+  const codeNorm = key.startsWith("code:") ? key.slice(5) : saleNormCode(key);
+  return (buy.articles || []).find(a => saleNormCode(a.code) === codeNorm) || null;
+}
+
+function lossItemsForDay(dayIso) {
+  const dayMap = buy.dailySaleLossByIso?.[String(dayIso || "").trim()] || {};
+  const items = [];
+
+  for (const articleKey in dayMap) {
+    const qtyLoss = Number(dayMap[articleKey]);
+    if (!Number.isFinite(qtyLoss) || qtyLoss <= 0) continue;
+
+    const art = findArticleByArticleKey(articleKey);
+    if (!art) continue;
+
+    const prN = Number(art.prResult);
+    const amountN = (Number.isFinite(prN) ? prN : 0) * qtyLoss;
+
+    items.push({
+      articleKey,
+      article: art,
+      qtyLoss,
+      amountN
+    });
+  }
+
+  items.sort((x, y) => {
+    const aCat = splitArticleCode(x.article?.code || "").cat || "";
+    const bCat = splitArticleCode(y.article?.code || "").cat || "";
+
+    if (aCat === "" && bCat !== "") return 1;
+    if (bCat === "" && aCat !== "") return -1;
+
+    const catCmp = cmpAsc(aCat, bCat);
+    if (catCmp !== 0) return catCmp;
+
+    return cmpArticleSuffix(x.article?.code || "", y.article?.code || "");
+  });
+
+  return items;
+}
+
+function lossCardsHtmlForDay(dayIso) {
+  const items = lossItemsForDay(dayIso);
+  if (!items.length) {
+    return `<div style="opacity:.75; font-weight:800;">Aucune perte</div>`;
+  }
+
+  return items.map((it, idx) => {
+    const a = it.article;
+    const title = `${a.name || ""} (${a.code || ""})`;
+
+    const prN = Number(a.prResult);
+    const lossText = `${fmtResult(it.qtyLoss)} × ${fmtResult(prN)} = ${fmtResult(it.amountN)}`;
+
+    return `
+      <div style="${idx ? "margin-top:14px;" : ""}">
+        <div class="buy-cat-card" style="padding:14px; display:block;">
+          <div style="text-align:center; font-weight:1000; margin:0 0 12px 0;">
+            ${escapeHtml(title)}
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+            ${kv("Perte", lossText)}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function lossDaysOfMonth(iso) {
+  const ym = isoYearMonth(iso);
+  const out = [];
+
+  for (const dayIso in (buy.dailySaleLossByIso || {})) {
+    if (isoYearMonth(dayIso) !== ym) continue;
+
+    const total = totalLossForDay(dayIso);
+    if (!(Number.isFinite(total) && total > 0)) continue;
+
+    out.push(dayIso);
+  }
+
+  out.sort((a, b) => isoToDayTs(a) - isoToDayTs(b));
+  return out;
+}
+
 
 
 
@@ -6826,9 +6942,11 @@ function renderDailySaleRecap() {
 
 // ✅ 1 seul binding (délégation) qui survit aux rerenders
 bindDailySaleCardActions();
+bindDailySaleLossGlobalActions();
 
 renderDailySaleRecap();
 renderDailySaleGlobals();
+
 
 
 // ===============================
@@ -6842,8 +6960,8 @@ function bindDailySaleCardActions() {
   if (listEl.__boundDailySaleActions) return;
   listEl.__boundDailySaleActions = true;
 
-  listEl.addEventListener("click", async (e) => {
-      listEl.addEventListener("input", (e) => {
+  // ✅ input perte : bindé une seule fois
+  listEl.addEventListener("input", (e) => {
     const input = e.target.closest("[data-sale-loss-input]");
     if (!input) return;
 
@@ -6865,6 +6983,8 @@ function bindDailySaleCardActions() {
       validateBtn.style.cursor = enabled ? "pointer" : "not-allowed";
     }
   });
+
+  // ✅ Enter dans champ perte : bindé une seule fois
   listEl.addEventListener("keydown", (e) => {
     const input = e.target.closest("[data-sale-loss-input]");
     if (!input) return;
@@ -6877,33 +6997,34 @@ function bindDailySaleCardActions() {
     }
   });
 
-   const toggleBtn = e.target.closest("[data-sale-toggle]");
-if (toggleBtn) {
-  e.preventDefault();
-  e.stopPropagation();
+  // ✅ clics : bindé une seule fois
+  listEl.addEventListener("click", async (e) => {
+    const toggleBtn = e.target.closest("[data-sale-toggle]");
+    if (toggleBtn) {
+      e.preventDefault();
+      e.stopPropagation();
 
-  const key = toggleBtn.getAttribute("data-sale-toggle") || "";
+      const key = toggleBtn.getAttribute("data-sale-toggle") || "";
 
-  // ✅ UI immédiate (aucun rerender)
-  const card = toggleBtn.closest(".sale-card");
-  const expandedNow = card ? !card.classList.contains("is-expanded") : !getFoldState(isoDate, key);
+      // ✅ UI immédiate (aucun rerender)
+      const card = toggleBtn.closest(".sale-card");
+      const expandedNow = card ? !card.classList.contains("is-expanded") : !getFoldState(isoDate, key);
 
-  if (card) {
-    card.classList.toggle("is-expanded", expandedNow);
+      if (card) {
+        card.classList.toggle("is-expanded", expandedNow);
 
-    // met à jour la rotation flèche (tu l’avais en inline style)
-    const svg = toggleBtn.querySelector("svg");
-    if (svg) svg.style.transform = expandedNow ? "rotate(180deg)" : "rotate(0deg)";
+        // met à jour la rotation flèche
+        const svg = toggleBtn.querySelector("svg");
+        if (svg) svg.style.transform = expandedNow ? "rotate(180deg)" : "rotate(0deg)";
 
-    toggleBtn.setAttribute("aria-label", expandedNow ? "Replier" : "Déplier");
-    toggleBtn.setAttribute("title", expandedNow ? "Replier" : "Déplier");
-  }
+        toggleBtn.setAttribute("aria-label", expandedNow ? "Replier" : "Déplier");
+        toggleBtn.setAttribute("title", expandedNow ? "Replier" : "Déplier");
+      }
 
-  // ✅ persistance sans bloquer l’UI
-  setFoldState(isoDate, key, expandedNow).catch(console.error);
-
-  return;
-}
+      // ✅ persistance sans bloquer l’UI
+      setFoldState(isoDate, key, expandedNow).catch(console.error);
+      return;
+    }
 
     const venduBtn = e.target.closest("[data-sale-vendu]");
     if (venduBtn) {
@@ -6918,7 +7039,7 @@ if (toggleBtn) {
       return;
     }
 
-        const ajoutBtn = e.target.closest("[data-sale-ajout-toggle]");
+    const ajoutBtn = e.target.closest("[data-sale-ajout-toggle]");
     if (ajoutBtn) {
       e.preventDefault();
       e.stopPropagation();
@@ -6961,7 +7082,7 @@ if (toggleBtn) {
       return;
     }
 
-        const lossAddBtn = e.target.closest("[data-sale-loss-add]");
+    const lossAddBtn = e.target.closest("[data-sale-loss-add]");
     if (lossAddBtn) {
       e.preventDefault();
       e.stopPropagation();
@@ -7035,19 +7156,254 @@ if (toggleBtn) {
       return;
     }
 
-    
     const delBtn = e.target.closest("[data-sale-del]");
     if (delBtn) {
       e.preventDefault();
       e.stopPropagation();
 
       const key = delBtn.getAttribute("data-sale-del") || "";
-openDailySaleDelModal(key);
-
+      openDailySaleDelModal(key);
       return;
     }
   });
 }
+
+
+function bindDailySaleLossGlobalActions() {
+  const wrap = document.getElementById("dailySaleLossGlobalsWrap");
+  if (!wrap) return;
+
+  if (wrap.__boundDailySaleLossGlobals) return;
+  wrap.__boundDailySaleLossGlobals = true;
+
+  wrap.addEventListener("click", (e) => {
+    const dayBtn = e.target.closest("[data-sale-loss-day-open]");
+    if (dayBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openDailySaleLossDayModal(isoDate);
+      return;
+    }
+
+    const monthBtn = e.target.closest("[data-sale-loss-month-open]");
+    if (monthBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      openDailySaleLossMonthModal(isoDate);
+      return;
+    }
+  });
+
+  wrap.addEventListener("keydown", (e) => {
+    const dayBtn = e.target.closest("[data-sale-loss-day-open]");
+    const monthBtn = e.target.closest("[data-sale-loss-month-open]");
+
+    if (e.key !== "Enter" && e.key !== " ") return;
+
+    if (dayBtn) {
+      e.preventDefault();
+      openDailySaleLossDayModal(isoDate);
+      return;
+    }
+
+    if (monthBtn) {
+      e.preventDefault();
+      openDailySaleLossMonthModal(isoDate);
+    }
+  });
+}
+
+
+// ===============================
+// ✅ MODALE "Pertes du jour"
+// ===============================
+function closeDailySaleLossDayModal() {
+  const bd = document.getElementById("dailySaleLossDayBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleLossDayModal(dayIso = isoDate) {
+  if (document.getElementById("dailySaleLossDayBackdrop")) return;
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleLossDayBackdrop";
+  bd.className = "cat-modal-backdrop";
+
+  bd.innerHTML = `
+    <div
+      class="cat-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pertes du jour"
+      style="
+        width:min(720px, calc(100vw - 24px));
+        max-width:calc(100vw - 24px);
+        display:flex;
+        flex-direction:column;
+        max-height:min(82vh, 700px);
+      "
+    >
+      <div class="cat-modal-title" style="flex:0 0 auto;">
+        Pertes du jour
+      </div>
+
+      <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+        ${lossCardsHtmlForDay(dayIso)}
+      </div>
+
+      <div
+        class="cat-modal-actions"
+        style="
+          flex:0 0 auto;
+          margin-top:12px;
+          padding-top:10px;
+          background:inherit;
+          position:sticky;
+          bottom:0;
+          justify-content:center;
+        "
+      >
+        <button id="dailySaleLossDayOk" class="modal-btn ok enabled" type="button">OK</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeDailySaleLossDayModal();
+  });
+
+  document.body.appendChild(bd);
+
+  const okBtn = document.getElementById("dailySaleLossDayOk");
+  if (okBtn) okBtn.addEventListener("click", closeDailySaleLossDayModal);
+}
+
+// ===============================
+// ✅ MODALE "Pertes du mois"
+// ===============================
+function closeDailySaleLossMonthModal() {
+  const bd = document.getElementById("dailySaleLossMonthBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleLossMonthModal(monthIso = isoDate) {
+  if (document.getElementById("dailySaleLossMonthBackdrop")) return;
+
+  const days = lossDaysOfMonth(monthIso);
+  let selectedDay = days[0] || "";
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleLossMonthBackdrop";
+  bd.className = "cat-modal-backdrop";
+
+  function renderMonthContent() {
+    const daysHtml = days.length
+      ? days.map(dayIso => {
+          const active = dayIso === selectedDay;
+          return `
+            <button
+              type="button"
+              class="buy-cat-card"
+              data-loss-month-day="${escapeAttr(dayIso)}"
+              style="
+                width:100%;
+                text-align:left;
+                padding:14px;
+                display:block;
+                cursor:pointer;
+                ${active ? "background:#2e7bff; border-color:rgba(255,255,255,0.95);" : ""}
+              "
+            >
+              <div style="font-weight:1000;">
+                ${escapeHtml(isoToFr(dayIso))}
+              </div>
+              <div style="margin-top:6px; opacity:.95;">
+                ${escapeHtml(fmtResult(totalLossForDay(dayIso)))}
+              </div>
+            </button>
+          `;
+        }).join(`<div style="height:12px;"></div>`)
+      : `<div style="opacity:.75; font-weight:800;">Aucune perte ce mois</div>`;
+
+    const detailsHtml = selectedDay
+      ? lossCardsHtmlForDay(selectedDay)
+      : `<div style="opacity:.75; font-weight:800;">Aucune perte ce mois</div>`;
+
+    bd.innerHTML = `
+      <div
+        class="cat-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pertes du mois"
+        style="
+          width:min(980px, calc(100vw - 24px));
+          max-width:calc(100vw - 24px);
+          display:flex;
+          flex-direction:column;
+          max-height:min(84vh, 760px);
+        "
+      >
+        <div class="cat-modal-title" style="flex:0 0 auto;">
+          Pertes du mois
+        </div>
+
+        <div style="flex:1 1 auto; overflow:auto; padding-right:6px;">
+          <div
+            style="
+              display:grid;
+              grid-template-columns:minmax(240px, 300px) minmax(0, 1fr);
+              gap:16px;
+              align-items:start;
+            "
+          >
+            <div style="min-width:0;">
+              <div style="font-weight:1000; margin-bottom:10px;">Jours</div>
+              ${daysHtml}
+            </div>
+
+            <div style="min-width:0;">
+              <div style="font-weight:1000; margin-bottom:10px;">Détail</div>
+              ${detailsHtml}
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="cat-modal-actions"
+          style="
+            flex:0 0 auto;
+            margin-top:12px;
+            padding-top:10px;
+            background:inherit;
+            position:sticky;
+            bottom:0;
+            justify-content:center;
+          "
+        >
+          <button id="dailySaleLossMonthOk" class="modal-btn ok enabled" type="button">OK</button>
+        </div>
+      </div>
+    `;
+
+    const okBtn = document.getElementById("dailySaleLossMonthOk");
+    if (okBtn) okBtn.addEventListener("click", closeDailySaleLossMonthModal);
+
+    bd.querySelectorAll("[data-loss-month-day]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        selectedDay = btn.getAttribute("data-loss-month-day") || "";
+        renderMonthContent();
+      });
+    });
+  }
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeDailySaleLossMonthModal();
+  });
+
+  document.body.appendChild(bd);
+  renderMonthContent();
+}
+
 
 // ===============================
 // ✅ MODALE "Validation impossible" — Perte
