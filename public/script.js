@@ -6189,25 +6189,33 @@ const salesToday = salesTodayForArticleKey(articleKey);
 
 const venduN = sumQtySales(salesToday); // ✅ logique stock / qté res inchangée
 
-// ✅ affichage "Vendu" = ventes normales + avances initiales createProv
+// ===============================
+// ✅ RECTANGLE DÉPLIÉ seulement
+// ventes normales + avances initiales createProv, avec cumul
+// ===============================
 const venduDisplayN = sumVenduQtyDisplay(salesToday);
 const venduDisplayDisp = (Number.isFinite(venduDisplayN) && venduDisplayN > 0)
   ? fmtResult(venduDisplayN)
   : "";
 
-// ✅ cumul jusqu’au jour affiché inclus
-//    = ventes normales + avances initiales createProv
 const venduCumN = sumVenduQtyUpToDayForArticleKey(articleKey, isoDate);
 const venduCumDisp = fmtResult(Number.isFinite(venduCumN) ? venduCumN : 0);
 
-// ✅ règle d'affichage :
-// - s'il y a une vente / avance initiale ce jour : "x (cumul)"
-// - sinon : "(cumul)"
 const venduBaseText = venduDisplayDisp
   ? `${venduDisplayDisp} (${venduCumDisp})`
   : `(${venduCumDisp})`;
 
-// ✅ détails avances du jour conservés
+// ===============================
+// ✅ RECTANGLE PLIÉ : retour au comportement initial
+// - chiffre vendu = ventes normales seulement
+// - avances affichées à part comme avant
+// - pas de cumul ici
+// ===============================
+const venduNormalN = sumNormalSoldQty(salesToday);
+const venduNormalDisp = (Number.isFinite(venduNormalN) && venduNormalN > 0)
+  ? fmtResult(venduNormalN)
+  : "";
+
 const advancesToday = (salesToday || [])
   .filter(s => s && s.type === "advance")
   .map(s => {
@@ -6215,12 +6223,13 @@ const advancesToday = (salesToday || [])
     if (!Number.isFinite(aN) || aN <= 0) return null;
     const pc = String(s.provCode || "").trim();
     const part = fmtResult(aN);
-    return pc ? `${part} (${pc})` : part;
+    return pc ? `${part} (${escapeHtml(pc)})` : part;
   })
   .filter(Boolean);
 
-// ✅ assemblage final
-const venduLineParts = [venduBaseText];
+// ✅ assemblage PLIÉ inchangé
+const venduLineParts = [];
+if (venduNormalDisp) venduLineParts.push(venduNormalDisp);
 if (advancesToday.length) venduLineParts.push(...advancesToday);
 
 const venduLineText = venduLineParts.join(" + ");
@@ -6228,6 +6237,7 @@ const venduLineText = venduLineParts.join(" + ");
 const venduEditRows = getSaleEditRowsForArticleKey(articleKey, isoDate);
 const hasRedVendu = String(venduLineText || "").trim().length > 0;
 const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
+
 
 
 
