@@ -4773,6 +4773,73 @@ buy.dailySaleFoldByIso = buy.dailySaleFoldByIso || {}; // { [iso]: { [originCode
 buy.dailySaleAjoutModeByIso = buy.dailySaleAjoutModeByIso || {}; 
 // { [iso]: { [articleKey]: "date" | "age" } }
 
+// ===============================
+// ✅ Pertes — Vente du jour
+// ===============================
+// total des pertes par jour et par article
+buy.dailySaleLossByIso = buy.dailySaleLossByIso || {};
+// { [iso]: { [articleKey]: number } }
+
+// état UI temporaire du champ "Perte"
+buy.dailySaleLossUiByIso = buy.dailySaleLossUiByIso || {};
+// { [iso]: { [articleKey]: { open:boolean, draft:string } } }
+
+function getLossTotalForArticleKey(iso, articleKey) {
+  const isoKey = String(iso || "").trim();
+  const k = String(articleKey || "").trim();
+  const n = Number(buy.dailySaleLossByIso?.[isoKey]?.[k]);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function setLossTotalForArticleKey(iso, articleKey, value) {
+  const isoKey = String(iso || "").trim();
+  const k = String(articleKey || "").trim();
+
+  buy.dailySaleLossByIso[isoKey] = buy.dailySaleLossByIso[isoKey] || {};
+  buy.dailySaleLossByIso[isoKey][k] = Number.isFinite(value) ? value : 0;
+}
+
+function addLossForArticleKey(iso, articleKey, rawValue) {
+  const n = parseLooseNumber(rawValue);
+  if (!Number.isFinite(n) || n < 0) return false;
+
+  const cur = getLossTotalForArticleKey(iso, articleKey);
+  setLossTotalForArticleKey(iso, articleKey, cur + n);
+  return true;
+}
+
+function getLossUiState(iso, articleKey) {
+  const isoKey = String(iso || "").trim();
+  const k = String(articleKey || "").trim();
+
+  buy.dailySaleLossUiByIso[isoKey] = buy.dailySaleLossUiByIso[isoKey] || {};
+  buy.dailySaleLossUiByIso[isoKey][k] = buy.dailySaleLossUiByIso[isoKey][k] || {
+    open: false,
+    draft: ""
+  };
+
+  return buy.dailySaleLossUiByIso[isoKey][k];
+}
+
+function setLossUiState(iso, articleKey, patch = {}) {
+  const state = getLossUiState(iso, articleKey);
+  Object.assign(state, patch);
+}
+
+function totalLossBeforeDayForArticleKey(articleKey, iso) {
+  const k = String(articleKey || "");
+  let total = 0;
+
+  for (const dayIso in (buy.dailySaleLossByIso || {})) {
+    if (isoToDayTs(dayIso) >= isoToDayTs(iso)) continue; // strictement avant
+    const n = Number(buy.dailySaleLossByIso?.[dayIso]?.[k]);
+    if (Number.isFinite(n)) total += n;
+  }
+
+  return total;
+}
+
+
 
 // ===============================
 // ✅ Articles masqués de "Vente du jour"
@@ -5742,11 +5809,13 @@ function computeGlobalsForDay(iso) {
     const salesToday = salesOfDayForArticleKey(iso, articleKey); // peut être vide
     const venduN = sumQtySales(salesToday); // 0 si aucune vente
 
-    const startQtyN = computeStartQtyForDay(a, iso);
+        const startQtyN = computeStartQtyForDay(a, iso);
     if (!Number.isFinite(startQtyN)) continue;
 
-    const resN = startQtyN - venduN;  // Qté res du jour
-    valeurTotal += (prN * resN);
+    const lossTodayN = getLossTotalForArticleKey(iso, articleKey);
+    const resN = startQtyN - venduN - lossTodayN;  // Qté res du jour, pertes incluses
+    valeurTotal += (prN * Math.max(0, resN));
+
   }
 
   // ✅ "has" reste basé sur l'existence de ventes (comme ton affichage actuel des globals)
@@ -5887,9 +5956,11 @@ function computeStartQtyForDay(article, iso) {
 
   const articleKey = saleArticleKeyFromArticle(article);
   const soldBefore = sumSoldQtyBeforeDayForArticleKey(articleKey, iso);
+  const lossBefore = totalLossBeforeDayForArticleKey(articleKey, iso);
 
-  return ini - soldBefore;
+  return ini - soldBefore - lossBefore;
 }
+
 
 
 
@@ -6166,22 +6237,107 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
   const startQtyN = startQtyN_top;
   const qteIni = fmtWhite(a.qty || "");
 
-  const vendu = venduNormalDisp; // ✅ affiche seulement les ventes normales
+    const vendu = venduNormalDisp; // ✅ affiche seulement les ventes normales
 
+  const lossTodayN = getLossTotalForArticleKey(isoDate, articleKey);
 
-  const resN = (Number.isFinite(startQtyN) ? startQtyN : 0) - (Number.isFinite(venduN) ? venduN : 0);
-  const qteRes = Number.isFinite(startQtyN) ? fmtResult(resN) : "";
+  const resN =
+    (Number.isFinite(startQtyN) ? startQtyN : 0) -
+    (Number.isFinite(venduN) ? venduN : 0) -
+    (Number.isFinite(lossTodayN) ? lossTodayN : 0);
+
+  const qteRes = Number.isFinite(startQtyN) ? fmtResult(Math.max(0, resN)) : "";
 
   // ✅ VALEUR = PR × Qté res (du même jour) — évolutif
-const prN = Number(a.prResult);
-const valeurN = (Number.isFinite(prN) && Number.isFinite(startQtyN)) ? (prN * resN) : NaN;
-const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
-  ? `${fmtResult(prN)} × ${fmtResult(resN)} = ${fmtResult(valeurN)}`
-  : "";
+  const prN = Number(a.prResult);
+  const valeurN = (Number.isFinite(prN) && Number.isFinite(startQtyN))
+    ? (prN * Math.max(0, resN))
+    : NaN;
+
+  const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
+    ? `${fmtResult(prN)} × ${fmtResult(Math.max(0, resN))} = ${fmtResult(valeurN)}`
+    : "";
+
 
 
   const prt = prtExpressionForToday(a);
   const pvt = pvtExpressionForToday(articleKey);
+
+    const lossUi = getLossUiState(isoDate, articleKey);
+  const lossDisplay = lossTodayN > 0 ? fmtResult(lossTodayN) : "";
+  const lossDraft = String(lossUi.draft || "").trim();
+  const lossDraftHasValue = Number.isFinite(parseLooseNumber(lossDraft)) && parseLooseNumber(lossDraft) >= 0;
+
+  const perteRowHtml = lossUi.open
+    ? `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="font-weight:1000; opacity:.95; white-space:nowrap;">Perte :</div>
+        <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+          <input
+            class="input"
+            data-sale-loss-input="${escapeAttr(articleKey)}"
+            inputmode="decimal"
+            autocomplete="off"
+            value="${escapeAttr(lossUi.draft || "")}"
+            style="flex:1; min-width:0;"
+          />
+          <button
+            type="button"
+            data-sale-loss-validate="${escapeAttr(articleKey)}"
+            style="
+              min-width:110px;
+              background:#000;
+              color:#2e7bff;
+              border:1px solid rgba(255,255,255,0.95);
+              border-radius:12px;
+              padding:10px 16px;
+              font-weight:900;
+              cursor:${lossDraftHasValue ? "pointer" : "not-allowed"};
+              opacity:${lossDraftHasValue ? "1" : ".45"};
+            "
+            ${lossDraftHasValue ? "" : "disabled"}
+          >Valider</button>
+
+          <button
+            type="button"
+            data-sale-loss-cancel="${escapeAttr(articleKey)}"
+            style="
+              min-width:110px;
+              background:#000;
+              color:#fff;
+              border:1px solid rgba(255,255,255,0.95);
+              border-radius:12px;
+              padding:10px 16px;
+              font-weight:900;
+              cursor:pointer;
+            "
+          >Annuler</button>
+        </div>
+      </div>
+    `
+    : `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="font-weight:1000; opacity:.95; white-space:nowrap;">Perte :</div>
+        <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+          <div class="buy-cat-white" style="flex:1; min-width:0;">${escapeHtml(lossDisplay)}</div>
+          <button
+            type="button"
+            data-sale-loss-add="${escapeAttr(articleKey)}"
+            style="
+              min-width:110px;
+              background:#000;
+              color:#34c759;
+              border:1px solid rgba(255,255,255,0.95);
+              border-radius:12px;
+              padding:10px 16px;
+              font-weight:900;
+              cursor:pointer;
+            "
+          >Ajouter</button>
+        </div>
+      </div>
+    `;
+
 
 
   let showPRT = prt.hasAny;
@@ -6293,10 +6449,16 @@ const valeurDisplay = (Number.isFinite(valeurN) && Number.isFinite(resN))
       ${kv("PVT", pvtLineDisplay)}
     </div>
 
+        <div style="height:10px;"></div>
+    <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+      ${kv("Valeur", valeurDisplay)}
+    </div>
+
     <div style="height:10px;"></div>
-<div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
-  ${kv("Valeur", valeurDisplay)}
-</div>
+    <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+      ${perteRowHtml}
+    </div>
+
 
   `;
 
@@ -6430,6 +6592,40 @@ function bindDailySaleCardActions() {
   listEl.__boundDailySaleActions = true;
 
   listEl.addEventListener("click", async (e) => {
+      listEl.addEventListener("input", (e) => {
+    const input = e.target.closest("[data-sale-loss-input]");
+    if (!input) return;
+
+    const key = input.getAttribute("data-sale-loss-input") || "";
+    const filtered = digitsCommaOnly(input.value);
+    if (filtered !== input.value) input.value = filtered;
+
+    setLossUiState(isoDate, key, { draft: filtered });
+
+    const card = input.closest(".sale-card");
+    if (!card) return;
+
+    const validateBtn = card.querySelector(`[data-sale-loss-validate="${CSS.escape(key)}"]`);
+    if (validateBtn) {
+      const n = parseLooseNumber(filtered);
+      const enabled = Number.isFinite(n) && n >= 0 && String(filtered).trim() !== "";
+      validateBtn.disabled = !enabled;
+      validateBtn.style.opacity = enabled ? "1" : ".45";
+      validateBtn.style.cursor = enabled ? "pointer" : "not-allowed";
+    }
+  });
+  listEl.addEventListener("keydown", (e) => {
+    const input = e.target.closest("[data-sale-loss-input]");
+    if (!input) return;
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const key = input.getAttribute("data-sale-loss-input") || "";
+      const btn = listEl.querySelector(`[data-sale-loss-validate="${CSS.escape(key)}"]`);
+      if (btn && !btn.disabled) btn.click();
+    }
+  });
+
    const toggleBtn = e.target.closest("[data-sale-toggle]");
 if (toggleBtn) {
   e.preventDefault();
@@ -6514,9 +6710,81 @@ if (toggleBtn) {
       return;
     }
 
+        const lossAddBtn = e.target.closest("[data-sale-loss-add]");
+    if (lossAddBtn) {
+      e.preventDefault();
+      e.stopPropagation();
 
+      const key = lossAddBtn.getAttribute("data-sale-loss-add") || "";
+      setLossUiState(isoDate, key, { open: true, draft: "" });
+      renderDailySaleRecap();
+      renderDailySaleGlobals();
 
+      setTimeout(() => {
+        const input = document.querySelector(`[data-sale-loss-input="${CSS.escape(key)}"]`);
+        if (input) input.focus();
+      }, 0);
 
+      return;
+    }
+
+    const lossCancelBtn = e.target.closest("[data-sale-loss-cancel]");
+    if (lossCancelBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const key = lossCancelBtn.getAttribute("data-sale-loss-cancel") || "";
+      setLossUiState(isoDate, key, { open: false, draft: "" });
+      renderDailySaleRecap();
+      renderDailySaleGlobals();
+      return;
+    }
+
+    const lossValidateBtn = e.target.closest("[data-sale-loss-validate]");
+    if (lossValidateBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const key = lossValidateBtn.getAttribute("data-sale-loss-validate") || "";
+      const state = getLossUiState(isoDate, key);
+      const raw = String(state.draft || "").trim();
+      const lossN = parseLooseNumber(raw);
+
+      if (!Number.isFinite(lossN) || lossN < 0) return;
+
+      let art = null;
+      if (key.startsWith("id:")) {
+        const id = key.slice(3);
+        art = (buy.articles || []).find(a => !a.deletedAtIso && String(a.id) === String(id));
+      } else {
+        const codeNorm = key.startsWith("code:") ? key.slice(5) : saleNormCode(key);
+        art = (buy.articles || []).find(a => !a.deletedAtIso && saleNormCode(a.code) === codeNorm);
+      }
+
+      if (!art) return;
+
+      const startQtyN = computeStartQtyForDay(art, isoDate);
+      const soldTodayN = sumQtySales(salesTodayForArticleKey(key));
+      const currentLossN = getLossTotalForArticleKey(isoDate, key);
+      const remainingBeforeNewLoss = startQtyN - soldTodayN - currentLossN;
+
+      if (lossN > remainingBeforeNewLoss) {
+        openDailySaleLossImpossibleModal();
+        return;
+      }
+
+      const ok = addLossForArticleKey(isoDate, key, raw);
+      if (!ok) return;
+
+      setLossUiState(isoDate, key, { open: false, draft: "" });
+      await safePersistNow();
+
+      renderDailySaleRecap();
+      renderDailySaleGlobals();
+      return;
+    }
+
+    
     const delBtn = e.target.closest("[data-sale-del]");
     if (delBtn) {
       e.preventDefault();
@@ -6528,6 +6796,53 @@ openDailySaleDelModal(key);
       return;
     }
   });
+}
+
+// ===============================
+// ✅ MODALE "Validation impossible" — Perte
+// ===============================
+function closeDailySaleLossImpossibleModal() {
+  const bd = document.getElementById("dailySaleLossImpossibleBackdrop");
+  if (bd) bd.remove();
+}
+
+function openDailySaleLossImpossibleModal() {
+  if (document.getElementById("dailySaleLossImpossibleBackdrop")) return;
+
+  const bd = document.createElement("div");
+  bd.id = "dailySaleLossImpossibleBackdrop";
+  bd.className = "cat-del-backdrop";
+
+  bd.innerHTML = `
+    <div class="cat-del-modal" role="dialog" aria-modal="true" aria-label="Validation impossible">
+      <div class="cat-del-text">Validation impossible</div>
+      <div class="cat-del-actions">
+        <button
+          id="dailySaleLossImpossibleOk"
+          type="button"
+          style="
+            min-width:120px;
+            background:#000;
+            color:#fff;
+            border:1px solid rgba(255,255,255,0.95);
+            border-radius:12px;
+            padding:10px 16px;
+            font-weight:900;
+            cursor:pointer;
+          "
+        >OK</button>
+      </div>
+    </div>
+  `;
+
+  bd.addEventListener("click", (e) => {
+    if (e.target === bd) closeDailySaleLossImpossibleModal();
+  });
+
+  document.body.appendChild(bd);
+
+  const okBtn = document.getElementById("dailySaleLossImpossibleOk");
+  if (okBtn) okBtn.addEventListener("click", closeDailySaleLossImpossibleModal);
 }
 
 
