@@ -4917,8 +4917,11 @@ async function setFoldState(iso, key, expanded) {
 function getAjoutModeState(iso, key) {
   const k = foldKey(key);
   buy.dailySaleAjoutModeByIso[iso] = buy.dailySaleAjoutModeByIso[iso] || {};
-  return buy.dailySaleAjoutModeByIso[iso][k] === "age" ? "age" : "date";
+
+  // ✅ par défaut on affiche l'âge
+  return buy.dailySaleAjoutModeByIso[iso][k] === "date" ? "date" : "age";
 }
+
 
 async function setAjoutModeState(iso, key, mode) {
   const k = foldKey(key);
