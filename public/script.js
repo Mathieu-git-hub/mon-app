@@ -5691,6 +5691,22 @@ function pvtExpressionForToday(articleKey) {
   };
 }
 
+function beneficeValueForArticle(article) {
+  const articleKey = saleArticleKeyFromArticle(article);
+
+  // ✅ cumul PVT jusqu'au jour affiché inclus
+  const pvt = pvtExpressionForToday(articleKey);
+  const pvtCumN = Number.isFinite(pvt?.cumToDay) ? pvt.cumToDay : 0;
+
+  // ✅ PRG de l'article
+  const prgN = Number(article?.prgResult);
+  const prgSafe = Number.isFinite(prgN) ? prgN : 0;
+
+  // ✅ bénéfice = cumul PVT - PRG
+  return pvtCumN - prgSafe;
+}
+
+
 // ===============================
 // ✅ Lignes de modale "Vendu" / "Annulation - modification"
 // ordre identique à l'intitulé PVT
@@ -6340,10 +6356,14 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
 
 
 
-  const prt = prtExpressionForToday(a);
+    const prt = prtExpressionForToday(a);
   const pvt = pvtExpressionForToday(articleKey);
 
-    const lossUi = getLossUiState(isoDate, articleKey);
+  const beneficeN = beneficeValueForArticle(a);
+  const beneficeDisplay = fmtResult(beneficeN);
+
+  const lossUi = getLossUiState(isoDate, articleKey);
+
   const lossDisplay = lossTodayN > 0 ? fmtResult(lossTodayN) : "";
   const lossDraft = String(lossUi.draft || "").trim();
   const lossDraftHasValue = Number.isFinite(parseLooseNumber(lossDraft)) && parseLooseNumber(lossDraft) >= 0;
@@ -6437,8 +6457,12 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
     </div>
   `).join(`<div style="height:10px;"></div>`);
 
+    const benefitGreenStyle = beneficeN >= 0
+    ? "background:#34c759; border-color:rgba(255,255,255,0.95);"
+    : "";
+
   return `
-    <div class="buy-cat-card sale-card" style="padding:14px; display:block;">
+    <div class="buy-cat-card sale-card" style="padding:14px; display:block; ${benefitGreenStyle}">
       ${headerRow}
 
       <div class="sale-folded">
@@ -6452,6 +6476,7 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
       </div>
     </div>
   `;
+
 
   }
 
@@ -6467,8 +6492,12 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
     </div>
   `).join(`<div style="height:10px;"></div>`);
 
+    const benefitGreenStyle = beneficeN >= 0
+    ? "background:#34c759; border-color:rgba(255,255,255,0.95);"
+    : "";
+
   return `
-    <div class="buy-cat-card sale-card is-expanded" style="padding:14px; display:block;">
+    <div class="buy-cat-card sale-card is-expanded" style="padding:14px; display:block; ${benefitGreenStyle}">
       ${headerRow}
 
       <!-- (optionnel) folded caché -->
@@ -6484,6 +6513,7 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
       </div>
     </div>
   `;
+
 }
 
 
@@ -6524,10 +6554,12 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
         : ``
     }
 
-    <div style="height:10px;"></div>
-    <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
+        <div style="height:10px;"></div>
+    <div style="display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:12px; margin:0;">
       ${kv("PVT", pvtLineDisplay)}
+      ${kv("Bénéfice", beneficeDisplay)}
     </div>
+
 
         <div style="height:10px;"></div>
     <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin:0;">
@@ -6542,8 +6574,12 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
 
   `;
 
+        const benefitGreenStyle = beneficeN >= 0
+      ? "background:#34c759; border-color:rgba(255,255,255,0.95);"
+      : "";
+
     return `
-    <div class="buy-cat-card sale-card ${expanded ? "is-expanded" : ""}" style="padding:14px; display:block;">
+    <div class="buy-cat-card sale-card ${expanded ? "is-expanded" : ""}" style="padding:14px; display:block; ${benefitGreenStyle}">
       ${headerRow}
 
       <div class="sale-folded">
@@ -6555,6 +6591,7 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
       </div>
     </div>
   `;
+
 
 }
 
