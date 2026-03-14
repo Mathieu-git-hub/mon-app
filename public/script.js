@@ -4856,13 +4856,35 @@ function totalLossBeforeDayForArticleKey(articleKey, iso) {
   return total;
 }
 
+function lossMoneyForArticleKeyOnDay(iso, articleKey) {
+  const isoKey = String(iso || "").trim();
+  const key = String(articleKey || "").trim();
+
+  const qtyLoss = Number(buy.dailySaleLossByIso?.[isoKey]?.[key]);
+  if (!Number.isFinite(qtyLoss) || qtyLoss <= 0) return 0;
+
+  let art = null;
+
+  if (key.startsWith("id:")) {
+    const id = key.slice(3);
+    art = (buy.articles || []).find(a => String(a.id) === String(id));
+  } else {
+    const codeNorm = key.startsWith("code:") ? key.slice(5) : saleNormCode(key);
+    art = (buy.articles || []).find(a => saleNormCode(a.code) === codeNorm);
+  }
+
+  const prN = Number(art?.prResult);
+  if (!Number.isFinite(prN)) return 0;
+
+  return qtyLoss * prN;
+}
+
 function totalLossForDay(iso) {
   const dayMap = buy.dailySaleLossByIso?.[String(iso || "").trim()] || {};
   let total = 0;
 
-  for (const k in dayMap) {
-    const n = Number(dayMap[k]);
-    if (Number.isFinite(n)) total += n;
+  for (const key in dayMap) {
+    total += lossMoneyForArticleKeyOnDay(iso, key);
   }
 
   return total;
@@ -4887,9 +4909,8 @@ function totalLossYearToDay(iso) {
     if (isoToDayTs(dayIso) > isoToDayTs(iso)) continue;
 
     const dayMap = buy.dailySaleLossByIso[dayIso] || {};
-    for (const k in dayMap) {
-      const n = Number(dayMap[k]);
-      if (Number.isFinite(n)) total += n;
+    for (const key in dayMap) {
+      total += lossMoneyForArticleKeyOnDay(dayIso, key);
     }
   }
 
@@ -4905,9 +4926,8 @@ function totalLossMonthToDay(iso) {
     if (isoToDayTs(dayIso) > isoToDayTs(iso)) continue;
 
     const dayMap = buy.dailySaleLossByIso[dayIso] || {};
-    for (const k in dayMap) {
-      const n = Number(dayMap[k]);
-      if (Number.isFinite(n)) total += n;
+    for (const key in dayMap) {
+      total += lossMoneyForArticleKeyOnDay(dayIso, key);
     }
   }
 
@@ -4926,6 +4946,7 @@ function isLastDayOfMonthIso(iso) {
   const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
   return d === last;
 }
+
 
 
 
