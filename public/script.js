@@ -4729,11 +4729,28 @@ function renderDailySalePage(isoDate) {
     </div>
   </div>
 
-  <!-- ✅ Valeur totale (toujours visible) -->
+    <!-- ✅ Valeur totale (toujours visible) -->
   <div style="margin-top:12px; display:flex; align-items:center; gap:10px;">
     <div style="font-weight:1000; opacity:.95; white-space:nowrap;">Valeur totale :</div>
     <div id="dailySaleValeurTotalGlobal" class="buy-cat-white" style="flex:1;"></div>
   </div>
+
+  <!-- ✅ Perte totale / Ce mois -->
+  <div id="dailySaleLossGlobalsWrap" style="margin-top:12px;">
+    <div id="dailySaleLossGlobalsRow"
+         style="display:grid; grid-template-columns: 2fr 1fr; gap:12px; align-items:start;">
+      <div style="min-width:0;">
+        <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">Perte totale :</div>
+        <div id="dailySaleLossTotalGlobal" class="buy-cat-white"></div>
+      </div>
+
+      <div id="dailySaleLossMonthCol" style="min-width:0; display:none;">
+        <div style="font-weight:1000; opacity:.95; margin-bottom:6px;">Ce mois :</div>
+        <div id="dailySaleLossMonthGlobal" class="buy-cat-white"></div>
+      </div>
+    </div>
+  </div>
+
 
 </div>
 
@@ -4838,6 +4855,78 @@ function totalLossBeforeDayForArticleKey(articleKey, iso) {
 
   return total;
 }
+
+function totalLossForDay(iso) {
+  const dayMap = buy.dailySaleLossByIso?.[String(iso || "").trim()] || {};
+  let total = 0;
+
+  for (const k in dayMap) {
+    const n = Number(dayMap[k]);
+    if (Number.isFinite(n)) total += n;
+  }
+
+  return total;
+}
+
+function isoYear(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[1] : "";
+}
+
+function isoYearMonth(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[1]}-${m[2]}` : "";
+}
+
+function totalLossYearToDay(iso) {
+  const y = isoYear(iso);
+  let total = 0;
+
+  for (const dayIso in (buy.dailySaleLossByIso || {})) {
+    if (isoYear(dayIso) !== y) continue;
+    if (isoToDayTs(dayIso) > isoToDayTs(iso)) continue;
+
+    const dayMap = buy.dailySaleLossByIso[dayIso] || {};
+    for (const k in dayMap) {
+      const n = Number(dayMap[k]);
+      if (Number.isFinite(n)) total += n;
+    }
+  }
+
+  return total;
+}
+
+function totalLossMonthToDay(iso) {
+  const ym = isoYearMonth(iso);
+  let total = 0;
+
+  for (const dayIso in (buy.dailySaleLossByIso || {})) {
+    if (isoYearMonth(dayIso) !== ym) continue;
+    if (isoToDayTs(dayIso) > isoToDayTs(iso)) continue;
+
+    const dayMap = buy.dailySaleLossByIso[dayIso] || {};
+    for (const k in dayMap) {
+      const n = Number(dayMap[k]);
+      if (Number.isFinite(n)) total += n;
+    }
+  }
+
+  return total;
+}
+
+function isLastDayOfMonthIso(iso) {
+  const s = String(iso || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return false;
+
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+
+  const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return d === last;
+}
+
 
 
 
@@ -5906,28 +5995,26 @@ function renderDailySaleGlobals() {
   const elPVT = document.getElementById("dailySalePVTGlobal");
   const elVAL = document.getElementById("dailySaleValeurTotalGlobal");
 
-  if (!wrap || !prtpvtWrap || !elPRT || !elPVT || !elVAL) return;
+  const elLossTotal = document.getElementById("dailySaleLossTotalGlobal");
+  const elLossMonthCol = document.getElementById("dailySaleLossMonthCol");
+  const elLossMonth = document.getElementById("dailySaleLossMonthGlobal");
 
-  // ✅ Valeur totale doit toujours être visible (même sans ventes)
+  if (!wrap || !prtpvtWrap || !elPRT || !elPVT || !elVAL || !elLossTotal || !elLossMonthCol || !elLossMonth) return;
+
   wrap.style.display = "";
 
-  // 1) PRT/PVT : logique inchangée (basée sur les ventes du jour)
   const g = computeGlobalsForDay(isoDate);
 
   if (!g.has) {
-    // pas de ventes => on cache seulement PRT/PVT
     prtpvtWrap.style.display = "none";
     elPRT.textContent = "";
     elPVT.textContent = "";
   } else {
-    // ventes => on affiche PRT/PVT
     prtpvtWrap.style.display = "grid";
     elPRT.textContent = fmtResult(g.prtGlobal);
     elPVT.textContent = fmtResult(g.pvtGlobal);
   }
 
-  // 2) Valeur totale : doit toujours s'afficher
-  //    et doit être 0 quand aucun article n'apparait
   let v = 0;
   if (typeof computeValeurTotalForDay === "function") {
     v = computeValeurTotalForDay(isoDate);
@@ -5937,9 +6024,23 @@ function renderDailySaleGlobals() {
     v = 0;
   }
 
-  // si aucun article "présent", computeValeurTotalForDay doit déjà renvoyer 0.
   elVAL.textContent = fmtResult(Number.isFinite(v) ? v : 0);
+
+  // ✅ Perte totale du jour + cumul annuel entre parenthèses
+  const lossDay = totalLossForDay(isoDate);
+  const lossYearCum = totalLossYearToDay(isoDate);
+  elLossTotal.textContent = `${fmtResult(lossDay)} (${fmtResult(lossYearCum)})`;
+
+  // ✅ "Ce mois" seulement le dernier jour du mois
+  if (isLastDayOfMonthIso(isoDate)) {
+    elLossMonthCol.style.display = "";
+    elLossMonth.textContent = fmtResult(totalLossMonthToDay(isoDate));
+  } else {
+    elLossMonthCol.style.display = "none";
+    elLossMonth.textContent = "";
+  }
 }
+
 
 
 
@@ -6362,11 +6463,22 @@ const canOpenVenduModal = hasRedVendu && venduEditRows.length > 0;
   const beneficeN = beneficeValueForArticle(a);
   const beneficeDisplay = fmtResult(beneficeN);
 
-  const lossUi = getLossUiState(isoDate, articleKey);
+    const lossUi = getLossUiState(isoDate, articleKey);
 
-  const lossDisplay = lossTodayN > 0 ? fmtResult(lossTodayN) : "";
+  // ✅ hypothèse cohérente :
+  // la valorisation monétaire de la perte = cumul perte × PR unitaire
+  // (PRT affiché étant déjà une opération du jour, non une valeur unitaire stable)
+  const lossAmountN = (Number.isFinite(lossTodayN) && Number.isFinite(prN))
+    ? (lossTodayN * prN)
+    : 0;
+
+  const lossDisplay = (Number.isFinite(lossTodayN) && lossTodayN > 0)
+    ? `${fmtResult(lossTodayN)} × ${fmtResult(prN)} = ${fmtResult(lossAmountN)}`
+    : `0 × ${fmtResult(prN)} = 0`;
+
   const lossDraft = String(lossUi.draft || "").trim();
   const lossDraftHasValue = Number.isFinite(parseLooseNumber(lossDraft)) && parseLooseNumber(lossDraft) >= 0;
+
 
   const perteRowHtml = lossUi.open
     ? `
